@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Tabs } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import '../globals.css';
 
 const TabIcon = ({ focused, icon, title }: any) => {
   const indicatorAnim = useRef(new Animated.Value(0)).current;
@@ -114,7 +115,7 @@ const _Layout = () => {
       }}
     >
       <Tabs.Screen
-        name='index'
+        name='home'
         options={{
           headerBackground: () => (
             <View className="bg-[#002D69] h-28 absolute w-full" />
@@ -122,7 +123,7 @@ const _Layout = () => {
           title: 'HOME',
           headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
-            color: '#fff',
+            color: '#000',
             
           },
           headerLeft: () => (
@@ -144,12 +145,12 @@ const _Layout = () => {
         }}
       />
       <Tabs.Screen
-        name='search'
+        name='profile'
         options={{
           headerBackground: () => (
             <View className="bg-[#002D69] h-28 absolute w-full" />
           ),
-          title: 'SEARCH',
+          title: 'PROFILE',
           headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
             color: '#fff',
@@ -167,7 +168,7 @@ const _Layout = () => {
     ),
         }}
       />
-      <Tabs.Screen
+      {/* <Tabs.Screen
       name='messaging'
         options={{
           headerBackground: () => (
@@ -238,35 +239,35 @@ const _Layout = () => {
       </TouchableOpacity>
     ),
         }}
-      />
-      <Tabs.Screen
+      /> */}
+      {/* <Tabs.Screen
       options={{
         headerShown: false,
         href: null, 
       }}
     name="profile"
-  />
-      <Tabs.Screen
+  /> */}
+      {/* <Tabs.Screen
       options={{
         headerShown: false,
         href: null, 
       }}
     name="chat"
-    />
-      <Tabs.Screen
+    /> */}
+      {/* <Tabs.Screen
       options={{
         headerShown: false,
         href: null, 
       }}
     name="settings"
-    />
-      <Tabs.Screen
+    /> */}
+      {/* <Tabs.Screen
       options={{
         headerShown: false,
         href: null, 
       }}
     name="community/community-profile-screen"
-    />
+    /> */}
       {/* <Tabs.Screen
       options={{
         headerShown: false,

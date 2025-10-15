@@ -20,8 +20,8 @@ export const signupSchema = z
       .refine(
         (val) =>
           val.endsWith(".edu") ||
-          val.includes(".edu.") || // handles .edu.gh, .edu.ng, .edu.au etc.
-          val.includes(".ac."), // e.g., .ac.uk, .ac.za
+          val.includes(".edu.") || 
+          val.includes(".ac."), 
         {
           message: "Email must be a valid university email (.edu or .ac domains)",
         }

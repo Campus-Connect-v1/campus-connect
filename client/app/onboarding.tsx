@@ -8,7 +8,7 @@ export default function OnboardingScreen() {
   return (
     <SplashScreenComponent
       onFinish={async () => {
-        await AsyncStorage.setItem("hasSeenOnboarding", "false");
+        await AsyncStorage.setItem("hasSeenOnboarding", "true");
         router.replace("/auth/login"); // go to login after onboarding
       }}
     />

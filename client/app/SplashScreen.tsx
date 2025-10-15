@@ -231,7 +231,7 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
 
         {renderDots()}
 
-        <View style={styles.buttonsContainer}>
+        {/* <View style={styles.buttonsContainer}>
           {currentStep > 0 && (
             <TouchableOpacity style={styles.backButton} onPress={handleBack}>
               <AntDesign name="arrow-left" size={20} color="#fff" />
@@ -243,7 +243,7 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
               <Text style={styles.nextButtonText}>Next</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </View> */}
       </Animated.View>
     </View>
   );
