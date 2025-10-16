@@ -8,8 +8,6 @@ import authRoutes from "./routes/auth.routes.js";
 dotenv.config();
 const app = express();
 
-dotenv.config();
-
 // ============ DEBUG =====================
 console.log("PORT:", process.env.PORT);
 console.log("NODE_ENV:", process.env.NODE_ENV);
