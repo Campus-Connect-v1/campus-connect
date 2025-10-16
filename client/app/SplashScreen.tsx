@@ -77,7 +77,7 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
         useNativeDriver: true,
       }).start(() => {
         setCurrentImageIndex(
-          (prevIndex:any) => (prevIndex + 1) % studentImages.length
+          (prevIndex) => (prevIndex + 1) % studentImages.length
         );
         imageOpacity.setValue(0.7);
         Animated.timing(imageOpacity, {
