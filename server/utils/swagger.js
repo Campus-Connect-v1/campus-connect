@@ -9,7 +9,7 @@ const options = {
       version: "1.0.0",
       description: "API documentation for Campus Connect",
     },
-    servers: [{ url: "http://localhost:8000" }],
+    servers: [{ url: "http://localhost:8000/api" }],
   },
   apis: ["./routes/*.js"], // paths to your route files
 };
