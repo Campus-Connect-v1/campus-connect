@@ -1,29 +1,22 @@
-import { StyleSheet, Text, View } from "react-native"
-import Colors from "@/src/constants/Colors"
+import React from 'react';
+import { View, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function HomeScreen() {
+const HomeScreen = () => {
   return (
-    <View >
-      <Text className="text-red-500 txt-4xl">Home Screen</Text>
-      <Text >Welcome to CampusConnect!</Text>
-    </View>
-  )
-}
+    <SafeAreaView className='flex-1 bg-[#FBFCFE]'>
+      <View className='flex-1 items-center justify-center px-4'>
+        <Ionicons name="settings-outline" size={28} color="#fff" />
+        <Text className='text-2xl font-ComfortaaBold text-primaryText mt-4'>
+          Home
+        </Text>
+        <Text className='text-subText font-PoppinsRegular text-center mt-2'>
+          Welcome to Vendyi - Your marketplace hub
+        </Text>
+      </View>
+    </SafeAreaView>
+  );
+};
 
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     justifyContent: "center",
-//     alignItems: "center",
-//     backgroundColor: Colors.light.background,
-//   },
-//   title: {
-//     fontSize: 24,
-//     fontWeight: "bold",
-//     color: Colors.light.text,
-//     marginBottom: 8,
-//   },
-//   subtitle: {
-//     fontSize: 16,
-//   },
-// })
+export default HomeScreen;

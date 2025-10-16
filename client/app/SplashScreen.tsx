@@ -13,7 +13,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import './globals.css'
+import '../globals.css'
 interface SplashScreenProps {
   onFinish: () => void;
 }
@@ -145,10 +145,12 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
       {item.features && (
         <View style={styles.featuresContainer}>
           {item.features.map((feature, idx) => (
-            <View key={idx} style={styles.featureItem}>
-              <AntDesign name="check-circle" size={20} color="#fff" />
-              <Text style={styles.featureText}>{feature}</Text>
-            </View>
+            <React.Fragment key={idx}>
+              <View style={styles.featureItem}>
+                <AntDesign name="check-circle" size={20} color="#fff" />
+                <Text style={styles.featureText}>{feature}</Text>
+              </View>
+            </React.Fragment>
           ))}
         </View>
       )}

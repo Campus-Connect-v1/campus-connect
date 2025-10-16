@@ -4,13 +4,13 @@ import { router } from 'expo-router';
 import React from 'react';
 import {
   Image,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface ProfileScreenProps {
   navigation?: any;
@@ -58,9 +58,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const user = posts[0].user;
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-transparent">
       <StatusBar barStyle="dark-content" />
-      
       <ScrollView className="flex-1">
         {/* Header */}
         <View className="flex-row items-center px-4 py-3 bg-white">

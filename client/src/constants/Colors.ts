@@ -1,6 +1,6 @@
-const primaryColor = "#003554"; // Indigo
-const secondaryColor = "#8B5CF6"; // Purple
-const accentColor = "#06B6D4"; // Cyan
+const primaryColor = "#003554"; 
+const secondaryColor = "#8B5CF6"; 
+const accentColor = "#06B6D4"; 
 
 export default {
   light: {

@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import './globals.css';
+import '../globals.css';
 
 SplashScreen.preventAutoHideAsync();
 

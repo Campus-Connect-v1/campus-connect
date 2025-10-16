@@ -142,7 +142,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
           </View>
 
           {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotPasswordContainer}>
+          <TouchableOpacity onPress={()=> {router.push("/auth/forgot-password")}} style={styles.forgotPasswordContainer}>
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
 
@@ -180,7 +180,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
+            <Text style={styles.signupText}>{"Don't have an account? "}</Text>
             <TouchableOpacity onPress={() => router.push("/auth/register")}>
               <Text style={styles.signupLink}>Sign Up</Text>
             </TouchableOpacity>
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
-    paddingTop: 40,
+    paddingTop: 60,
   },
   scrollContainer: {
     flexGrow: 1,
