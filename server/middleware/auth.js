@@ -28,11 +28,11 @@ export const authenticate = (req, res, next) => {
     next();
   } catch (err) {
     if (err.name === "TokenExpiredError") {
-      return res.status(403).json({ message: "Token expired" });
+      return res.status(401).json({ message: "Token expired" });
     } else if (err.name === "JsonWebTokenError") {
-      return res.status(403).json({ message: "Invalid token" });
+      return res.status(401).json({ message: "Invalid token" });
     } else {
-      return res.status(403).json({ message: "Token verification failed" });
+      return res.status(401).json({ message: "Token verification failed" });
     }
   }
 };
