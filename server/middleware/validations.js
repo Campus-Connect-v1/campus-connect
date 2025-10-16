@@ -2,7 +2,23 @@ import Joi from "joi";
 
 export const registerValidation = (data) => {
   const schema = Joi.object({
-    name: Joi.string()
+    first_name: Joi.string()
+      .min(2)
+      .max(100)
+      .required()
+      .trim()
+      .pattern(/^[a-zA-Z\s]+$/)
+      .messages({
+        "string.pattern.base": "Name can only contain letters and spaces",
+        "string.empty": "Name is required",
+        "string.min": "Name must be at least 2 characters long",
+        "string.max": "Name cannot exceed 100 characters",
+      }),
+    email: Joi.string().email().required().trim().lowercase().messages({
+      "string.email": "Please provide a valid email address",
+      "string.empty": "Email is required",
+    }),
+    last_name: Joi.string()
       .min(2)
       .max(100)
       .required()

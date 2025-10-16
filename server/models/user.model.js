@@ -1,18 +1,15 @@
 import { db } from "../config/db.js";
+import { v4 as uuidv4 } from "uuid";
 
 export const createUser = async (userData) => {
-  const { name, email, password, university_id } = userData;
-
-  // Split name into first and last name (simple approach)
-  const nameParts = name.split(" ");
-  const first_name = nameParts[0];
-  const last_name = nameParts.slice(1).join(" ") || ""; // Handle single names
+  const { first_name, last_name, email, password, university_id } = userData;
+  const user_id = uuidv4();
 
   const [result] = await db.execute(
     `INSERT INTO users (user_id, university_id, email, password_hash, first_name, last_name, is_email_verified) 
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
-      `user_${Date.now()}`, // Generate unique user ID
+      user_id,
       university_id,
       email,
       password,
@@ -22,7 +19,7 @@ export const createUser = async (userData) => {
     ]
   );
 
-  return `user_${result.insertId}`; // Return the user_id
+  return user_id; // Return the user_id
 };
 
 export const findUserByEmail = async (email) => {

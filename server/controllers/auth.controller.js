@@ -46,7 +46,7 @@ export const register = async (req, res) => {
     const { error } = registerValidation(req.body);
     if (error) return handleValidationError(error, res);
 
-    const { name, email, password, university_id } = req.body;
+    const { first_name, last_name, email, password, university_id } = req.body;
 
     // Check if user already exists
     const existingUser = await findUserByEmail(email);
@@ -62,7 +62,8 @@ export const register = async (req, res) => {
 
     // Create user
     const userId = await createUser({
-      name,
+      first_name,
+      last_name,
       email,
       password: hashedPassword,
       university_id,
@@ -73,7 +74,7 @@ export const register = async (req, res) => {
     await createOTP(email, otp);
 
     try {
-      await sendOTPEmail(email, otp, name);
+      await sendOTPEmail(email, otp, first_name, last_name);
     } catch (emailError) {
       console.error("Failed to send OTP email:", emailError);
       // Don't fail the registration if email fails.
@@ -95,6 +96,7 @@ export const register = async (req, res) => {
     res.status(500).json({
       message: "Internal server error during registration",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      stack: error.stack,
     });
   }
 };
@@ -177,21 +179,25 @@ export const verifyOTP = async (req, res) => {
     if (error) return handleValidationError(error, res);
 
     const { email, otp } = req.body;
+    console.log("OTP Verification Debug:");
+    console.log("Email:", email);
+    console.log("OTP:", otp);
 
     // Verify OTP
     const isValidOTP = await verifyOTPModel(email, otp);
     if (!isValidOTP) {
       return res.status(400).json({
         message: "Invalid or expired OTP",
-        suggestion: "Please request a new OTP if this one has expired",
+        suggestion:
+          "Please request a new OTP if this one has expired or Check the email typed, but the email should be stored on frontend and used as a part of the request not that the user will retype the eamil.",
       });
     }
 
     // Mark email as verified
-    await markEmailAsVerified(email);
+    // await markEmailAsVerified(email);
 
     // Delete used OTP
-    await deleteOTP(email);
+    // await deleteOTP(email);
 
     try {
       const user = await findUserByEmail(email);
@@ -274,9 +280,10 @@ export const forgotPassword = async (req, res) => {
     // Check if user exists
     const user = await findUserByEmail(email);
     if (!user) {
-      // Don't reveal that the email doesn't exist for security
+      // Don't reveal that the email doesn't exist for security.
       return res.status(200).json({
         message: "If the email exists, a password reset link has been sent",
+        suggestion: `Please check the email address ${email}`,
       });
     }
 

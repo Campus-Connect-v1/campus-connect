@@ -1,7 +1,4 @@
 import nodemailer from "nodemailer";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 // Create transporter
 const transporter = nodemailer.createTransport({
@@ -15,9 +12,9 @@ const transporter = nodemailer.createTransport({
 // Verify transporter configuration
 transporter.verify((error, success) => {
   if (error) {
-    console.error(" Mail transporter failed:", error);
+    console.error("Mail transporter failed:", error);
   } else {
-    console.log(" Mail transporter is ready");
+    console.log("Mail transporter is ready");
   }
 });
 
@@ -110,8 +107,14 @@ export const sendEmail = async (to, templateType, data) => {
       throw new Error(`Email template '${templateType}' not found`);
     }
 
-    const emailContent =
-      typeof template === "function" ? template(data) : template;
+    // FIX: Properly pass the data to the template function
+    let emailContent;
+    if (typeof template === "function") {
+      // If template is a function, call it with the data properties
+      emailContent = template(data.otp || data.resetToken, data.name);
+    } else {
+      emailContent = template;
+    }
 
     const mailOptions = {
       from: `"Campus Connect" <${process.env.EMAIL_USER}>`,
@@ -121,16 +124,16 @@ export const sendEmail = async (to, templateType, data) => {
     };
 
     const result = await transporter.sendMail(mailOptions);
-    console.log(` Email sent to ${to}: ${templateType}`);
+    console.log(`Email sent to ${to}: ${templateType}`);
     return { success: true, messageId: result.messageId };
   } catch (error) {
-    console.error(` Failed to send email to ${to}:`, error);
+    console.error(`Failed to send email to ${to}:`, error);
     throw new Error(`Failed to send email: ${error.message}`);
   }
 };
 
-export const sendOTPEmail = async (email, otp, name) => {
-  return await sendEmail(email, "otpVerification", { otp, name });
+export const sendOTPEmail = async (email, otp, first_name, last_name) => {
+  return await sendEmail(email, "otpVerification", { otp, first_name });
 };
 
 export const sendPasswordResetEmail = async (email, resetToken, name) => {
