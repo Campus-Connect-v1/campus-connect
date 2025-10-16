@@ -3,10 +3,14 @@ import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
 import { db } from "./config/db.js";
+import { swaggerDocs } from "./utils/swagger.js";
 import authRoutes from "./routes/auth.routes.js";
 
 dotenv.config();
 const app = express();
+
+// ============= SWAGGER =====================
+swaggerDocs(app);
 
 dotenv.config();
 
@@ -57,6 +61,7 @@ app.use((error, req, res, next) => {
     error: process.env.NODE_ENV === "development" ? error.message : undefined,
   });
 });
+
 app.get("/", (req, res) => res.send("Campus Connect API running..."));
 
 app.listen(process.env.PORT || 5000, () =>
