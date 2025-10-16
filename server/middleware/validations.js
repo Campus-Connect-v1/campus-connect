@@ -14,10 +14,6 @@ export const registerValidation = (data) => {
         "string.min": "Name must be at least 2 characters long",
         "string.max": "Name cannot exceed 100 characters",
       }),
-    email: Joi.string().email().required().trim().lowercase().messages({
-      "string.email": "Please provide a valid email address",
-      "string.empty": "Email is required",
-    }),
     last_name: Joi.string()
       .min(2)
       .max(100)
