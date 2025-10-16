@@ -3,8 +3,9 @@ import { icons } from '@/src/constants/icons';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Tabs } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
-import '../globals.css';
+import { Animated, Image, TouchableOpacity, View } from 'react-native';
+import Colors from '@/src/constants/Colors';
+
 
 const TabIcon = ({ focused, icon, title }: any) => {
   const indicatorAnim = useRef(new Animated.Value(0)).current;
@@ -15,7 +16,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
       duration: 300,
       useNativeDriver: false, // Using layout props (opacity, scaleX)
     }).start();
-  }, [focused]);
+  }, [focused, indicatorAnim]);
 
   const indicatorStyle = {
     opacity: indicatorAnim,
@@ -39,7 +40,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
     <View className="size-full justify-center items-center mt-4 rounded-full bg-white" >
       <Image
         source={icon}
-        tintColor={focused ? '#002D69' : '#000'}
+        tintColor={focused ? Colors.light.primary : '#000'}
         className="size-6 mb-1"
       />
       <Animated.View
@@ -48,7 +49,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
             width: 24,
             height: 4,
             borderRadius: 9999,
-            backgroundColor: '#002D69',
+            backgroundColor: Colors.light.primary,
           },
           indicatorStyle,
         ]}
@@ -58,7 +59,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
 };
 
 
-const _Layout = () => {
+const TabsLayout = () => {
     const [isDrawerVisible, setIsDrawerVisible] = useState(false);
 
      const user = {
@@ -92,6 +93,8 @@ const _Layout = () => {
 
     <Tabs
       screenOptions={{
+        headerShown: false,
+        headerShadowVisible: false,
         tabBarShowLabel: false,
         tabBarItemStyle: {
           width: '100%',
@@ -107,9 +110,10 @@ const _Layout = () => {
           height: 52,
           width: '90%',
           alignSelf: 'center',
-         
           overflow: 'hidden',
           borderColor: 'rgba(255, 255, 255, 0.1)',
+          backgroundColor: '#ffffff',
+          borderTopWidth: 0,
         },
        
       }}
@@ -117,18 +121,15 @@ const _Layout = () => {
       <Tabs.Screen
         name='home'
         options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
+          headerStyle: { backgroundColor: '#003554' },
           title: 'HOME',
           headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
-            color: '#000',
-            
+            color: '#fff',
           },
           headerLeft: () => (
       <TouchableOpacity onPress={() => setIsDrawerVisible(true)} className="ml-4">
-        <Ionicons name="settings-outline" size={28} color="#000" />
+        <Ionicons name="settings-outline" size={28} color="#fff" />
       </TouchableOpacity>
     ),
     headerRight: () => (
@@ -147,16 +148,14 @@ const _Layout = () => {
       <Tabs.Screen
         name='profile'
         options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
+          headerStyle: { backgroundColor: '#002D69' },
           title: 'PROFILE',
           headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
             color: '#fff',
           },
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.search} title='SEARCH' />
+            <TabIcon focused={focused} icon={icons.person} title='SEARCH' />
           ),
            headerLeft: () => (
       <TouchableOpacity onPress={handleProfilePress} className="ml-4">
@@ -168,13 +167,11 @@ const _Layout = () => {
     ),
         }}
       />
-      {/* <Tabs.Screen
-      name='messaging'
+      <Tabs.Screen
+      name='chat'
         options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
-          title: 'MESSAGING',
+          headerStyle: { backgroundColor: '#002D69' },
+          title: 'CHAT ',
           headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
             color: '#fff',
@@ -195,9 +192,7 @@ const _Layout = () => {
       <Tabs.Screen
         name='community'
         options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
+          headerStyle: { backgroundColor: '#002D69' },
           title: 'COMMUNITY',
            headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
@@ -219,9 +214,7 @@ const _Layout = () => {
       <Tabs.Screen
         name='notifications'
         options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
+          headerStyle: { backgroundColor: '#002D69' },
           title: 'NOTIFICATIONS',
           headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
@@ -239,54 +232,10 @@ const _Layout = () => {
       </TouchableOpacity>
     ),
         }}
-      /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="profile"
-  /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="chat"
-    /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="settings"
-    /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="community/community-profile-screen"
-    /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="community/community-settings-screen"
-    /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="community/join-requests-screen"
-    /> */}
+      />
     </Tabs>
         </>
   );
 };
 
-export default _Layout
-
-const styles = StyleSheet.create({})
+export default TabsLayout

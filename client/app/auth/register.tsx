@@ -41,7 +41,8 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
   } = useForm<SignupSchema>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      fullName: "",
+      first_name: "",
+      last_name: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -57,7 +58,7 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
       } else {
         Alert.alert("Registration Failed", result.error || "Please try again")
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "An unexpected error occurred")
     } finally {
       setIsLoading(false)
@@ -93,15 +94,15 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
 
         {/* Register Form */}
         <View style={styles.formContainer}>
-          {/* Full Name Input */}
+          {/* First Name Input */}
           <View style={styles.inputContainer}>
             <Controller
               control={control}
-              name="fullName"
+              name="first_name"
               render={({ field: { onChange, onBlur, value } }) => (
                 <TextInput
-                  style={[styles.input, errors.fullName && styles.inputError]}
-                  placeholder="Full Name"
+                  style={[styles.input, errors.first_name && styles.inputError]}
+                  placeholder="First Name"
                   placeholderTextColor={Colors.light.textSecondary}
                   value={value}
                   onChangeText={onChange}
@@ -112,7 +113,28 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
                 />
               )}
             />
-            {errors.fullName && <Text style={styles.errorText}>{errors.fullName.message}</Text>}
+            {errors.first_name && <Text style={styles.errorText}>{errors.first_name.message}</Text>}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Controller
+              control={control}
+              name="last_name"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  style={[styles.input, errors.last_name && styles.inputError]}
+                  placeholder="Last Name"
+                  placeholderTextColor={Colors.light.textSecondary}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  keyboardType="default"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              )}
+            />
+            {errors.last_name && <Text style={styles.errorText}>{errors.last_name.message}</Text>}
           </View>
 
           {/* Email Input */}
