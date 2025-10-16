@@ -22,7 +22,8 @@ Content-Type: application/json
 
 ```json
 {
-  "name": "John Doe",
+  "first_name": "John",
+  "last_name": "Doe",
   "email": "john@stanford.edu",
   "password": "SecurePass123!",
   "university_id": "uni_1"
