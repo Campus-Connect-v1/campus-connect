@@ -18,100 +18,100 @@ const router = express.Router();
  *   description: User authentication and account management
  */
 
-/**
- * @swagger
- * components:
- *   schemas:
- *     UserRegistration:
- *       type: object
- *       required:
- *         - name
- *         - email
- *         - password
- *         - university_id
- *       properties:
- *         first_name:
- *           type: string
- *           example: "John"
- *         last_name:
- *           type: string
- *           example: "Doe"
- *         email:
- *           type: string
- *           format: email
- *           example: "john.doe@stanford.edu"
- *         password:
- *           type: string
- *           format: password
- *           example: "SecurePass123!"
- *         university_id:
- *           type: string
- *           example: "uni_1"
- *     UserLogin:
- *       type: object
- *       required:
- *         - email
- *         - password
- *       properties:
- *         email:
- *           type: string
- *           format: email
- *           example: "john.doe@stanford.edu"
- *         password:
- *           type: string
- *           format: password
- *           example: "SecurePass123!"
- *     VerifyOTP:
- *       type: object
- *       required:
- *         - email
- *         - otp
- *       properties:
- *         email:
- *           type: string
- *           format: email
- *           example: "john.doe@stanford.edu"
- *         otp:
- *           type: string
- *           pattern: '^[0-9]{6}$'
- *           example: "123456"
- *     ResendOTP:
- *       type: object
- *       required:
- *         - email
- *       properties:
- *         email:
- *           type: string
- *           format: email
- *           example: "john.doe@stanford.edu"
- *     ForgotPassword:
- *       type: object
- *       required:
- *         - email
- *       properties:
- *         email:
- *           type: string
- *           format: email
- *           example: "john.doe@stanford.edu"
- *     ResetPassword:
- *       type: object
- *       required:
- *         - token
- *         - password
- *         - confirmPassword
- *       properties:
- *         token:
- *           type: string
- *           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *         password:
- *           type: string
- *           format: password
- *           example: "NewSecurePass123!"
- *         confirmPassword:
- *           type: string
- *           format: password
- *           example: "NewSecurePass123!"
- */
+// /**
+//  * @swagger
+//  * components:
+//  *   schemas:
+//  *     UserRegistration:
+//  *       type: object
+//  *       required:
+//  *         - name
+//  *         - email
+//  *         - password
+//  *         - university_id
+//  *       properties:
+//  *         first_name:
+//  *           type: string
+//  *           example: "John"
+//  *         last_name:
+//  *           type: string
+//  *           example: "Doe"
+//  *         email:
+//  *           type: string
+//  *           format: email
+//  *           example: "john.doe@stanford.edu"
+//  *         password:
+//  *           type: string
+//  *           format: password
+//  *           example: "SecurePass123!"
+//  *         university_id:
+//  *           type: string
+//  *           example: "uni_1"
+//  *     UserLogin:
+//  *       type: object
+//  *       required:
+//  *         - email
+//  *         - password
+//  *       properties:
+//  *         email:
+//  *           type: string
+//  *           format: email
+//  *           example: "john.doe@stanford.edu"
+//  *         password:
+//  *           type: string
+//  *           format: password
+//  *           example: "SecurePass123!"
+//  *     VerifyOTP:
+//  *       type: object
+//  *       required:
+//  *         - email
+//  *         - otp
+//  *       properties:
+//  *         email:
+//  *           type: string
+//  *           format: email
+//  *           example: "john.doe@stanford.edu"
+//  *         otp:
+//  *           type: string
+//  *           pattern: '^[0-9]{6}$'
+//  *           example: "123456"
+//  *     ResendOTP:
+//  *       type: object
+//  *       required:
+//  *         - email
+//  *       properties:
+//  *         email:
+//  *           type: string
+//  *           format: email
+//  *           example: "john.doe@stanford.edu"
+//  *     ForgotPassword:
+//  *       type: object
+//  *       required:
+//  *         - email
+//  *       properties:
+//  *         email:
+//  *           type: string
+//  *           format: email
+//  *           example: "john.doe@stanford.edu"
+//  *     ResetPassword:
+//  *       type: object
+//  *       required:
+//  *         - token
+//  *         - password
+//  *         - confirmPassword
+//  *       properties:
+//  *         token:
+//  *           type: string
+//  *           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+//  *         password:
+//  *           type: string
+//  *           format: password
+//  *           example: "NewSecurePass123!"
+//  *         confirmPassword:
+//  *           type: string
+//  *           format: password
+//  *           example: "NewSecurePass123!"
+//  */
 
 /**
  * @swagger

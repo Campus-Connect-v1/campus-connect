@@ -3,15 +3,14 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:8889
--- Generation Time: Oct 16, 2025 at 12:49 PM
+-- Generation Time: Oct 16, 2025 at 01:55 PM
 -- Server version: 8.0.40
 -- PHP Version: 8.3.14
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
-CREATE DATABASE campus_connect;
-USE campus_connect
+
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -228,6 +227,22 @@ INSERT INTO `connections` (`connection_id`, `requester_id`, `receiver_id`, `stat
 -- --------------------------------------------------------
 
 --
+-- Stand-in structure for view `connection_recommendations`
+-- (See below for the actual view)
+--
+CREATE TABLE `connection_recommendations` (
+`common_courses_score` bigint
+,`common_groups_score` bigint
+,`mutual_connections_score` bigint
+,`recommended_user_id` varchar(50)
+,`same_graduation_score` int
+,`same_program_score` int
+,`source_user_id` varchar(50)
+);
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `events`
 --
 
@@ -402,7 +417,8 @@ INSERT INTO `otps` (`id`, `email`, `otp_code`, `expires_at`, `created_at`) VALUE
 (7, 'leslie@stanford5.edu', '951738', '2025-10-16 07:47:45', '2025-10-16 07:37:44'),
 (8, 'leslie@stanford.edu', '696121', '2025-10-16 07:48:36', '2025-10-16 07:38:35'),
 (9, 'leslieajayi@stanford.edu', '628938', '2025-10-16 08:03:08', '2025-10-16 07:53:08'),
-(10, 'leslieajayi27@stanford.edu', '740030', '2025-10-16 08:05:48', '2025-10-16 07:55:48');
+(10, 'leslieajayi27@stanford.edu', '740030', '2025-10-16 08:05:48', '2025-10-16 07:55:48'),
+(12, 'john.doe@stanford.edu', '849617', '2025-10-16 13:29:03', '2025-10-16 13:19:02');
 
 -- --------------------------------------------------------
 
@@ -573,9 +589,16 @@ CREATE TABLE `users` (
   `program` varchar(100) DEFAULT NULL,
   `graduation_year` int DEFAULT NULL,
   `bio` text,
+  `profile_headline` varchar(255) DEFAULT NULL,
+  `linkedin_url` varchar(500) DEFAULT NULL,
+  `website_url` varchar(500) DEFAULT NULL,
   `date_of_birth` date DEFAULT NULL,
   `show_location_preference` enum('friends','university','none') DEFAULT 'friends',
   `show_status_preference` enum('friends','university','none') DEFAULT 'friends',
+  `timezone` varchar(50) DEFAULT 'UTC',
+  `notification_email` tinyint(1) DEFAULT '1',
+  `notification_push` tinyint(1) DEFAULT '1',
+  `privacy_profile` enum('public','university','friends','private') DEFAULT 'friends',
   `is_active` tinyint(1) DEFAULT '1',
   `is_email_verified` tinyint(1) DEFAULT '0',
   `last_login` timestamp NULL DEFAULT NULL,
@@ -587,42 +610,165 @@ CREATE TABLE `users` (
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`user_id`, `university_id`, `email`, `password_hash`, `first_name`, `last_name`, `profile_picture_url`, `phone_number`, `program`, `graduation_year`, `bio`, `date_of_birth`, `show_location_preference`, `show_status_preference`, `is_active`, `is_email_verified`, `last_login`, `created_at`, `updated_at`) VALUES
-('611296a8-9873-4f8f-83c0-9b3aa583a814', 'uni_2', 'leslieajayi28@stanford.edu', '$2b$12$L.8UW9ArBSpm7VDhoq9tJ.RrqDolb1xUGHmCaerHIzQnExlMx8pEy', 'Doe', 'John', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 1, NULL, '2025-10-16 07:56:32', '2025-10-16 07:57:36'),
-('76ac7caa-da34-46aa-922b-2441e351ef21', 'uni_2', 'leslieajayi@stanford.edu', '$2b$12$GUyp1IpWSYAbMxmEsRnqcubp4p33PumBp8Xm9QZ3RTXpmmsGYMoJ6', 'Doe', 'John', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-16 07:53:08', '2025-10-16 07:53:08'),
-('af36d018-a31e-44be-b0d6-551bbfafdd39', 'uni_2', 'leslieajayi27@stanford.edu', '$2b$12$obkK2nSDxDpWsY9Z4JANf.Z/vy3imcANfAurgwesVRIJrEmKDmQT.', 'Doe', 'John', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-16 07:55:48', '2025-10-16 07:55:48'),
-('user_1', 'uni_1', 'jsmith@stanford.edu', '$2b$12$LtRYh7QVMI12GPJK5mkcK.6OGuQPI6QoqViDYc/XZLDfh5AvScLN2', 'John', 'Smith', NULL, NULL, 'Computer Science', 2025, NULL, NULL, 'friends', 'friends', 1, 1, NULL, '2025-10-15 23:55:56', '2025-10-16 02:17:07'),
-('user_10', 'uni_5', 'kanderson@umich.edu', '$2b$12$vH66ZtyXe9XP3maIwz0xfevWR3Jv19fRrSIZ7sO6KyJh0QzCr8EPy', 'Karen', 'Anderson', NULL, NULL, 'Chemistry', 2026, NULL, NULL, 'university', 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_11', 'uni_6', 'jtaylor@columbia.edu', '$2b$12$dOUaNi0g8dzyZuRVS.zsI.3IRHSEH2yGsr.aD5TReYvyHx6KAHQuK', 'James', 'Taylor', NULL, NULL, 'English Literature', 2024, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_12', 'uni_6', 'pthomas@columbia.edu', '$2b$12$R1xxK3P4xC1x9z2zjXnfU.qIb0hYqIyhHlhILZTgNwIXjb4NggVJm', 'Patricia', 'Thomas', NULL, NULL, 'Art History', 2025, NULL, NULL, 'university', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_13', 'uni_7', 'mhernandez@ucla.edu', '$2b$12$eo63y4rIibx9FRvYhxA0lO1rDUJnVAQbTaVj/jUPvsFVnKlCpwdz2', 'Matthew', 'Hernandez', NULL, NULL, 'Film Studies', 2026, NULL, NULL, 'friends', 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_14', 'uni_7', 'jmoore@ucla.edu', '$2b$12$ycZHfrDAsKQjC52kGGl4eub107puhTrEHCpU1QmyUZHvh9t2ON0BW', 'Jennifer', 'Moore', NULL, NULL, 'Sociology', 2024, NULL, NULL, 'university', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_15', 'uni_8', 'cjackson@yale.edu', '$2b$12$5DaQ80cqzUNPQlBeakXpb.qqMrtsejjG2.M1xvSjsdXGT4VeyJKb2', 'Christopher', 'Jackson', NULL, NULL, 'History', 2025, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_16', 'uni_8', 'amartin@yale.edu', '$2b$12$/VqaGqpERH0RD2xmbxk5ouScUAHoZYxD1r7jnM0EdysBvWUNEQiG6', 'Amanda', 'Martin', NULL, NULL, 'Mathematics', 2026, NULL, NULL, 'university', 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_17', 'uni_9', 'jlee@princeton.edu', '$2b$12$Pwg6eLXOUmveCg17GJoT2ee0QfM5F0s8NIIyOn.PTXVRKtH4zJDqC', 'Joshua', 'Lee', NULL, NULL, 'Philosophy', 2024, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_1760580138760', 'uni_1', 'john@stanford.edu', '$2b$12$paZTC4wGuc4uVA8QyaD.F.R8xDZh9DjIPMDjfikvttRhJ1afh4kxa', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-16 02:02:18', '2025-10-16 08:05:04'),
-('user_1760580155322', 'uni_1', 'john@stanfor.edu', '$2b$12$TCWO192zi0sOKd3oXfFBlOCuna6xTYIQV1rul7RKUFTmKGMPpzBM.', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-16 02:02:35', '2025-10-16 02:02:35'),
-('user_1760598616804', 'uni_1', 'john@stanford3.edu', '$2b$12$GbDs6cX4YN0NlA0Z4Gyrbe3EW0ealBZg6Aranx3RHDCcSoovthpuy', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-16 07:10:16', '2025-10-16 07:10:16'),
-('user_1760598925036', 'uni_1', 'john@stanford4.edu', '$2b$12$t.H0Jso1yCBheJEXJQ82geN4llYM9kLj1ERco0D1ZI8JWqnN/u9gS', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-16 07:15:25', '2025-10-16 07:15:25'),
-('user_1760599613855', 'uni_2', 'john@stanford5.edu', '$2b$12$sbLRytDkX1ZBr1WRNmQkHelG7FZrsljUztmJ.ltgcA.7cpdy4tgBe', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 1, NULL, '2025-10-16 07:26:53', '2025-10-16 07:28:22'),
-('user_1760600264763', 'uni_2', 'leslie@stanford5.edu', '$2b$12$sBIY3AUMNhqzJcLVr1HIquBA7UL4KGDS/27G5KYkXItyQsY6tawKy', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-16 07:37:44', '2025-10-16 07:37:44'),
-('user_1760600315598', 'uni_2', 'leslie@stanford.edu', '$2b$12$8yNCtPbjpKrSt9.nz8ClWewwt9/NVv1d/6T3/qUo1yhaOhRmK7jSa', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-16 07:38:35', '2025-10-16 07:38:35'),
-('user_18', 'uni_9', 'mperez@princeton.edu', '$2b$12$3z5yp2Oj2Br6dYl47gL4EOKpd.wjqwGoXLwnBUAAqeV7Vn9/ZZj12', 'Michelle', 'Perez', NULL, NULL, 'Molecular Biology', 2025, NULL, NULL, 'university', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_19', 'uni_10', 'dthompson@uchicago.edu', '$2b$12$vkIlEnWyJzun4/5G9JJ8b.6bfaDXfOro/BE5XOet4rHjRog3xuoje', 'Daniel', 'Thompson', NULL, NULL, 'Economics', 2026, NULL, NULL, 'friends', 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_2', 'uni_1', 'mjohnson@stanford.edu', '$2b$12$xaOMr2lkp0QRETIvq8u4cuPUZeGZm5wPG3yLVKeL.k50wnXuq0XHu', 'Maria', 'Johnson', NULL, NULL, 'Biology', 2024, NULL, NULL, 'university', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_20', 'uni_10', 'lwhite@uchicago.edu', '$2b$12$AYNfIS5e/XXpQMXyk45YrOyhE6h5m31dD5u1jNuWS7EDy2QoCelvK', 'Laura', 'White', NULL, NULL, 'Computer Science', 2024, NULL, NULL, 'university', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_21', 'uni_11', 'kharris@caltech.edu', '$2b$12$tPNSnlR5M1C4wblzZtkjHewED4hNZaFHamE26./KbENugBAZ/YTE.', 'Kevin', 'Harris', NULL, NULL, 'Aerospace Engineering', 2025, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_22', 'uni_11', 'nsanchez@caltech.edu', '$2b$12$99B1nCdRwbPXTk1hA/qF/u7Am8RR3E/TfA/muKLM.6fn3vrlBnGCK', 'Nicole', 'Sanchez', NULL, NULL, 'Physics', 2026, NULL, NULL, 'university', 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_23', 'uni_12', 'jclark@cornell.edu', '$2b$12$bhZE432i93HKNuht5wzv5u3lxAxbUKgWG0fwW33OzQxa/TNmd0ZCi', 'Jason', 'Clark', NULL, NULL, 'Hotel Administration', 2024, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_24', 'uni_12', 'sramirez@cornell.edu', '$2b$12$t7WjqNiMLuXN8LORgsUUPePtl60BFLdA/1pvBTK/9Bhp1YZ6V.3MS', 'Stephanie', 'Ramirez', NULL, NULL, 'Agriculture', 2025, NULL, NULL, 'university', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_25', 'uni_13', 'rlewis@upenn.edu', '$2b$12$M23y1RsD0k90bFSi6OqGoOB1SAIuXBeZAstNyZytzVZK121OBeXDq', 'Richard', 'Lewis', NULL, NULL, 'Finance', 2026, NULL, NULL, 'friends', 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_3', 'uni_2', 'dwilson@mit.edu', '$2b$12$6DFlGaxeQ1z5B.CgBSHC6epvoaL9j10mq3sirO2Ys/w7fg.4wLWtS', 'David', 'Wilson', NULL, NULL, 'Mechanical Engineering', 2026, NULL, NULL, 'friends', 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_4', 'uni_2', 'slee@mit.edu', '$2b$12$F5R7LvlLLE0da0YxP9kOXORjxjrC13fBEoFykZx5tElc7vGz3AnqK', 'Sarah', 'Lee', NULL, NULL, 'Physics', 2025, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_5', 'uni_3', 'rbrooks@harvard.edu', '$2b$12$FDeJ3fS8.oWD5gQemrA26.WU3Kj1WJuwql3W/Eg7KPwHOLPz4eZay', 'Robert', 'Brooks', NULL, NULL, 'Economics', 2024, NULL, NULL, 'university', 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_6', 'uni_3', 'lchen@harvard.edu', '$2b$12$iAq3kqetg1WxxSwMTNJjI.vNuDGW.n9fj91Z7baUnNt9ZoUMkvwgW', 'Lisa', 'Chen', NULL, NULL, 'Psychology', 2025, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_7', 'uni_4', 'mgarcia@berkeley.edu', '$2b$12$/uZoQWXq7MPCtMJ28ExYyOLlyw.Gp6gt05HNXPxgFOq9q2e9jHnKS', 'Michael', 'Garcia', NULL, NULL, 'Electrical Engineering', 2026, NULL, NULL, 'friends', 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_8', 'uni_4', 'erodriguez@berkeley.edu', '$2b$12$QrizPadr.fMYXVso4hf.JuWWd1XchyUUV5P0IFpnIW5/V5iTCS1uy', 'Emily', 'Rodriguez', NULL, NULL, 'Political Science', 2024, NULL, NULL, 'university', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
-('user_9', 'uni_5', 'tmartinez@umich.edu', '$2b$12$hHvYFA8AJfQoi6XpAxlrl.2h6QbRL25/Q/5TTOBoGQzektLpzsXWG', 'Thomas', 'Martinez', NULL, NULL, 'Business', 2025, NULL, NULL, 'friends', 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45');
+INSERT INTO `users` (`user_id`, `university_id`, `email`, `password_hash`, `first_name`, `last_name`, `profile_picture_url`, `phone_number`, `program`, `graduation_year`, `bio`, `profile_headline`, `linkedin_url`, `website_url`, `date_of_birth`, `show_location_preference`, `show_status_preference`, `timezone`, `notification_email`, `notification_push`, `privacy_profile`, `is_active`, `is_email_verified`, `last_login`, `created_at`, `updated_at`) VALUES
+('611296a8-9873-4f8f-83c0-9b3aa583a814', 'uni_2', 'leslieajayi28@stanford.edu', '$2b$12$L.8UW9ArBSpm7VDhoq9tJ.RrqDolb1xUGHmCaerHIzQnExlMx8pEy', 'Doe', 'John', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 1, NULL, '2025-10-16 07:56:32', '2025-10-16 07:57:36'),
+('76ac7caa-da34-46aa-922b-2441e351ef21', 'uni_2', 'leslieajayi@stanford.edu', '$2b$12$GUyp1IpWSYAbMxmEsRnqcubp4p33PumBp8Xm9QZ3RTXpmmsGYMoJ6', 'Doe', 'John', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-16 07:53:08', '2025-10-16 07:53:08'),
+('af36d018-a31e-44be-b0d6-551bbfafdd39', 'uni_2', 'leslieajayi27@stanford.edu', '$2b$12$obkK2nSDxDpWsY9Z4JANf.Z/vy3imcANfAurgwesVRIJrEmKDmQT.', 'Doe', 'John', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-16 07:55:48', '2025-10-16 07:55:48'),
+('b171c38c-68a4-4300-ad40-0108f10992d3', 'uni_1', 'john.doe@stanford.edu', '$2b$12$VL/0UBuuINkI3VliKpz//u/n8BxC3BNJEapdROtpcQu85.O8EO7sW', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-16 13:19:02', '2025-10-16 13:19:02'),
+('user_1', 'uni_1', 'jsmith@stanford.edu', '$2b$12$LtRYh7QVMI12GPJK5mkcK.6OGuQPI6QoqViDYc/XZLDfh5AvScLN2', 'John', 'Smith', NULL, NULL, 'Computer Science', 2025, NULL, 'Computer Science Student passionate about AI and Machine Learning', 'https://linkedin.com/in/johnsmith', NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 1, NULL, '2025-10-15 23:55:56', '2025-10-16 13:36:22'),
+('user_10', 'uni_5', 'kanderson@umich.edu', '$2b$12$vH66ZtyXe9XP3maIwz0xfevWR3Jv19fRrSIZ7sO6KyJh0QzCr8EPy', 'Karen', 'Anderson', NULL, NULL, 'Chemistry', 2026, NULL, NULL, NULL, NULL, NULL, 'university', 'university', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_11', 'uni_6', 'jtaylor@columbia.edu', '$2b$12$dOUaNi0g8dzyZuRVS.zsI.3IRHSEH2yGsr.aD5TReYvyHx6KAHQuK', 'James', 'Taylor', NULL, NULL, 'English Literature', 2024, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_12', 'uni_6', 'pthomas@columbia.edu', '$2b$12$R1xxK3P4xC1x9z2zjXnfU.qIb0hYqIyhHlhILZTgNwIXjb4NggVJm', 'Patricia', 'Thomas', NULL, NULL, 'Art History', 2025, NULL, NULL, NULL, NULL, NULL, 'university', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_13', 'uni_7', 'mhernandez@ucla.edu', '$2b$12$eo63y4rIibx9FRvYhxA0lO1rDUJnVAQbTaVj/jUPvsFVnKlCpwdz2', 'Matthew', 'Hernandez', NULL, NULL, 'Film Studies', 2026, NULL, NULL, NULL, NULL, NULL, 'friends', 'university', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_14', 'uni_7', 'jmoore@ucla.edu', '$2b$12$ycZHfrDAsKQjC52kGGl4eub107puhTrEHCpU1QmyUZHvh9t2ON0BW', 'Jennifer', 'Moore', NULL, NULL, 'Sociology', 2024, NULL, NULL, NULL, NULL, NULL, 'university', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_15', 'uni_8', 'cjackson@yale.edu', '$2b$12$5DaQ80cqzUNPQlBeakXpb.qqMrtsejjG2.M1xvSjsdXGT4VeyJKb2', 'Christopher', 'Jackson', NULL, NULL, 'History', 2025, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_16', 'uni_8', 'amartin@yale.edu', '$2b$12$/VqaGqpERH0RD2xmbxk5ouScUAHoZYxD1r7jnM0EdysBvWUNEQiG6', 'Amanda', 'Martin', NULL, NULL, 'Mathematics', 2026, NULL, NULL, NULL, NULL, NULL, 'university', 'university', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_17', 'uni_9', 'jlee@princeton.edu', '$2b$12$Pwg6eLXOUmveCg17GJoT2ee0QfM5F0s8NIIyOn.PTXVRKtH4zJDqC', 'Joshua', 'Lee', NULL, NULL, 'Philosophy', 2024, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_1760580138760', 'uni_1', 'john@stanford.edu', '$2b$12$paZTC4wGuc4uVA8QyaD.F.R8xDZh9DjIPMDjfikvttRhJ1afh4kxa', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-16 02:02:18', '2025-10-16 08:05:04'),
+('user_1760580155322', 'uni_1', 'john@stanfor.edu', '$2b$12$TCWO192zi0sOKd3oXfFBlOCuna6xTYIQV1rul7RKUFTmKGMPpzBM.', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-16 02:02:35', '2025-10-16 02:02:35'),
+('user_1760598616804', 'uni_1', 'john@stanford3.edu', '$2b$12$GbDs6cX4YN0NlA0Z4Gyrbe3EW0ealBZg6Aranx3RHDCcSoovthpuy', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-16 07:10:16', '2025-10-16 07:10:16'),
+('user_1760598925036', 'uni_1', 'john@stanford4.edu', '$2b$12$t.H0Jso1yCBheJEXJQ82geN4llYM9kLj1ERco0D1ZI8JWqnN/u9gS', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-16 07:15:25', '2025-10-16 07:15:25'),
+('user_1760599613855', 'uni_2', 'john@stanford5.edu', '$2b$12$sbLRytDkX1ZBr1WRNmQkHelG7FZrsljUztmJ.ltgcA.7cpdy4tgBe', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 1, NULL, '2025-10-16 07:26:53', '2025-10-16 07:28:22'),
+('user_1760600264763', 'uni_2', 'leslie@stanford5.edu', '$2b$12$sBIY3AUMNhqzJcLVr1HIquBA7UL4KGDS/27G5KYkXItyQsY6tawKy', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-16 07:37:44', '2025-10-16 07:37:44'),
+('user_1760600315598', 'uni_2', 'leslie@stanford.edu', '$2b$12$8yNCtPbjpKrSt9.nz8ClWewwt9/NVv1d/6T3/qUo1yhaOhRmK7jSa', 'John', 'Doe', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-16 07:38:35', '2025-10-16 07:38:35'),
+('user_18', 'uni_9', 'mperez@princeton.edu', '$2b$12$3z5yp2Oj2Br6dYl47gL4EOKpd.wjqwGoXLwnBUAAqeV7Vn9/ZZj12', 'Michelle', 'Perez', NULL, NULL, 'Molecular Biology', 2025, NULL, NULL, NULL, NULL, NULL, 'university', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_19', 'uni_10', 'dthompson@uchicago.edu', '$2b$12$vkIlEnWyJzun4/5G9JJ8b.6bfaDXfOro/BE5XOet4rHjRog3xuoje', 'Daniel', 'Thompson', NULL, NULL, 'Economics', 2026, NULL, NULL, NULL, NULL, NULL, 'friends', 'university', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_2', 'uni_1', 'mjohnson@stanford.edu', '$2b$12$xaOMr2lkp0QRETIvq8u4cuPUZeGZm5wPG3yLVKeL.k50wnXuq0XHu', 'Maria', 'Johnson', NULL, NULL, 'Biology', 2024, NULL, 'Biology Major focusing on Genetic Research', NULL, NULL, NULL, 'university', 'friends', 'UTC', 1, 1, 'university', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 13:36:22'),
+('user_20', 'uni_10', 'lwhite@uchicago.edu', '$2b$12$AYNfIS5e/XXpQMXyk45YrOyhE6h5m31dD5u1jNuWS7EDy2QoCelvK', 'Laura', 'White', NULL, NULL, 'Computer Science', 2024, NULL, NULL, NULL, NULL, NULL, 'university', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_21', 'uni_11', 'kharris@caltech.edu', '$2b$12$tPNSnlR5M1C4wblzZtkjHewED4hNZaFHamE26./KbENugBAZ/YTE.', 'Kevin', 'Harris', NULL, NULL, 'Aerospace Engineering', 2025, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_22', 'uni_11', 'nsanchez@caltech.edu', '$2b$12$99B1nCdRwbPXTk1hA/qF/u7Am8RR3E/TfA/muKLM.6fn3vrlBnGCK', 'Nicole', 'Sanchez', NULL, NULL, 'Physics', 2026, NULL, NULL, NULL, NULL, NULL, 'university', 'university', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_23', 'uni_12', 'jclark@cornell.edu', '$2b$12$bhZE432i93HKNuht5wzv5u3lxAxbUKgWG0fwW33OzQxa/TNmd0ZCi', 'Jason', 'Clark', NULL, NULL, 'Hotel Administration', 2024, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_24', 'uni_12', 'sramirez@cornell.edu', '$2b$12$t7WjqNiMLuXN8LORgsUUPePtl60BFLdA/1pvBTK/9Bhp1YZ6V.3MS', 'Stephanie', 'Ramirez', NULL, NULL, 'Agriculture', 2025, NULL, NULL, NULL, NULL, NULL, 'university', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_25', 'uni_13', 'rlewis@upenn.edu', '$2b$12$M23y1RsD0k90bFSi6OqGoOB1SAIuXBeZAstNyZytzVZK121OBeXDq', 'Richard', 'Lewis', NULL, NULL, 'Finance', 2026, NULL, NULL, NULL, NULL, NULL, 'friends', 'university', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_3', 'uni_2', 'dwilson@mit.edu', '$2b$12$6DFlGaxeQ1z5B.CgBSHC6epvoaL9j10mq3sirO2Ys/w7fg.4wLWtS', 'David', 'Wilson', NULL, NULL, 'Mechanical Engineering', 2026, NULL, NULL, NULL, NULL, NULL, 'friends', 'university', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_4', 'uni_2', 'slee@mit.edu', '$2b$12$F5R7LvlLLE0da0YxP9kOXORjxjrC13fBEoFykZx5tElc7vGz3AnqK', 'Sarah', 'Lee', NULL, NULL, 'Physics', 2025, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_5', 'uni_3', 'rbrooks@harvard.edu', '$2b$12$FDeJ3fS8.oWD5gQemrA26.WU3Kj1WJuwql3W/Eg7KPwHOLPz4eZay', 'Robert', 'Brooks', NULL, NULL, 'Economics', 2024, NULL, NULL, NULL, NULL, NULL, 'university', 'university', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_6', 'uni_3', 'lchen@harvard.edu', '$2b$12$iAq3kqetg1WxxSwMTNJjI.vNuDGW.n9fj91Z7baUnNt9ZoUMkvwgW', 'Lisa', 'Chen', NULL, NULL, 'Psychology', 2025, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_7', 'uni_4', 'mgarcia@berkeley.edu', '$2b$12$/uZoQWXq7MPCtMJ28ExYyOLlyw.Gp6gt05HNXPxgFOq9q2e9jHnKS', 'Michael', 'Garcia', NULL, NULL, 'Electrical Engineering', 2026, NULL, NULL, NULL, NULL, NULL, 'friends', 'university', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_8', 'uni_4', 'erodriguez@berkeley.edu', '$2b$12$QrizPadr.fMYXVso4hf.JuWWd1XchyUUV5P0IFpnIW5/V5iTCS1uy', 'Emily', 'Rodriguez', NULL, NULL, 'Political Science', 2024, NULL, NULL, NULL, NULL, NULL, 'university', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45'),
+('user_9', 'uni_5', 'tmartinez@umich.edu', '$2b$12$hHvYFA8AJfQoi6XpAxlrl.2h6QbRL25/Q/5TTOBoGQzektLpzsXWG', 'Thomas', 'Martinez', NULL, NULL, 'Business', 2025, NULL, NULL, NULL, NULL, NULL, 'friends', 'friends', 'UTC', 1, 1, 'friends', 1, 0, NULL, '2025-10-15 23:55:56', '2025-10-16 00:15:45');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_availability`
+--
+
+CREATE TABLE `user_availability` (
+  `availability_id` varchar(50) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
+  `day_of_week` enum('monday','tuesday','wednesday','thursday','friday','saturday','sunday') NOT NULL,
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `preferred_activity` enum('studying','social','sports','meetings') DEFAULT 'studying',
+  `is_recurring` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `user_availability`
+--
+
+INSERT INTO `user_availability` (`availability_id`, `user_id`, `day_of_week`, `start_time`, `end_time`, `preferred_activity`, `is_recurring`, `created_at`) VALUES
+('avail_1', 'user_1', 'monday', '14:00:00', '16:00:00', 'studying', 1, '2025-10-16 13:36:22'),
+('avail_2', 'user_1', 'wednesday', '10:00:00', '12:00:00', 'meetings', 1, '2025-10-16 13:36:22'),
+('avail_3', 'user_2', 'tuesday', '15:00:00', '17:00:00', 'studying', 1, '2025-10-16 13:36:22');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_courses`
+--
+
+CREATE TABLE `user_courses` (
+  `user_course_id` varchar(50) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
+  `course_code` varchar(50) NOT NULL,
+  `course_name` varchar(255) NOT NULL,
+  `department_id` varchar(50) DEFAULT NULL,
+  `semester` varchar(50) DEFAULT NULL,
+  `academic_year` int DEFAULT NULL,
+  `is_current` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `user_courses`
+--
+
+INSERT INTO `user_courses` (`user_course_id`, `user_id`, `course_code`, `course_name`, `department_id`, `semester`, `academic_year`, `is_current`, `created_at`) VALUES
+('uc_1', 'user_1', 'CS106', 'Programming Methodology', 'dept_1', 'Fall', 2024, 1, '2025-10-16 13:36:22'),
+('uc_2', 'user_1', 'CS229', 'Machine Learning', 'dept_1', 'Fall', 2024, 1, '2025-10-16 13:36:22'),
+('uc_3', 'user_2', 'BIO101', 'Introduction to Biology', 'dept_2', 'Fall', 2024, 1, '2025-10-16 13:36:22');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_interests`
+--
+
+CREATE TABLE `user_interests` (
+  `interest_id` varchar(50) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
+  `interest_type` enum('academic','hobby','career','sports','arts') DEFAULT 'hobby',
+  `interest_name` varchar(100) NOT NULL,
+  `skill_level` enum('beginner','intermediate','advanced','expert') DEFAULT 'beginner',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `user_interests`
+--
+
+INSERT INTO `user_interests` (`interest_id`, `user_id`, `interest_type`, `interest_name`, `skill_level`, `created_at`) VALUES
+('int_1', 'user_1', 'academic', 'Machine Learning', 'advanced', '2025-10-16 13:36:22'),
+('int_2', 'user_1', 'hobby', 'Basketball', 'intermediate', '2025-10-16 13:36:22'),
+('int_3', 'user_1', 'arts', 'Photography', 'beginner', '2025-10-16 13:36:22'),
+('int_4', 'user_2', 'academic', 'Molecular Biology', 'advanced', '2025-10-16 13:36:22'),
+('int_5', 'user_2', 'sports', 'Running', 'intermediate', '2025-10-16 13:36:22');
+
+-- --------------------------------------------------------
+
+--
+-- Stand-in structure for view `user_profiles_comprehensive`
+-- (See below for the actual view)
+--
+CREATE TABLE `user_profiles_comprehensive` (
+`bio` text
+,`connection_count` bigint
+,`created_at` timestamp
+,`date_of_birth` date
+,`email` varchar(255)
+,`event_count` bigint
+,`first_name` varchar(100)
+,`graduation_year` int
+,`group_count` bigint
+,`last_login` timestamp
+,`last_name` varchar(100)
+,`linkedin_url` varchar(500)
+,`privacy_profile` enum('public','university','friends','private')
+,`profile_headline` varchar(255)
+,`profile_picture_url` varchar(500)
+,`program` varchar(100)
+,`show_location_preference` enum('friends','university','none')
+,`show_status_preference` enum('friends','university','none')
+,`university_id` varchar(50)
+,`university_name` varchar(255)
+,`user_id` varchar(50)
+,`website_url` varchar(500)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_search_index`
+--
+
+CREATE TABLE `user_search_index` (
+  `user_id` varchar(50) NOT NULL,
+  `search_content` text NOT NULL,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -673,6 +819,24 @@ INSERT INTO `user_sessions` (`session_id`, `user_id`, `device_type`, `device_tok
 ('sess_7', 'user_7', 'android', 'device_token_7', 'fcm_token_7', '192.168.1.106', '2025-10-15 23:55:56', '2024-12-31 23:59:59', 1, '2025-10-15 23:55:56'),
 ('sess_8', 'user_8', 'ios', 'device_token_8', 'fcm_token_8', '192.168.1.107', '2025-10-15 23:55:56', '2024-12-31 23:59:59', 1, '2025-10-15 23:55:56'),
 ('sess_9', 'user_9', 'android', 'device_token_9', 'fcm_token_9', '192.168.1.108', '2025-10-15 23:55:56', '2024-12-31 23:59:59', 1, '2025-10-15 23:55:56');
+
+-- --------------------------------------------------------
+
+--
+-- Structure for view `connection_recommendations`
+--
+DROP TABLE IF EXISTS `connection_recommendations`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `connection_recommendations`  AS SELECT `u1`.`user_id` AS `source_user_id`, `u2`.`user_id` AS `recommended_user_id`, (select count(0) from (`user_courses` `uc1` join `user_courses` `uc2` on((`uc1`.`course_code` = `uc2`.`course_code`))) where ((`uc1`.`user_id` = `u1`.`user_id`) and (`uc2`.`user_id` = `u2`.`user_id`) and (`uc1`.`is_current` = 1) and (`uc2`.`is_current` = 1))) AS `common_courses_score`, (select count(0) from (`group_members` `gm1` join `group_members` `gm2` on((`gm1`.`group_id` = `gm2`.`group_id`))) where ((`gm1`.`user_id` = `u1`.`user_id`) and (`gm2`.`user_id` = `u2`.`user_id`))) AS `common_groups_score`, (select count(0) from (`connections` `c1` join `connections` `c2` on((((`c1`.`requester_id` = `u1`.`user_id`) and (`c1`.`receiver_id` = `c2`.`requester_id`) and (`c2`.`receiver_id` = `u2`.`user_id`)) or ((`c1`.`requester_id` = `u1`.`user_id`) and (`c1`.`receiver_id` = `c2`.`receiver_id`) and (`c2`.`requester_id` = `u2`.`user_id`))))) where ((`c1`.`status` = 'accepted') and (`c2`.`status` = 'accepted'))) AS `mutual_connections_score`, (case when (`u1`.`program` = `u2`.`program`) then 1 else 0 end) AS `same_program_score`, (case when (`u1`.`graduation_year` = `u2`.`graduation_year`) then 1 else 0 end) AS `same_graduation_score` FROM ((`users` `u1` join `users` `u2` on(((`u1`.`user_id` <> `u2`.`user_id`) and (`u1`.`university_id` = `u2`.`university_id`)))) left join `connections` `c` on((((`c`.`requester_id` = `u1`.`user_id`) and (`c`.`receiver_id` = `u2`.`user_id`)) or ((`c`.`requester_id` = `u2`.`user_id`) and (`c`.`receiver_id` = `u1`.`user_id`))))) WHERE ((`c`.`connection_id` is null) AND (`u1`.`is_active` = 1) AND (`u2`.`is_active` = 1)) ;
+
+-- --------------------------------------------------------
+
+--
+-- Structure for view `user_profiles_comprehensive`
+--
+DROP TABLE IF EXISTS `user_profiles_comprehensive`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `user_profiles_comprehensive`  AS SELECT `u`.`user_id` AS `user_id`, `u`.`university_id` AS `university_id`, `uni`.`name` AS `university_name`, `u`.`email` AS `email`, `u`.`first_name` AS `first_name`, `u`.`last_name` AS `last_name`, `u`.`profile_picture_url` AS `profile_picture_url`, `u`.`profile_headline` AS `profile_headline`, `u`.`program` AS `program`, `u`.`graduation_year` AS `graduation_year`, `u`.`bio` AS `bio`, `u`.`linkedin_url` AS `linkedin_url`, `u`.`website_url` AS `website_url`, `u`.`date_of_birth` AS `date_of_birth`, `u`.`show_location_preference` AS `show_location_preference`, `u`.`show_status_preference` AS `show_status_preference`, `u`.`privacy_profile` AS `privacy_profile`, count(distinct `conn`.`connection_id`) AS `connection_count`, count(distinct `gm`.`group_id`) AS `group_count`, count(distinct `ea`.`event_id`) AS `event_count`, `u`.`created_at` AS `created_at`, `u`.`last_login` AS `last_login` FROM ((((`users` `u` left join `universities` `uni` on((`u`.`university_id` = `uni`.`university_id`))) left join `connections` `conn` on((((`u`.`user_id` = `conn`.`requester_id`) or (`u`.`user_id` = `conn`.`receiver_id`)) and (`conn`.`status` = 'accepted')))) left join `group_members` `gm` on((`u`.`user_id` = `gm`.`user_id`))) left join `event_attendees` `ea` on(((`u`.`user_id` = `ea`.`user_id`) and (`ea`.`rsvp_status` = 'going')))) WHERE (`u`.`is_active` = 1) GROUP BY `u`.`user_id` ;
 
 --
 -- Indexes for dumped tables
@@ -781,6 +945,39 @@ ALTER TABLE `users`
   ADD KEY `idx_created_at` (`created_at`);
 
 --
+-- Indexes for table `user_availability`
+--
+ALTER TABLE `user_availability`
+  ADD PRIMARY KEY (`availability_id`),
+  ADD KEY `idx_user_id` (`user_id`),
+  ADD KEY `idx_day_time` (`day_of_week`,`start_time`);
+
+--
+-- Indexes for table `user_courses`
+--
+ALTER TABLE `user_courses`
+  ADD PRIMARY KEY (`user_course_id`),
+  ADD UNIQUE KEY `unique_user_course` (`user_id`,`course_code`,`academic_year`),
+  ADD KEY `idx_user_id` (`user_id`),
+  ADD KEY `idx_course_code` (`course_code`),
+  ADD KEY `idx_department_id` (`department_id`);
+
+--
+-- Indexes for table `user_interests`
+--
+ALTER TABLE `user_interests`
+  ADD PRIMARY KEY (`interest_id`),
+  ADD KEY `idx_user_id` (`user_id`),
+  ADD KEY `idx_interest_type` (`interest_type`);
+
+--
+-- Indexes for table `user_search_index`
+--
+ALTER TABLE `user_search_index`
+  ADD PRIMARY KEY (`user_id`);
+ALTER TABLE `user_search_index` ADD FULLTEXT KEY `idx_search_content` (`search_content`);
+
+--
 -- Indexes for table `user_sessions`
 --
 ALTER TABLE `user_sessions`
@@ -802,7 +999,7 @@ ALTER TABLE `audit_logs`
 -- AUTO_INCREMENT for table `otps`
 --
 ALTER TABLE `otps`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- Constraints for dumped tables
@@ -866,6 +1063,31 @@ ALTER TABLE `university_departments`
 --
 ALTER TABLE `users`
   ADD CONSTRAINT `users_ibfk_1` FOREIGN KEY (`university_id`) REFERENCES `universities` (`university_id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `user_availability`
+--
+ALTER TABLE `user_availability`
+  ADD CONSTRAINT `user_availability_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `user_courses`
+--
+ALTER TABLE `user_courses`
+  ADD CONSTRAINT `user_courses_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `user_courses_ibfk_2` FOREIGN KEY (`department_id`) REFERENCES `university_departments` (`department_id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `user_interests`
+--
+ALTER TABLE `user_interests`
+  ADD CONSTRAINT `user_interests_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `user_search_index`
+--
+ALTER TABLE `user_search_index`
+  ADD CONSTRAINT `user_search_index_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `user_sessions`

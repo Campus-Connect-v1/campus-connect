@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { db } from "./config/db.js";
 import { swaggerDocs } from "./utils/swagger.js";
 import authRoutes from "./routes/auth.routes.js";
+import userRoutes from "./routes/user.routes.js";
 
 dotenv.config();
 const app = express();
@@ -33,6 +34,7 @@ app.get("/api/health", (req, res) => {
   res.status(200).json({ message: "API is healthy" });
 });
 app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
 
 // ============= MIDDLWAREs ======================
 // =========================404 handler
