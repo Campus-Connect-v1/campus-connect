@@ -14,6 +14,7 @@ import {
   getConnectionRecommendationsModel,
   removeCourseByCodeModel,
   findById,
+  checkExistingConnectionModel,
 } from "../models/user.model.js";
 import { authenticate } from "../middleware/auth.js";
 
@@ -136,9 +137,38 @@ export const sendConnectionRequest = async (req, res) => {
     }
 
     if (requesterId === receiver_id) {
-      return res
-        .status(400)
-        .json({ message: "Cannot send connection request to yourself" });
+      return res.status(400).json({
+        message: "Cannot send connection request to yourself",
+      });
+    }
+
+    // Check existing connection with detailed status
+    const existingConnection = await checkExistingConnectionModel(
+      requesterId,
+      receiver_id
+    );
+
+    if (existingConnection) {
+      let message;
+      switch (existingConnection.status) {
+        case "pending":
+          message = "Connection request is already pending";
+          break;
+        case "accepted":
+          message = "You are already connected with this user";
+          break;
+        case "rejected":
+          message = "Previous connection request was rejected";
+          break;
+        default:
+          message = "Connection already exists";
+      }
+
+      return res.status(409).json({
+        message,
+        connection_id: existingConnection.connection_id,
+        status: existingConnection.status,
+      });
     }
 
     const connectionId = await createConnectionRequest(
@@ -152,6 +182,13 @@ export const sendConnectionRequest = async (req, res) => {
     });
   } catch (error) {
     console.error("Send connection error:", error);
+
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        message: "Connection request already exists",
+      });
+    }
+
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -189,7 +226,7 @@ export const respondToConnection = async (req, res) => {
 export const getConnections = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { status } = req.params; // Changed to req.params
+    const { status } = req.params;
 
     const connections = await getUserConnections(userId, status || "accepted");
 
@@ -198,18 +235,18 @@ export const getConnections = async (req, res) => {
       count: connections.length,
       connections: connections.map((conn) => {
         const otherUser =
-          conn.user_id_1 === userId
+          conn.requester_id === userId
             ? {
-                id: conn.user_id_2,
-                first_name: conn.user2_first_name,
-                last_name: conn.user2_last_name,
-                profile_picture_url: conn.user2_profile_pic,
+                id: conn.receiver_id,
+                first_name: conn.receiver_first_name,
+                last_name: conn.receiver_last_name,
+                profile_picture_url: conn.receiver_profile_pic,
               }
             : {
-                id: conn.user_id_1,
-                first_name: conn.user1_first_name,
-                last_name: conn.user1_last_name,
-                profile_picture_url: conn.user1_profile_pic,
+                id: conn.requester_id,
+                first_name: conn.requester_first_name,
+                last_name: conn.requester_last_name,
+                profile_picture_url: conn.requester_profile_pic,
               };
 
         return {
@@ -364,7 +401,7 @@ export const addInterest = async (req, res) => {
 // Get user by ID
 export const getUserById = async (req, res) => {
   try {
-    const userId = req.params;
+    const { userId } = req.params;
 
     if (!userId) {
       return res.status(400).json({
@@ -385,20 +422,54 @@ export const getUserById = async (req, res) => {
     res.status(200).json({
       message: "User retrieved successfully",
       user: {
+        // Core Identity
         user_id: user.user_id,
+        university_id: user.university_id,
+        email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
-        email: user.email,
+        gender: user.gender,
+        date_of_birth: user.date_of_birth,
+
+        // Profile & Appearance
         profile_picture_url: user.profile_picture_url,
-        program: user.program,
+        profile_headline: user.profile_headline,
         bio: user.bio,
-        year_of_study: user.year_of_study,
+
+        // Academic Information
+        program: user.program,
         graduation_year: user.graduation_year,
-        university_id: user.university_id,
+        year_of_study: user.year_of_study,
+
+        // Contact & Links
+        phone_number: user.phone_number,
+        linkedin_url: user.linkedin_url,
+        website_url: user.website_url,
+        social_links: user.social_links,
+        interests: user.interests,
+
+        // University Context
         university_name: user.university_name,
         university_domain: user.university_domain,
+
+        // Preferences
+        privacy_profile: user.privacy_profile,
+        privacy_settings: user.privacy_settings,
+        show_location_preference: user.show_location_preference,
+        show_status_preference: user.show_status_preference,
+        timezone: user.timezone,
+        notification_email: user.notification_email,
+        notification_push: user.notification_push,
+
+        // Account Status
+        is_active: user.is_active,
+        is_email_verified: user.is_email_verified,
         is_profile_complete: user.is_profile_complete,
+
+        // Timestamps
+        last_login: user.last_login,
         created_at: user.created_at,
+        updated_at: user.updated_at,
       },
     });
   } catch (error) {
@@ -419,6 +490,7 @@ export const getConnectionRecommendations = async (req, res) => {
     if (limit < 1 || limit > 50) {
       return res.status(400).json({
         message: "Limit must be between 1 and 50",
+        // if this shows then something failed
       });
     }
 

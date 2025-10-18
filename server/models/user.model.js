@@ -8,7 +8,8 @@ export const findById = async (userId) => {
       `SELECT u.*, uni.name as university_name, uni.domain as university_domain
        FROM users u 
        LEFT JOIN universities uni ON u.university_id = uni.university_id
-       WHERE u.user_id = ? AND u.is_active = 1`,
+       WHERE u.user_id = ? 
+       -- AND u.is_active = 1`,
       [userId]
     );
     return rows[0] || null;
@@ -166,7 +167,7 @@ export const searchUsersModel = async (filters = {}) => {
       LEFT JOIN universities uni ON u.university_id = uni.university_id
       LEFT JOIN user_interests ui ON u.user_id = ui.user_id
       LEFT JOIN user_courses uc ON u.user_id = uc.user_id
-      -- WHERE u.is_active = 1
+       WHERE u.is_active = 1 
     `;
     // uncomment this line if you want to include active users only. for now, we are including all users.(the db was loaded understand me)
     const params = [];
@@ -277,7 +278,7 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
     return rows;
   } catch (error) {
     throw new Error(
-      `Database error in getConnectionRecommendations: ${error.message}`
+      `Database error in getConnectionRecommendationsModel: ${error.message}`
     );
   }
 };
@@ -450,12 +451,12 @@ export const updateConnectionStatus = async (connectionId, status, userId) => {
 export const getUserConnections = async (userId, status = "accepted") => {
   const [rows] = await db.execute(
     `SELECT uc.*, 
-            u1.first_name as user1_first_name, u1.last_name as user1_last_name, u1.profile_picture_url as user1_profile_pic,
-            u2.first_name as user2_first_name, u2.last_name as user2_last_name, u2.profile_picture_url as user2_profile_pic
-     FROM user_connections uc
-     JOIN users u1 ON uc.user_id_1 = u1.user_id
-     JOIN users u2 ON uc.user_id_2 = u2.user_id
-     WHERE (uc.user_id_1 = ? OR uc.user_id_2 = ?) AND uc.status = ?`,
+       u1.first_name as user1_first_name, u1.last_name as user1_last_name, u1.profile_picture_url as user1_profile_pic,
+       u2.first_name as user2_first_name, u2.last_name as user2_last_name, u2.profile_picture_url as user2_profile_pic
+FROM connections uc
+JOIN users u1 ON uc.requester_id = u1.user_id
+JOIN users u2 ON uc.receiver_id = u2.user_id
+WHERE (uc.requester_id = ? OR uc.receiver_id = ?) AND uc.status = ?`,
     [userId, userId, status]
   );
   return rows;
@@ -549,4 +550,15 @@ export const removeCourseByCodeModel = async (userId, courseCode) => {
       `Database error in removeCourseByCodeModel: ${error.message}`
     );
   }
+};
+export const checkExistingConnectionModel = async (user1, user2) => {
+  const query = `
+    SELECT connection_id, status 
+    FROM user_connections 
+    WHERE (user_id_1 = ? AND user_id_2 = ?) 
+       OR (user_id_1 = ? AND user_id_2 = ?)
+  `;
+
+  const [rows] = await db.execute(query, [user1, user2, user2, user1]);
+  return rows[0] || null;
 };
