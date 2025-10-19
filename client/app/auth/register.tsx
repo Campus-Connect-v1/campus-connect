@@ -30,7 +30,8 @@ interface RegisterScreenProps {
   onNavigateToHome?: () => void
 }
 
-export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: RegisterScreenProps = {}) {
+export default function RegisterScreen(props: RegisterScreenProps = {}) {
+  const { onRegisterSuccess, onNavigateToHome } = props;
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
