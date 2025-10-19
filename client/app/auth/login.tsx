@@ -3,6 +3,7 @@
 import Colors from "@/src/constants/Colors"
 import { loginSchema, type LoginSchema } from "@/src/schemas/authSchemas"
 import { signInWithEmail } from "@/src/services/authServices"
+import { storage } from "@/src/utils/storage"
 import { Ionicons } from "@expo/vector-icons"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "expo-router"
@@ -20,16 +21,21 @@ import {
   TouchableOpacity,
   View,
 } from "react-native"
+import DropdownAlert from "@/src/components/ui/DropdownAlert"
+import { useDropdownAlert } from "@/src/hooks/useDropdownAlert"
 
 interface LoginScreenProps {
-  onLoginSuccess: () => void
-  onNavigateToSignup: () => void
+  onLoginSuccess?: (token: string, user: any) => void
+  onNavigateToSignup?: () => void
 }
 
-export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: LoginScreenProps) {
+export default function LoginScreen(props: LoginScreenProps = {}) {
+  const { onLoginSuccess, onNavigateToSignup } = props;
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isGoogleLoading] = useState(false)
+  // const scrollX = React.useRef(new Animated.Value(0)).current
+  const { alert, hideAlert, success, error } = useDropdownAlert()
   const router = useRouter()
 
   const {
@@ -44,24 +50,65 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
     },
   })
 
-  const onSubmit = async (data: LoginSchema) => {
-    router.push('/home');
-  }
   // const onSubmit = async (data: LoginSchema) => {
-  //   setIsLoading(true)
-  //   try {
-  //     const result = await signInWithEmail(data)
-  //     if (result.success) {
-  //       onLoginSuccess()
-  //     } else {
-  //       Alert.alert("Login Failed", result.error || "Please try again")
-  //     }
-  //   } catch (error) {
-  //     Alert.alert("Error", "An unexpected error occurred")
-  //   } finally {
-  //     setIsLoading(false)
-  //   }
+  //   router.push('/(tabs)/home');
   // }
+  const onSubmit = async (data: LoginSchema) => {
+    setIsLoading(true)
+    try {
+      console.log("Attempting login with:", { email: data.email })
+      const result = await signInWithEmail(data)
+      console.log("Login result:", result)
+      
+      if (result.success) {
+        try {
+          // Store token and user data
+          console.log("Storing token and user data...")
+          await storage.setToken(result.data.token)
+          await storage.setUserData(result.data.user)
+          console.log("Token and user data stored successfully")
+          
+          // Call success callback with token and user data (if provided)
+          if (onLoginSuccess) {
+            onLoginSuccess(result.data.token, result.data.user)
+          }
+          
+          success("uniCLIQ", "Login successful!", 4000)
+          setTimeout(() => {
+            router.push("/(tabs)/home")
+          }, 2000)
+        } catch (storageError) {
+          console.error("Storage error:", storageError)
+          error("uniCLIQ", "Failed to save login", 4000)
+        }
+      } else {
+        console.log("Login failed:", result.error)
+        const errorMessage = result.error?.message || result.error || "Please try again"
+        
+        // Special handling for email verification
+        if (result.error?.message === "Email not verified") {
+          Alert.alert(
+            "Email Not Verified", 
+            "Please verify your email address before logging in.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { 
+                text: "Verify Email", 
+                onPress: () => router.push("/auth/verify-email") 
+              }
+            ]
+          )
+        } else {
+          error("uniCLIQ", "Login Failed", 4000)
+        }
+      }
+    } catch (error: any) {
+      console.error("Login error:", error)
+      error("uniCLIQ", "Login Failed", 4000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // const handleGoogleSignIn = async () => {
   //   setIsGoogleLoading(true)
@@ -82,12 +129,17 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-
-
+      <DropdownAlert
+        visible={alert.visible}
+        type={alert.type}
+        title={alert.title}
+        message={alert.message}
+        onDismiss={hideAlert}
+      />
         {/* Welcome Text */}
         <View style={styles.welcomeContainer}>
           <Text style={styles.welcomeTitle}>Welcome Back!</Text>
-          <Text style={styles.welcomeSubtitle}>Sign in to continue to CampusConnect</Text>
+          <Text style={styles.welcomeSubtitle}>Sign in to continue to uniCLIQ</Text>
         </View>
 
         {/* Login Form */}
@@ -142,7 +194,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
           </View>
 
           {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotPasswordContainer}>
+          <TouchableOpacity onPress={()=> {router.push("/auth/forgot-password")}} style={styles.forgotPasswordContainer}>
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
 
@@ -180,8 +232,8 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => router.push("/auth/register")}>
+            <Text style={styles.signupText}>{"Don't have an account? "}</Text>
+            <TouchableOpacity onPress={() => onNavigateToSignup ? onNavigateToSignup() : router.push("/auth/register")}>
               <Text style={styles.signupLink}>Sign Up</Text>
             </TouchableOpacity>
           </View>
@@ -195,7 +247,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
-    paddingTop: 40,
+    paddingTop: 60,
   },
   scrollContainer: {
     flexGrow: 1,
