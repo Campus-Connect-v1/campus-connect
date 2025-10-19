@@ -13,13 +13,16 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-} from "react-native";
+ Alert } from "react-native";
 import { forgotSchema, ForgotSchema } from "@/src/schemas/authSchemas";
+
 import { forgotPassword } from "@/src/services/authServices";
+import { useState } from "react";
 
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
   const { control, handleSubmit, formState: { errors } } = useForm<ForgotSchema>({
     resolver: zodResolver(forgotSchema),
   });
@@ -28,25 +31,26 @@ export default function ForgotPasswordScreen() {
   //   console.log("Send reset link to:", data.email);
   //   router.push("/auth/reset-password");
   // };
-  const onSubmit = () => {
-    router.push("/auth/verify-otp");
-  };
+  // const onSubmit = () => {
+  //   router.push("/auth/verify-otp");
+  // };
 
-  //   const onSubmit = async (data: ForgotSchema) => {
-  //   setIsLoading(true)
-  //   try {
-  //     const result = await forgotPassword(data)
-  //     if (result.success) {
-  //       onLoginSuccess()
-  //     } else {
-  //       Alert.alert("Login Failed", result.error || "Please try again")
-  //     }
-  //   } catch (error) {
-  //     Alert.alert("Error", "An unexpected error occurred")
-  //   } finally {
-  //     setIsLoading(false)
-  //   }
-  // }
+    const onSubmit = async (data: ForgotSchema) => {
+    setIsLoading(true)
+    try {
+      const result = await forgotPassword(data)
+      if (result.success) {
+        Alert.alert("Success", result.data || "Reset link sent to your email")
+        router.push("/auth/reset-password");
+      } else {
+        Alert.alert("Login Failed", result.error || "Please try again")
+      }
+    } catch {
+      Alert.alert("Error", "An unexpected error occurred")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>

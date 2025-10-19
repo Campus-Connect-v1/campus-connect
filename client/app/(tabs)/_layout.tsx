@@ -1,4 +1,4 @@
-import ProfileDrawer from '@/src/components/layout/profile-drawer';
+
 import { icons } from '@/src/constants/icons';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Tabs } from 'expo-router';
@@ -37,7 +37,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
   };
 
   return (
-    <View className="size-full justify-center items-center mt-4 rounded-full bg-white" >
+    <View className="size-full justify-center items-center mt-4 bg-white" >
       <Image
         source={icon}
         tintColor={focused ? Colors.light.primary : '#000'}
@@ -60,36 +60,14 @@ const TabIcon = ({ focused, icon, title }: any) => {
 
 
 const TabsLayout = () => {
-    const [isDrawerVisible, setIsDrawerVisible] = useState(false);
 
-     const user = {
-    name: 'Joshua User',
-    username: '@joshuser',
-    avatar: 'https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-  };
 
-  const handleNavigate = (screen: string) => {
-    console.log(`Navigate to ${screen}`);
-    // Add your navigation logic here
-  };
-
-  const handleLogout = () => {
-    console.log('Logout');
-    // Add your logout logic here
-  };
   
   const handleProfilePress = () => {
     router.push('/(tabs)/profile');
   };
   return (
     <>
-      <ProfileDrawer
-        isVisible={isDrawerVisible}
-        onClose={() => setIsDrawerVisible(false)}
-        user={user}
-        onNavigate={handleNavigate}
-        onLogout={handleLogout}
-      />
 
     <Tabs
       screenOptions={{
@@ -127,11 +105,6 @@ const TabsLayout = () => {
             fontFamily: 'Gilroy-SemiBold',
             color: '#fff',
           },
-          headerLeft: () => (
-      <TouchableOpacity onPress={() => setIsDrawerVisible(true)} className="ml-4">
-        <Ionicons name="settings-outline" size={28} color="#fff" />
-      </TouchableOpacity>
-    ),
     headerRight: () => (
       <TouchableOpacity onPress={handleProfilePress} className="mr-4">
         <Image

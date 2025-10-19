@@ -58,11 +58,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const user = posts[0].user;
 
   return (
-    <SafeAreaView className="flex-1 bg-transparent">
+    <SafeAreaView className="flex-1">
       <StatusBar barStyle="dark-content" />
       <ScrollView className="flex-1">
         {/* Header */}
-        <View className="flex-row items-center px-4 py-3 bg-white">
+        <View className="flex-row items-center px-4 py-3">
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>

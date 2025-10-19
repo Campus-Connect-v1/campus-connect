@@ -20,11 +20,11 @@ interface SplashScreenProps {
 
 // Student images from Unsplash
 const studentImages = [
-  "https://images.unsplash.com/photo-1685539144681-5b1386d5fd9b?q=80&w=2127&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1577036057060-d318e280b0c2?q=80&w=1964&auto=format&fit=crop",
+  "https://www.waccbip.org/images/2023/ARUA_CORE_PROJECT/light.jpg",
+  "https://rmu.edu.gh/wp-content/uploads/photo-gallery/IMG_7689.jpg?bwg=1752484920",
   "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1463453091185-61582044d556?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1694175271713-a6e2cc378980?q=80&w=1965&auto=format&fit=crop",
+  "https://www.waccbip.org/images/2023/ARUA_CORE_PROJECT/light.jpg",
   "https://images.unsplash.com/photo-1686213011642-b25f94b95b96?q=80&w=2043&auto=format&fit=crop",
 ];
 
@@ -33,7 +33,7 @@ const { width } = Dimensions.get("window");
 // Onboarding content
 const onboardingData = [
   {
-    title: "Welcome to CampusConnect",
+    title: "Welcome to uniCLIQ",
     subtitle: "Your Ultimate Campus Companion",
     description:
       "Connecting students, simplifying campus life, and creating meaningful experiences.",

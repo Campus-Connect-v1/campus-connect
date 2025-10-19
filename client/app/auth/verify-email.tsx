@@ -1,7 +1,6 @@
 "use client";
 
 import Colors from "@/src/constants/Colors";
-import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, Controller } from "react-hook-form";
 import { useRouter } from "expo-router";
@@ -14,43 +13,49 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { verifyEmailSchema, VerifyEmailSchema } from "@/src/schemas/authSchemas";
-import { verifyOtp } from "@/src/services/authServices";
+import { resendOtp } from "@/src/services/authServices";
+import { useState } from "react";
 
 
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  
   const {
     control,
     handleSubmit,
     formState: { errors },
   } = useForm<VerifyEmailSchema>({
     resolver: zodResolver(verifyEmailSchema),
+    defaultValues: {
+      email: "",
+    },
   });
 
   const onSubmit = async (data: VerifyEmailSchema) => {
-    // Call API to send OTP to email
-    console.log("Sending OTP to:", data.email);
-    router.push("/auth/verify-otp");
+    setIsLoading(true);
+    try {
+      const result = await resendOtp(data);
+      if (result.success) {
+        Alert.alert("Success", "Verification code sent! Please check your email.");
+        router.push({
+          pathname: "/auth/verify-otp",
+          params: { email: data.email }
+        });
+      } else {
+        Alert.alert("Failed", result.error || "Please try again");
+      }
+    } catch (error: any) {
+      console.error("Resend OTP error:", error);
+      Alert.alert("Error", error.message || "An unexpected error occurred");
+    } finally {
+      setIsLoading(false);
+    }
   };
-
-    //   const onSubmit = async (data: VerifyEmailSchema) => {
-    //   setIsLoading(true)
-    //   try {
-    //     const result = await verifyEmail(data)
-    //     if (result.success) {
-    //       onLoginSuccess()
-    //     } else {
-    //       Alert.alert("Login Failed", result.error || "Please try again")
-    //     }
-    //   } catch (error) {
-    //     Alert.alert("Error", "An unexpected error occurred")
-    //   } finally {
-    //     setIsLoading(false)
-    //   }
-    // }
 
   return (
     <KeyboardAvoidingView
@@ -83,8 +88,16 @@ export default function VerifyEmailScreen() {
           <Text style={styles.errorText}>{errors.email.message}</Text>
         )}
 
-        <TouchableOpacity style={styles.button} onPress={handleSubmit(onSubmit)}>
-          <Text style={styles.buttonText}>Send OTP</Text>
+        <TouchableOpacity 
+          style={[styles.button, isLoading && styles.buttonDisabled]} 
+          onPress={handleSubmit(onSubmit)}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.buttonText}>Send OTP</Text>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -126,4 +139,5 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   buttonText: { color: "white", fontSize: 16, fontWeight: "bold" },
+  buttonDisabled: { opacity: 0.7 },
 });
