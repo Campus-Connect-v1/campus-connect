@@ -86,6 +86,6 @@ export const verifyOtpSchema = z.object({
     .regex(/^\d+$/, "OTP must contain only numbers"),
 })
 
-export type VerifyOtpSchema = z.infer<typeof verifyOtpSchema>
+export type VerifyOtpSchema = z.infer<typeof verifyOtpSchema>;
 
 
