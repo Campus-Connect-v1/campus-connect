@@ -6,7 +6,8 @@ import { db } from "./config/db.js";
 import { swaggerDocs } from "./utils/swagger.js";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
-
+import universityRoutes from "./routes/university.routes.js";
+import socialRoutes from "./routes/social.routes.js";
 dotenv.config();
 const app = express();
 
@@ -35,6 +36,8 @@ app.get("/api/health", (req, res) => {
 });
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/university", universityRoutes);
+app.use("/api/social", socialRoutes);
 
 // ============= MIDDLWAREs ======================
 // =========================404 handler
@@ -44,13 +47,7 @@ app.use((req, res, next) => {
     path: req.originalUrl,
     method: req.method,
     availableEndpoints: [
-      "POST /api/auth/register",
-      "POST /api/auth/login",
-      "POST /api/auth/verify-otp",
-      "POST /api/auth/resend-otp",
-      "POST /api/auth/forgot-password",
-      "POST /api/auth/reset-password",
-      "GET /api/health",
+      `let's assume you are a hacker, why would i tell you the available endpoints?`,
     ],
   });
 });

@@ -299,7 +299,97 @@ export const addInterestModel = async (userId, interestData) => {
     throw new Error(`Database error in addInterest: ${error.message}`);
   }
 };
+export const updateInterestModel = async (userId, interestId, interestData) => {
+  try {
+    const { interest_type, interest_name, skill_level } = interestData;
 
+    // Validate interest_type against allowed values
+    const allowedInterestTypes = [
+      "academic",
+      "hobby",
+      "career",
+      "sports",
+      "arts",
+    ];
+    if (interest_type && !allowedInterestTypes.includes(interest_type)) {
+      throw new Error(
+        `Invalid interest_type. Allowed values: ${allowedInterestTypes.join(
+          ", "
+        )}`
+      );
+    }
+
+    // Validate skill_level against allowed values
+    const allowedSkillLevels = [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "expert",
+    ];
+    if (skill_level && !allowedSkillLevels.includes(skill_level)) {
+      throw new Error(
+        `Invalid skill_level. Allowed values: ${allowedSkillLevels.join(", ")}`
+      );
+    }
+
+    // First, verify the interest belongs to the user
+    const [existing] = await db.execute(
+      "SELECT interest_id FROM user_interests WHERE interest_id = ? AND user_id = ?",
+      [interestId, userId]
+    );
+
+    if (existing.length === 0) {
+      throw new Error("Interest not found or access denied");
+    }
+
+    // Build dynamic update query
+    const updateFields = [];
+    const values = [];
+
+    if (interest_type !== undefined) {
+      updateFields.push("interest_type = ?");
+      values.push(interest_type);
+    }
+
+    if (interest_name !== undefined) {
+      updateFields.push("interest_name = ?");
+      values.push(interest_name);
+    }
+
+    if (skill_level !== undefined) {
+      updateFields.push("skill_level = ?");
+      values.push(skill_level);
+    }
+
+    if (updateFields.length === 0) {
+      throw new Error("No valid fields to update");
+    }
+
+    values.push(interestId, userId);
+
+    // Update the interest
+    const [result] = await db.execute(
+      `UPDATE user_interests SET ${updateFields.join(
+        ", "
+      )} WHERE interest_id = ? AND user_id = ?`,
+      values
+    );
+
+    if (result.affectedRows === 0) {
+      throw new Error("Failed to update interest");
+    }
+
+    // Return the updated interest
+    const [updatedInterest] = await db.execute(
+      "SELECT * FROM user_interests WHERE interest_id = ? AND user_id = ?",
+      [interestId, userId]
+    );
+
+    return updatedInterest[0];
+  } catch (error) {
+    throw new Error(`Database error in updateInterest: ${error.message}`);
+  }
+};
 // Remove user interest
 export const removeInterestModel = async (userId, interestId) => {
   try {
@@ -429,37 +519,152 @@ export const getUserStatsModel = async (userId) => {
   }
 };
 
-export const createConnectionRequest = async (requesterId, receiverId) => {
-  const connectionId = uuidv4();
-  const [result] = await db.execute(
-    `INSERT INTO user_connections ( user_id_1, user_id_2, status) 
-     VALUES ( ?, ?, 'pending')`,
-    [requesterId, receiverId]
-  );
-  return connectionId;
-};
+export const createConnectionRequest = async (
+  connectionId,
+  requesterId,
+  receiverId,
+  connectionNote = null,
+  sharedCourses = null
+) => {
+  try {
+    const query = `
+      INSERT INTO connections (connection_id, requester_id, receiver_id, status, connection_note, shared_courses) 
+           VALUES (?, ?, ?, 'pending', ?, ?)
+    `;
 
+    const [result] = await db.execute(query, [
+      connectionId,
+      requesterId,
+      receiverId,
+      connectionNote,
+      sharedCourses,
+    ]);
+
+    return result;
+  } catch (error) {
+    console.error("Create connection model error:", error);
+    throw error;
+  }
+};
 export const updateConnectionStatus = async (connectionId, status, userId) => {
   const [result] = await db.execute(
-    `UPDATE user_connections SET status = ?, updated_at = CURRENT_TIMESTAMP 
+    `UPDATE uconnections SET status = ?, updated_at = CURRENT_TIMESTAMP 
      WHERE connection_id = ? AND (user_id_1 = ? OR user_id_2 = ?)`,
     [status, connectionId, userId, userId]
   );
   return result.affectedRows > 0;
 };
+export const cancelConnectionRequestModel = async (connectionId, userId) => {
+  try {
+    const query = `
+      UPDATE connections 
+      SET status = 'declined', updated_at = CURRENT_TIMESTAMP 
+      WHERE connection_id = ? 
+        AND requester_id = ? 
+        AND status = 'pending'
+    `;
+
+    const [result] = await db.execute(query, [connectionId, userId]);
+
+    if (result.affectedRows === 0) {
+      throw new Error(
+        "Connection request not found, already processed, or you don't have permission to cancel it"
+      );
+    }
+
+    return {
+      success: true,
+      connection_id: connectionId,
+      status: "cancelled",
+    };
+  } catch (error) {
+    console.error("Cancel connection model error:", error);
+    throw error;
+  }
+};
 
 export const getUserConnections = async (userId, status = "accepted") => {
   const [rows] = await db.execute(
-    `SELECT uc.*, 
-       u1.first_name as user1_first_name, u1.last_name as user1_last_name, u1.profile_picture_url as user1_profile_pic,
-       u2.first_name as user2_first_name, u2.last_name as user2_last_name, u2.profile_picture_url as user2_profile_pic
-FROM connections uc
-JOIN users u1 ON uc.requester_id = u1.user_id
-JOIN users u2 ON uc.receiver_id = u2.user_id
-WHERE (uc.requester_id = ? OR uc.receiver_id = ?) AND uc.status = ?`,
+    `SELECT 
+      uc.*,
+      u1.first_name as requester_first_name, 
+      u1.last_name as requester_last_name, 
+      u1.profile_picture_url as requester_profile_pic,
+      u2.first_name as receiver_first_name, 
+      u2.last_name as receiver_last_name, 
+      u2.profile_picture_url as receiver_profile_pic
+    FROM connections uc
+    JOIN users u1 ON uc.requester_id = u1.user_id
+    JOIN users u2 ON uc.receiver_id = u2.user_id
+    WHERE (uc.requester_id = ? OR uc.receiver_id = ?) 
+      AND uc.status = ?
+    ORDER BY uc.updated_at DESC`,
     [userId, userId, status]
   );
   return rows;
+};
+
+export const getAllUserConnectionsModel = async (
+  userId,
+  status,
+  limit,
+  offset
+) => {
+  try {
+    let query = `
+      SELECT 
+        uc.*,
+        u1.first_name as requester_first_name, 
+        u1.last_name as requester_last_name, 
+        u1.profile_picture_url as requester_profile_pic,
+        u1.profile_headline as requester_headline,
+        u1.program as requester_program,
+        u2.first_name as receiver_first_name, 
+        u2.last_name as receiver_last_name, 
+        u2.profile_picture_url as receiver_profile_pic,
+        u2.profile_headline as receiver_headline,
+        u2.program as receiver_program
+      FROM connections uc
+      JOIN users u1 ON uc.requester_id = u1.user_id
+      JOIN users u2 ON uc.receiver_id = u2.user_id
+      WHERE (uc.requester_id = ? OR uc.receiver_id = ?)
+    `;
+
+    const params = [userId, userId];
+
+    // Add status filter if provided
+    if (status && status !== "all") {
+      query += ` AND uc.status = ?`;
+      params.push(status);
+    }
+
+    query += ` ORDER BY 
+      CASE uc.status
+        WHEN 'pending' THEN 1
+        WHEN 'accepted' THEN 2
+        WHEN 'declined' THEN 3
+        WHEN 'blocked' THEN 4
+        ELSE 5
+      END,
+      uc.updated_at DESC`;
+
+    // Add pagination if provided
+    if (limit) {
+      query += ` LIMIT ?`;
+      params.push(parseInt(limit));
+
+      if (offset) {
+        query += ` OFFSET ?`;
+        params.push(parseInt(offset));
+      }
+    }
+
+    const [rows] = await db.execute(query, params);
+    return rows;
+  } catch (error) {
+    console.error("Get all user connections model error:", error);
+    throw error;
+  }
 };
 
 export const getUserProfile = async (userId) => {
@@ -551,14 +756,149 @@ export const removeCourseByCodeModel = async (userId, courseCode) => {
     );
   }
 };
-export const checkExistingConnectionModel = async (user1, user2) => {
-  const query = `
+export const checkExistingConnectionModel = async (requesterId, receiverId) => {
+  try {
+    const query = `
     SELECT connection_id, status 
-    FROM user_connections 
-    WHERE (user_id_1 = ? AND user_id_2 = ?) 
-       OR (user_id_1 = ? AND user_id_2 = ?)
+FROM connections 
+WHERE (requester_id = ? AND receiver_id = ?) 
+   OR (requester_id = ? AND receiver_id = ?)
+ORDER BY updated_at DESC
   `;
 
-  const [rows] = await db.execute(query, [user1, user2, user2, user1]);
-  return rows[0] || null;
+    const [rows] = await db.execute(query, [
+      requesterId,
+      receiverId,
+      receiverId, // Check reverse direction
+      requesterId,
+    ]);
+    return rows[0] || null;
+  } catch (error) {
+    console.error("Check existing connection model error:", error);
+    throw error;
+  }
+};
+
+export const deleteProfileModel = async (
+  userId,
+  deletionReason = "User initiated"
+) => {
+  try {
+    await db.beginTransaction();
+
+    // 1. Archive the user data with expiration date
+    const [archiveResult] = await db.execute(
+      `INSERT INTO user_archive 
+       SELECT *, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 DAY)
+       FROM users 
+       WHERE user_id = ?`,
+      [deletionReason, userId]
+    );
+
+    // 2. Soft delete user
+    const [updateResult] = await db.execute(
+      `UPDATE users 
+       SET is_active = 0, 
+           email = CONCAT('deleted_', UNIX_TIMESTAMP(), '_', user_id, '@deleted.example'),
+           password_hash = '',
+           first_name = 'Deleted',
+           last_name = 'User',
+           profile_picture_url = NULL,
+           phone_number = NULL,
+           bio = NULL,
+           profile_headline = NULL,
+           linkedin_url = NULL,
+           website_url = NULL,
+           privacy_profile = 'private',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ?`,
+      [userId]
+    );
+
+    // 3. Update connections status
+    await db.execute(
+      `UPDATE connections 
+       SET status = 'declined' 
+       WHERE (requester_id = ? OR receiver_id = ?) 
+       AND status = 'pending'`,
+      [userId, userId]
+    );
+
+    // 4. Remove from active sessions
+    await db.execute(`DELETE FROM user_sessions WHERE user_id = ?`, [userId]);
+
+    await db.commit();
+
+    return {
+      archived: archiveResult.affectedRows > 0,
+      deactivated: updateResult.affectedRows > 0,
+    };
+  } catch (error) {
+    await db.rollback();
+    throw new Error(`Database error in deleteProfile: ${error.message}`);
+  }
+};
+export const recoverProfileModel = async (userId) => {
+  try {
+    await db.beginTransaction();
+
+    // 1. Check if recovery is within 30 days
+    const [archivedUser] = await db.execute(
+      `SELECT * FROM user_archive 
+       WHERE user_id = ? 
+       AND archived_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY)`,
+      [userId]
+    );
+
+    if (archivedUser.length === 0) {
+      throw new Error(
+        "Recovery period has expired or user not found in archive"
+      );
+    }
+
+    const userData = archivedUser[0];
+
+    // 2. Restore user data
+    const [restoreResult] = await db.execute(
+      `UPDATE users 
+       SET is_active = 1,
+           email = ?,
+           password_hash = ?,
+           first_name = ?,
+           last_name = ?,
+           profile_picture_url = ?,
+           phone_number = ?,
+           bio = ?,
+           profile_headline = ?,
+           linkedin_url = ?,
+           website_url = ?,
+           privacy_profile = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ?`,
+      [
+        userData.email,
+        userData.password_hash,
+        userData.first_name,
+        userData.last_name,
+        userData.profile_picture_url,
+        userData.phone_number,
+        userData.bio,
+        userData.profile_headline,
+        userData.linkedin_url,
+        userData.website_url,
+        userData.privacy_profile,
+        userId,
+      ]
+    );
+
+    // 3. Remove from archive
+    await db.execute(`DELETE FROM user_archive WHERE user_id = ?`, [userId]);
+
+    await db.commit();
+
+    return { restored: restoreResult.affectedRows > 0 };
+  } catch (error) {
+    await db.rollback();
+    throw new Error(`Database error in recoverProfile: ${error.message}`);
+  }
 };
