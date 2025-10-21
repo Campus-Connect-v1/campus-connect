@@ -1120,3 +1120,110 @@ All endpoints use appropriate HTTP status codes:
 - **Soft Deletion:** Posts are not permanently removed but marked as inactive.
 
 ---
+
+```markdown
+# `GET /api/universities/domains`
+
+## 📘 Overview
+
+Retrieves a filtered list of universities along with their associated domains, logos, colors, and locations.  
+Used primarily for populating dropdowns or university selection menus during signup or profile setup.
+
+---
+
+## Endpoint Details
+
+| Method  | Endpoint                    | Description                                       |
+| ------- | --------------------------- | ------------------------------------------------- |
+| **GET** | `/api/universities/domains` | Fetch university domain information and metadata. |
+```
+
+---
+
+## Headers
+
+```
+
+Authorization: Bearer <token> // optional if endpoint is public
+Content-Type: application/json
+
+```
+
+---
+
+## 🔍 Query Parameters
+
+| Parameter | Type   | Required | Description                                                                        |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------------- |
+| `search`  | string | No       | Search term to filter universities by name or domain. Default: `""` (returns all). |
+
+**Example:**
+
+```
+
+GET /api/universities/domains?search=tech
+
+```
+
+---
+
+## Response (200 OK)
+
+```json
+{
+  "message": "University domains retrieved successfully",
+  "count": 2,
+  "universities": [
+    {
+      "value": "kstu.edu.gh",
+      "label": "Kumasi Technical University",
+      "university_id": "uni_001",
+      "logo_url": "https://example.com/kstu-logo.png",
+      "location": "Kumasi, Ashanti, Ghana",
+      "colors": {
+        "primary": "#004D40",
+        "secondary": "#FFFFFF",
+        "accent": "#FFC107",
+        "text": "#333333"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Empty Result Example
+
+```json
+{
+  "message": "No universities found",
+  "count": 0,
+  "universities": []
+}
+```
+
+---
+
+## Error Response (500 Internal Server Error)
+
+```json
+{
+  "message": "Failed to retrieve university domains",
+  "error": "Database connection failed"
+}
+```
+
+> The `error` field only appears in development mode.
+
+---
+
+## ⚙️ Notes
+
+- The `location` field automatically combines `city`, `state`, and `country` (excluding null or empty values).
+- The `colors` object provides a fallback palette when database color values are missing.
+- Ideal for use in **dropdown selectors** or **university verification** workflows.
+
+```
+
+```
