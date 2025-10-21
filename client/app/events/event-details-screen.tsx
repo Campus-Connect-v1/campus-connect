@@ -52,7 +52,7 @@ const EventDetailsScreen: React.FC<EventDetailsScreenProps> = ({ navigation }) =
           <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-600 text-base leading-6 mb-6">
             Join us for an exciting networking event where tech enthusiasts, entrepreneurs, and industry professionals come together to share ideas, collaborate, and build meaningful connections. This event will feature keynote speakers, interactive workshops, and plenty of opportunities to network with like-minded individuals in the tech community.
             {'\n\n'}
-            Whether you're a seasoned professional or just starting your career in tech, this event offers valuable insights, learning opportunities, and the chance to expand your professional network. Don't miss out on this incredible opportunity to connect with the tech community!
+            Whether you&#39;re a seasoned professional or just starting your career in tech, this event offers valuable insights, learning opportunities, and the chance to expand your professional network. Don&#39;t miss out on this incredible opportunity to connect with the tech community!
           </Text>
 
           {/* Event Details */}

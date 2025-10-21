@@ -1,5 +1,4 @@
-import { StyleSheet, Text, View } from "react-native"
-import Colors from "@/src/constants/Colors"
+import { View } from "react-native"
 import FeedScreen from "../feed/feed-screen"
 
 export default function HomeScreen() {
