@@ -42,3 +42,224 @@ export const getUniversityDomains = async (req, res) => {
     });
   }
 };
+
+// ================ CAMPUS CONTROLLER ==========================
+import { CampusBuilding } from "../models/university.model.js";
+import { CampusFacility } from "../models/university.model.js";
+
+export const campusController = {
+  // Get all buildings for university
+  getBuildings: async (req, res) => {
+    try {
+      const { university_id } = req.params;
+      const { building_type } = req.query;
+
+      const buildings = await CampusBuilding.findByUniversity(
+        university_id,
+        building_type
+      );
+
+      res.json({
+        success: true,
+        data: buildings,
+      });
+    } catch (error) {
+      console.error("Get buildings error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching buildings",
+        error: error.message,
+      });
+    }
+  },
+
+  // Get building by ID
+  getBuildingById: async (req, res) => {
+    try {
+      const { buildingId } = req.params;
+      const building = await CampusBuilding.findById(buildingId);
+
+      if (!building) {
+        return res.status(404).json({
+          success: false,
+          message: "Building not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: building,
+      });
+    } catch (error) {
+      console.error("Get building error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching building",
+        error: error.message,
+      });
+    }
+  },
+
+  // Search buildings
+  searchBuildings: async (req, res) => {
+    try {
+      const { university_id } = req.params;
+      const { q: searchTerm } = req.query;
+
+      if (!searchTerm) {
+        return res.status(400).json({
+          success: false,
+          message: "Search term is required",
+        });
+      }
+
+      const buildings = await CampusBuilding.search(university_id, searchTerm);
+
+      res.json({
+        success: true,
+        data: buildings,
+      });
+    } catch (error) {
+      console.error("Search buildings error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error searching buildings",
+        error: error.message,
+      });
+    }
+  },
+
+  // Get facilities by building
+  getFacilitiesByBuilding: async (req, res) => {
+    try {
+      const { buildingId } = req.params;
+      const { facility_type } = req.query;
+
+      const facilities = await CampusFacility.findByBuilding(
+        buildingId,
+        facility_type
+      );
+
+      res.json({
+        success: true,
+        data: facilities,
+      });
+    } catch (error) {
+      console.error("Get facilities error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching facilities",
+        error: error.message,
+      });
+    }
+  },
+
+  // Get facility by ID
+  getFacilityById: async (req, res) => {
+    try {
+      const { facilityId } = req.params;
+      const facility = await CampusFacility.findById(facilityId);
+
+      if (!facility) {
+        return res.status(404).json({
+          success: false,
+          message: "Facility not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: facility,
+      });
+    } catch (error) {
+      console.error("Get facility error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching facility",
+        error: error.message,
+      });
+    }
+  },
+
+  // Search facilities
+  searchFacilities: async (req, res) => {
+    try {
+      const { university_id } = req.params;
+      const { q: searchTerm } = req.query;
+
+      if (!searchTerm) {
+        return res.status(400).json({
+          success: false,
+          message: "Search term is required",
+        });
+      }
+
+      const facilities = await CampusFacility.search(university_id, searchTerm);
+
+      res.json({
+        success: true,
+        data: facilities,
+      });
+    } catch (error) {
+      console.error("Search facilities error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error searching facilities",
+        error: error.message,
+      });
+    }
+  },
+
+  // Get facilities by type
+  getFacilitiesByType: async (req, res) => {
+    try {
+      const { university_id } = req.params;
+      const { facility_type } = req.query;
+
+      if (!facility_type) {
+        return res.status(400).json({
+          success: false,
+          message: "Facility type is required",
+        });
+      }
+
+      const facilities = await CampusFacility.findByType(
+        university_id,
+        facility_type
+      );
+
+      res.json({
+        success: true,
+        data: facilities,
+      });
+    } catch (error) {
+      console.error("Get facilities by type error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching facilities by type",
+        error: error.message,
+      });
+    }
+  },
+
+  // Get reservable facilities
+  getReservableFacilities: async (req, res) => {
+    try {
+      const { university_id } = req.params;
+
+      const facilities = await CampusFacility.getReservable(university_id);
+
+      res.json({
+        success: true,
+        data: facilities,
+      });
+    } catch (error) {
+      console.error("Get reservable facilities error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching reservable facilities",
+        error: error.message,
+      });
+    }
+  },
+};

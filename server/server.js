@@ -4,11 +4,15 @@ import cors from "cors";
 import morgan from "morgan";
 import { db } from "./config/db.js";
 import { swaggerDocs } from "./utils/swagger.js";
+
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import universityRoutes from "./routes/university.routes.js";
 import socialRoutes from "./routes/social.routes.js";
 import locationRoutes from "./routes/location.routes.js";
+import eventRoutes from "./routes/event.routes.js";
+import studyGroupRoutes from "./routes/studyGroup.routes.js";
+
 import connectMongoDB from "./config/mongoDB.js";
 
 dotenv.config();
@@ -43,6 +47,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/university", universityRoutes);
 app.use("/api/social", socialRoutes);
 app.use("/api/geofencing", locationRoutes);
+app.use("/api/events", eventRoutes);
 
 // ============= MIDDLWAREs ======================
 // =========================404 handler
