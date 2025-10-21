@@ -13,11 +13,14 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
-import { Bell, Search, Calendar, Users, Star } from "lucide-react-native";
+import { Search, Calendar, Users } from "lucide-react-native";
 import ProfileDrawer from '@/src/components/layout/profile-drawer';
 import { Ionicons } from "@expo/vector-icons";
 import { styles } from "@/src/styles/home.styles";
 import Colors from "@/src/constants/Colors";
+import { logout } from "@/src/services/authServices";
+import { announcements, highlights } from "@/src/mocks/mockData";
+
 
 const { width, height } = Dimensions.get("window");
 export const CARD_WIDTH = width * 0.75;
@@ -42,43 +45,9 @@ export default function HomeScreen() {
   };
 
   const handleLogout = () => {
-    console.log('Logout');
-    // Add your logout logic here
+    logout();
+    router.replace("/auth/login")
   };
-
-  // Example carousel data
-  const highlights = [
-    {
-      id: "1",
-      title: "Student Hackathon This Weekend!",
-      image:
-        "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=800&q=80",
-    },
-    {
-      id: "2",
-      title: "Music Night @ Arts Hall 🎵",
-      image:
-        "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=800&q=80",
-    },
-    {
-      id: "3",
-      title: "Volunteer with Campus Green",
-      image:
-        "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=800&q=80",
-    },
-    {
-      id: "4",
-      title: "Volunteer with Campus Green",
-      image:
-        "https://www.waccbip.org/images/2023/ARUA_CORE_PROJECT/light.jpg",
-    },
-    {
-      id: "5",
-      title: "Volunteer with Campus Green",
-      image:
-        "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=800&q=80",
-    },
-  ];
 
   return (
     <View style={styles.container}>

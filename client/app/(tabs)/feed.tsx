@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View } from "react-native"
 import Colors from "@/src/constants/Colors"
+import FeedScreen from "../feed/feed-screen"
 
 export default function HomeScreen() {
   return (
-    <View >
-      <Text className="text-red-500 text-4xl">Home Screen</Text>
-      <Text >Welcome to CampusConnect!</Text>
+    <View className="flex-1">
+            <FeedScreen />
     </View>
   )
 }

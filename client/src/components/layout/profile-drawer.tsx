@@ -91,7 +91,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       title: 'Events',
       icon: 'calendar-outline',
       onPress: () => {
-        // router.push('/screens/events/events-screen')
+        router.push('/events/events-screen')
         onClose();
       },
     },

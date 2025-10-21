@@ -1,8 +1,7 @@
 
 import { icons } from '@/src/constants/icons';
-import { Ionicons } from '@expo/vector-icons';
 import { router, Tabs } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, Image, TouchableOpacity, View } from 'react-native';
 import Colors from '@/src/constants/Colors';
 
@@ -60,9 +59,6 @@ const TabIcon = ({ focused, icon, title }: any) => {
 
 
 const TabsLayout = () => {
-
-
-  
   const handleProfilePress = () => {
     router.push('/(tabs)/profile');
   };
@@ -163,16 +159,16 @@ const TabsLayout = () => {
         }}
       />
       <Tabs.Screen
-        name='community'
+        name='feed'
         options={{
           headerStyle: { backgroundColor: '#002D69' },
-          title: 'COMMUNITY',
+          title: 'FEED',
            headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
             color: '#fff',
           },
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.person} title='COMMUNITY' />
+            <TabIcon focused={focused} icon={icons.person} title='FEED' />
           ),
            headerLeft: () => (
       <TouchableOpacity onPress={handleProfilePress} className="ml-4">
