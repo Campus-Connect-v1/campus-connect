@@ -7,6 +7,7 @@ import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import '../globals.css';
+import Colors from "@/src/constants/Colors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,7 +25,7 @@ export default function RootLayout() {
   useEffect(() => {
     const init = async () => {
       const seen = await AsyncStorage.getItem("hasSeenOnboarding");
-      const loggedIn = false; // TODO: hook Firebase here
+      const loggedIn = false; 
 
       if (seen) {
         setInitialRoute("onboarding");
@@ -48,13 +49,13 @@ export default function RootLayout() {
   if (!fontsLoaded || loading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#6200ee" />
+        <ActivityIndicator size="large" color={Colors.light.primary} />
       </View>
     );
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView>
       <SafeAreaProvider>
         <Stack
           screenOptions={{ headerShown: false }}

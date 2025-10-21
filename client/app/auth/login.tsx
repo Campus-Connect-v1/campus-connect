@@ -2,8 +2,7 @@
 
 import Colors from "@/src/constants/Colors"
 import { loginSchema, type LoginSchema } from "@/src/schemas/authSchemas"
-import { signInWithEmail } from "@/src/services/authServices"
-import { storage } from "@/src/utils/storage"
+// import { signInWithEmail } from "@/src/services/authServices"
 import { Ionicons } from "@expo/vector-icons"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "expo-router"
@@ -11,7 +10,6 @@ import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -35,7 +33,7 @@ export default function LoginScreen(props: LoginScreenProps = {}) {
   const [showPassword, setShowPassword] = useState(false)
   const [isGoogleLoading] = useState(false)
   // const scrollX = React.useRef(new Animated.Value(0)).current
-  const { alert, hideAlert, success, error } = useDropdownAlert()
+  const { alert, hideAlert } = useDropdownAlert()
   const router = useRouter()
 
   const {
@@ -50,65 +48,65 @@ export default function LoginScreen(props: LoginScreenProps = {}) {
     },
   })
 
-  // const onSubmit = async (data: LoginSchema) => {
-  //   router.push('/(tabs)/home');
-  // }
   const onSubmit = async (data: LoginSchema) => {
-    setIsLoading(true)
-    try {
-      console.log("Attempting login with:", { email: data.email })
-      const result = await signInWithEmail(data)
-      console.log("Login result:", result)
-      
-      if (result.success) {
-        try {
-          // Store token and user data
-          console.log("Storing token and user data...")
-          await storage.setToken(result.data.token)
-          await storage.setUserData(result.data.user)
-          console.log("Token and user data stored successfully")
-          
-          // Call success callback with token and user data (if provided)
-          if (onLoginSuccess) {
-            onLoginSuccess(result.data.token, result.data.user)
-          }
-          
-          success("uniCLIQ", "Login successful!", 4000)
-          setTimeout(() => {
-            router.push("/(tabs)/home")
-          }, 2000)
-        } catch (storageError) {
-          console.error("Storage error:", storageError)
-          error("uniCLIQ", "Failed to save login", 4000)
-        }
-      } else {
-        console.log("Login failed:", result.error)
-        const errorMessage = result.error?.message || result.error || "Please try again"
-        
-        // Special handling for email verification
-        if (result.error?.message === "Email not verified") {
-          Alert.alert(
-            "Email Not Verified", 
-            "Please verify your email address before logging in.",
-            [
-              { text: "Cancel", style: "cancel" },
-              { 
-                text: "Verify Email", 
-                onPress: () => router.push("/auth/verify-email") 
-              }
-            ]
-          )
-        } else {
-          error("uniCLIQ", "Login Failed", 4000)
-        }
-      }
-    } catch (error: any) {
-      console.error("Login error:", error)
-      error("uniCLIQ", "Login Failed", 4000)
-    } finally {
-      setIsLoading(false)
-    }
+    router.push('/(tabs)/home');
   }
+  // const onSubmit = async (data: LoginSchema) => {
+  //   setIsLoading(true)
+  //   try {
+  //     console.log("Attempting login with:", { email: data.email })
+  //     const result = await signInWithEmail(data)
+  //     console.log("Login result:", result)
+      
+  //     if (result.success) {
+  //       try {
+  //         // Store token and user data
+  //         console.log("Storing token and user data...")
+  //         await storage.setToken(result.data.token)
+  //         await storage.setUserData(result.data.user)
+  //         console.log("Token and user data stored successfully")
+          
+  //         // Call success callback with token and user data (if provided)
+  //         if (onLoginSuccess) {
+  //           onLoginSuccess(result.data.token, result.data.user)
+  //         }
+          
+  //         success("uniCLIQ", "Login successful!", 4000)
+  //         setTimeout(() => {
+  //           router.push("/(tabs)/home")
+  //         }, 2000)
+  //       } catch (storageError) {
+  //         console.error("Storage error:", storageError)
+  //         error("uniCLIQ", "Failed to save login", 4000)
+  //       }
+  //     } else {
+  //       console.log("Login failed:", result.error)
+  //       const errorMessage = result.error?.message || result.error || "Please try again"
+        
+  //       // Special handling for email verification
+  //       if (result.error?.message === "Email not verified") {
+  //         Alert.alert(
+  //           "Email Not Verified", 
+  //           "Please verify your email address before logging in.",
+  //           [
+  //             { text: "Cancel", style: "cancel" },
+  //             { 
+  //               text: "Verify Email", 
+  //               onPress: () => router.push("/auth/verify-email") 
+  //             }
+  //           ]
+  //         )
+  //       } else {
+  //         error("uniCLIQ", "Login Failed", 4000)
+  //       }
+  //     }
+  //   } catch (error: any) {
+  //     console.error("Login error:", error)
+  //     error("uniCLIQ", "Login Failed", 4000)
+  //   } finally {
+  //     setIsLoading(false)
+  //   }
+  // }
 
   // const handleGoogleSignIn = async () => {
   //   setIsGoogleLoading(true)

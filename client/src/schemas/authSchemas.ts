@@ -1,9 +1,5 @@
 import { z } from "zod";
 
-
-
-
-
 export const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters long"),
@@ -29,9 +25,9 @@ export const signupSchema = z
       .email("Invalid email address")
       .refine(
         (val) =>
-          val.endsWith(".edu") || val.includes(".edu.") || val.includes(".ac."),
+          val.endsWith(".edu") || val.includes(".edu.") ,
         {
-          message: "Email must be a valid university email (.edu or .ac domains)",
+          message: "Email must be a valid university email (.edu domain)",
         }
       ),
     password: z
