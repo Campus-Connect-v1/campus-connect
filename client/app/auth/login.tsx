@@ -28,7 +28,7 @@ interface LoginScreenProps {
 }
 
 export default function LoginScreen(props: LoginScreenProps = {}) {
-  const { onLoginSuccess, onNavigateToSignup } = props;
+  const {  onNavigateToSignup } = props;
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [isGoogleLoading] = useState(false)

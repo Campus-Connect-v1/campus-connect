@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { styles } from "@/src/styles/home.styles";
 import Colors from "@/src/constants/Colors";
 import { logout } from "@/src/services/authServices";
-import { announcements, highlights } from "@/src/mocks/mockData";
+import { highlights } from "@/src/mocks/mockData";
 
 
 const { width, height } = Dimensions.get("window");
