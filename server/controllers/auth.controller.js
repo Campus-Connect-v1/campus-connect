@@ -9,7 +9,7 @@ import {
   verifyOTP as verifyOTPModel,
   deleteOTP,
   markEmailAsVerified, // Make sure this is imported
-} from "../models/user.model.js";
+} from "../models/auth.model.js";
 import {
   registerValidation,
   loginValidation,
