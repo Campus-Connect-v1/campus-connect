@@ -1,3 +1,4 @@
+import Colors from '@/src/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
@@ -90,7 +91,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       title: 'Events',
       icon: 'calendar-outline',
       onPress: () => {
-        // router.push('/screens/events/events-screen')
+        router.push('/events/events-screen')
         onClose();
       },
     },
@@ -146,9 +147,10 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 
       {/* Drawer */}
       <Animated.View
-        className="absolute top-0 left-0 h-full w-72 bg-[#002D69]"
+        className="absolute top-0 left-0 h-full w-72"
         style={{
           transform: [{ translateX: slideAnim }],
+          backgroundColor: Colors.light.primary
         }}
       >
         {/* User Profile Section */}
@@ -203,10 +205,11 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
         {/* Logout Button */}
         <View className="p-6 pb-8">
           <TouchableOpacity
-            className="bg-yellow-500 rounded-full py-4 items-center active:bg-yellow-600"
+            className="rounded-full py-4 items-center"
+            style={{backgroundColor: Colors.light.border}}
             onPress={handleLogout}
           >
-            <Text style={{fontFamily: "Gilroy-Medium"}} className="text-white text-lg font-semibold">
+            <Text style={{fontFamily: "Gilroy-Medium"}} className="text-black text-lg font-semibold">
               Log out
             </Text>
           </TouchableOpacity>

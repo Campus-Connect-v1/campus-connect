@@ -4,8 +4,8 @@ import { Ionicons } from "@expo/vector-icons"
 import { zodResolver } from "@hookform/resolvers/zod"
 
 import Colors from "@/src/constants/Colors"
-import { loginSchema, signupSchema, type SignupSchema } from "@/src/schemas/authSchemas"
-import { signInWithEmail, signUpWithEmail } from "@/src/services/authServices"
+import { signupSchema, type SignupSchema } from "@/src/schemas/authSchemas"
+import { signUpWithEmail } from "@/src/services/authServices"
 import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import {
@@ -21,18 +21,23 @@ import {
   View,
 } from "react-native"
 import { useRouter } from "expo-router"
+import { useDropdownAlert } from "@/src/hooks/useDropdownAlert"
+import { Image } from "expo-image"
+import logo from "@/assets/images/logo.png"
 
 interface RegisterScreenProps {
-  onRegisterSuccess: () => void
-  onNavigateToHome: () => void
+  onRegisterSuccess?: (message: string) => void
+  onNavigateToHome?: () => void
 }
 
-export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: RegisterScreenProps) {
+export default function RegisterScreen(props: RegisterScreenProps = {}) {
+  const { onRegisterSuccess, onNavigateToHome } = props;
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isGoogleLoading] = useState(false)
   const router = useRouter()
+  const { alert, hideAlert, success, error } = useDropdownAlert()
 
   const {
     control,
@@ -41,28 +46,56 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
   } = useForm<SignupSchema>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      fullName: "",
+      first_name: "",
+      last_name: "",
       email: "",
       password: "",
-      confirmPassword: "",
+      university_id: "",
     },
   })
 
   const onSubmit = async (data: SignupSchema) => {
-    setIsLoading(true)
+    const payload = {
+      first_name: data.first_name.trim(),
+      last_name: data.last_name.trim(),
+      email: data.email.toLowerCase().trim(),
+      password: data.password,
+      university_id: data.university_id || "uni_1",
+    };
+  
+    setIsLoading(true);
+  
     try {
-      const result = await signUpWithEmail(data)
-      if (result.success) {
-        onRegisterSuccess()
-      } else {
-        Alert.alert("Registration Failed", result.error || "Please try again")
+      const result = await signUpWithEmail(payload);
+  
+      if (!result) {
+        throw new Error("No response from server");
       }
-    } catch (error) {
-      Alert.alert("Error", "An unexpected error occurred")
+  
+      if (result.success) {
+        // Call success callback if provided
+        if (onRegisterSuccess) {
+          onRegisterSuccess(result.data?.message || "Registration successful! Please check your email to verify your account.");
+        }
+        success("uniCLIQ", "Registration successful! Please check your email to verify your account.", 4000)
+        setTimeout(()=>{
+          router.push({
+            pathname: "/auth/verify-otp",
+            params: { email: data.email }
+          });
+        }, 2000)
+      } else {
+        error("uniCLIQ","Registration Failed", 4000)
+      }
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      Alert.alert("Error", error.message || "An unexpected error occurred");
+      error("Error", error.message || "An unexpected error occurred", 4000)
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
+  
 
   // const handleGoogleSignIn = async () => {
   //   setIsGoogleLoading(true)
@@ -87,21 +120,24 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
 
         {/* Welcome Text */}
         <View style={styles.welcomeContainer}>
-          <Text style={styles.welcomeTitle}>CampusConnect!</Text>
-          <Text style={styles.welcomeSubtitle}>Sign up to CampusConnect</Text>
+        <Image
+  source={require("@/assets/images/logo.png")}
+  style={{ width: 240, height: 180, resizeMode: "contain", marginBottom: 0 }}
+/>
+          <Text style={styles.welcomeSubtitle}>Sign up to uniCLIQ</Text>
         </View>
 
         {/* Register Form */}
         <View style={styles.formContainer}>
-          {/* Full Name Input */}
+          {/* First Name Input */}
           <View style={styles.inputContainer}>
             <Controller
               control={control}
-              name="fullName"
+              name="first_name"
               render={({ field: { onChange, onBlur, value } }) => (
                 <TextInput
-                  style={[styles.input, errors.fullName && styles.inputError]}
-                  placeholder="Full Name"
+                  style={[styles.input, errors.first_name && styles.inputError]}
+                  placeholder="First Name"
                   placeholderTextColor={Colors.light.textSecondary}
                   value={value}
                   onChangeText={onChange}
@@ -112,7 +148,28 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
                 />
               )}
             />
-            {errors.fullName && <Text style={styles.errorText}>{errors.fullName.message}</Text>}
+            {errors.first_name && <Text style={styles.errorText}>{errors.first_name.message}</Text>}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Controller
+              control={control}
+              name="last_name"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  style={[styles.input, errors.last_name && styles.inputError]}
+                  placeholder="Last Name"
+                  placeholderTextColor={Colors.light.textSecondary}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  keyboardType="default"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              )}
+            />
+            {errors.last_name && <Text style={styles.errorText}>{errors.last_name.message}</Text>}
           </View>
 
           {/* Email Input */}
@@ -202,7 +259,7 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
             onPress={handleSubmit(onSubmit)}
             disabled={isLoading}
           >
-            {isLoading ? <ActivityIndicator color="white" /> : <Text style={styles.loginButtonText}>Sign In</Text>}
+            {isLoading ? <ActivityIndicator color="white" /> : <Text style={styles.loginButtonText}>Sign Up</Text>}
           </TouchableOpacity>
 
           {/* Divider */}
@@ -230,8 +287,8 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => router.push("/auth/login")}>
+            <Text style={styles.signupText}>Don&apos;t have an account? </Text>
+            <TouchableOpacity onPress={() => onNavigateToHome ? onNavigateToHome() : router.push("/auth/login")}>
               <Text style={styles.signupLink}>Sign in</Text>
             </TouchableOpacity>
           </View>
@@ -269,7 +326,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     color: Colors.light.text,
-    marginBottom: 8,
     fontFamily: "Chillis",
   },
   welcomeSubtitle: {
