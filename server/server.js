@@ -8,13 +8,17 @@ import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import universityRoutes from "./routes/university.routes.js";
 import socialRoutes from "./routes/social.routes.js";
+import locationRoutes from "./routes/location.routes.js";
+import connectMongoDB from "./config/mongoDB.js";
+
 dotenv.config();
 const app = express();
 
+// ============= MONGO DB ====================
+connectMongoDB();
+
 // ============= SWAGGER =====================
 swaggerDocs(app);
-
-dotenv.config();
 
 // ============ DEBUG =====================
 console.log("PORT:", process.env.PORT);
@@ -38,6 +42,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/university", universityRoutes);
 app.use("/api/social", socialRoutes);
+app.use("/api/geofencing", locationRoutes);
 
 // ============= MIDDLWAREs ======================
 // =========================404 handler
