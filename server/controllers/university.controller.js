@@ -61,6 +61,7 @@ export const campusController = {
 
       res.json({
         success: true,
+        count: buildings.length,
         data: buildings,
       });
     } catch (error) {
@@ -110,11 +111,19 @@ export const campusController = {
         return res.status(400).json({
           success: false,
           message: "Search term is required",
+          example: "Add ?q=science to your query string",
         });
       }
 
       const buildings = await CampusBuilding.search(university_id, searchTerm);
 
+      if (buildings.length === 0) {
+        return res.json({
+          success: true,
+          data: buildings,
+          message: `No building called -- ${searchTerm} -- was found`,
+        });
+      }
       res.json({
         success: true,
         data: buildings,
@@ -191,13 +200,20 @@ export const campusController = {
         return res.status(400).json({
           success: false,
           message: "Search term is required",
+          example: "Add ?q=facility to your query string",
         });
       }
 
       const facilities = await CampusFacility.search(university_id, searchTerm);
-
+      if (facilities.length === 0) {
+        return res.json({
+          success: true,
+          message: `No facility with query -- ${searchTerm} -- was found`,
+        });
+      }
       res.json({
         success: true,
+        count: facilities.length,
         data: facilities,
       });
     } catch (error) {
@@ -227,9 +243,15 @@ export const campusController = {
         university_id,
         facility_type
       );
-
+      if (facilities.length === 0) {
+        return res.json({
+          success: true,
+          message: `No facility of type -- ${facility_type} -- was found`,
+        });
+      }
       res.json({
         success: true,
+        count: facilities.length,
         data: facilities,
       });
     } catch (error) {
@@ -248,9 +270,15 @@ export const campusController = {
       const { university_id } = req.params;
 
       const facilities = await CampusFacility.getReservable(university_id);
-
+      if (facilities.length === 0) {
+        return res.json({
+          success: true,
+          message: `No reservable facilities were found`,
+        });
+      }
       res.json({
         success: true,
+        count: facilities.length,
         data: facilities,
       });
     } catch (error) {

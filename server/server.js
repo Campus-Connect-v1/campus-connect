@@ -2,7 +2,6 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
-import { db } from "./config/db.js";
 import { swaggerDocs } from "./utils/swagger.js";
 
 import authRoutes from "./routes/auth.routes.js";
