@@ -40,7 +40,7 @@ router.get("/domains", getUniversityDomains);
 
 /**
  * @swagger
- * /api/campus/{university_id}/buildings:
+ *    /campus/{university_id}/buildings:
  *   get:
  *     summary: Get all buildings for a university
  *     tags: [Campus]
@@ -64,7 +64,7 @@ router.get("/:university_id/buildings", campusController.getBuildings);
 
 /**
  * @swagger
- * /api/campus/{university_id}/buildings/search:
+ *    /campus/{university_id}/buildings/search:
  *   get:
  *     summary: Search buildings
  *     tags: [Campus]
@@ -91,7 +91,7 @@ router.get(
 
 /**
  * @swagger
- * /api/campus/buildings/{buildingId}:
+ *    /campus/buildings/{buildingId}:
  *   get:
  *     summary: Get building by ID
  *     tags: [Campus]
@@ -111,7 +111,7 @@ router.get("/buildings/:buildingId", campusController.getBuildingById);
 
 /**
  * @swagger
- * /api/campus/buildings/{buildingId}/facilities:
+ *    /campus/buildings/{buildingId}/facilities:
  *   get:
  *     summary: Get facilities by building
  *     tags: [Campus]
@@ -138,7 +138,7 @@ router.get(
 
 /**
  * @swagger
- * /api/campus/facilities/{facilityId}:
+ *    /campus/facilities/{facilityId}:
  *   get:
  *     summary: Get facility by ID
  *     tags: [Campus]
@@ -158,7 +158,7 @@ router.get("/facilities/:facilityId", campusController.getFacilityById);
 
 /**
  * @swagger
- * /api/campus/{university_id}/facilities/search:
+ *    /campus/{university_id}/facilities/search:
  *   get:
  *     summary: Search facilities
  *     tags: [Campus]
@@ -185,7 +185,7 @@ router.get(
 
 /**
  * @swagger
- * /api/campus/{university_id}/facilities/type:
+ *    /campus/{university_id}/facilities/type:
  *   get:
  *     summary: Get facilities by type
  *     tags: [Campus]
@@ -213,7 +213,7 @@ router.get(
 
 /**
  * @swagger
- * /api/campus/{university_id}/facilities/reservable:
+ *    /campus/{university_id}/facilities/reservable:
  *   get:
  *     summary: Get reservable facilities
  *     tags: [Campus]

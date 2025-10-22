@@ -24,7 +24,7 @@ router.use(authenticate);
 
 /**
  * @swagger
- * /api/geofencing/location:
+ *   /geofencing/location:
  *   post:
  *     tags: [Geofencing]
  *     summary: Update user location
@@ -64,7 +64,7 @@ router.post("/location", updateLocation);
 
 /**
  * @swagger
- * /api/geofencing/nearby:
+ *   /geofencing/nearby:
  *   get:
  *     tags: [Geofencing]
  *     summary: Get nearby profiles
@@ -94,7 +94,7 @@ router.get("/nearby", getNearbyProfiles);
 
 /**
  * @swagger
- * /api/geofencing/privacy:
+ *   /geofencing/privacy:
  *   get:
  *     tags: [Geofencing]
  *     summary: Get privacy settings
@@ -111,7 +111,7 @@ router.get("/privacy", getPrivacySettings);
 
 /**
  * @swagger
- * /api/geofencing/privacy:
+ *   /geofencing/privacy:
  *   put:
  *     tags: [Geofencing]
  *     summary: Update privacy settings
@@ -170,7 +170,7 @@ router.put("/privacy", updatePrivacySettings);
 
 /**
  * @swagger
- * /api/geofencing/location/toggle:
+ *   /geofencing/location/toggle:
  *   post:
  *     tags: [Geofencing]
  *     summary: Toggle location sharing
@@ -199,7 +199,7 @@ router.post("/location/toggle", toggleLocationSharing);
 
 /**
  * @swagger
- * /api/geofencing/location/history:
+ *   /geofencing/location/history:
  *   get:
  *     tags: [Geofencing]
  *     summary: Get location history

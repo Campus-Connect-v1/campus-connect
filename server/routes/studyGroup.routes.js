@@ -13,7 +13,7 @@ router.use(authenticate);
 
 /**
  * @swagger
- * /api/study-groups:
+ *   /study-groups:
  *   get:
  *     summary: Get all study groups with filtering
  *     tags: [StudyGroups]
@@ -54,7 +54,7 @@ router.get("/", studyGroupController.getAllStudyGroups);
 
 /**
  * @swagger
- * /api/study-groups/user:
+ *   /study-groups/user:
  *   get:
  *     summary: Get user's study groups
  *     tags: [StudyGroups]
@@ -68,7 +68,7 @@ router.get("/user", studyGroupController.getUserStudyGroups);
 
 /**
  * @swagger
- * /api/study-groups:
+ *   /study-groups:
  *   post:
  *     summary: Create a new study group
  *     tags: [StudyGroups]
@@ -109,7 +109,7 @@ router.post("/", studyGroupController.createStudyGroup);
 
 /**
  * @swagger
- * /api/study-groups/{groupId}:
+ *   /study-groups/{groupId}:
  *   get:
  *     summary: Get study group by ID
  *     tags: [StudyGroups]
@@ -129,7 +129,7 @@ router.get("/:groupId", studyGroupController.getStudyGroupById);
 
 /**
  * @swagger
- * /api/study-groups/{groupId}:
+ *   /study-groups/{groupId}:
  *   put:
  *     summary: Update study group
  *     tags: [StudyGroups]
@@ -164,7 +164,7 @@ router.put("/:groupId", studyGroupController.updateStudyGroup);
 
 /**
  * @swagger
- * /api/study-groups/{groupId}/join:
+ *   /study-groups/{groupId}/join:
  *   post:
  *     summary: Join a study group
  *     tags: [StudyGroups]
@@ -186,7 +186,7 @@ router.post("/:groupId/join", studyGroupController.joinStudyGroup);
 
 /**
  * @swagger
- * /api/study-groups/{groupId}/leave:
+ *   /study-groups/{groupId}/leave:
  *   post:
  *     summary: Leave a study group
  *     tags: [StudyGroups]
@@ -206,7 +206,7 @@ router.post("/:groupId/leave", studyGroupController.leaveStudyGroup);
 
 /**
  * @swagger
- * /api/study-groups/{groupId}/members:
+ *   /study-groups/{groupId}/members:
  *   get:
  *     summary: Get study group members
  *     tags: [StudyGroups]

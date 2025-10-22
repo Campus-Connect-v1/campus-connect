@@ -61,7 +61,7 @@ router.get("/", eventController.getAllEvents);
 
 /**
  * @swagger
- * /api/events/user:
+ *  /events/user:
  *   get:
  *     summary: Get user's events (created and attending)
  *     tags: [Events]
@@ -75,7 +75,7 @@ router.get("/user", eventController.getUserEvents);
 
 /**
  * @swagger
- * /api/events:
+ *  /events:
  *   post:
  *     summary: Create a new event
  *     tags: [Events]
@@ -124,7 +124,7 @@ router.post("/", eventController.createEvent);
 
 /**
  * @swagger
- * /api/events/{eventId}:
+ *  /events/{eventId}:
  *   get:
  *     summary: Get event by ID
  *     tags: [Events]
@@ -144,7 +144,7 @@ router.get("/:eventId", eventController.getEventById);
 
 /**
  * @swagger
- * /api/events/{eventId}:
+ *  /events/{eventId}:
  *   put:
  *     summary: Update event
  *     tags: [Events]
@@ -183,7 +183,7 @@ router.put("/:eventId", eventController.updateEvent);
 
 /**
  * @swagger
- * /api/events/{eventId}:
+ *  /events/{eventId}:
  *   delete:
  *     summary: Delete event
  *     tags: [Events]
@@ -205,7 +205,7 @@ router.delete("/:eventId", eventController.deleteEvent);
 
 /**
  * @swagger
- * /api/events/{eventId}/rsvp:
+ *  /events/{eventId}/rsvp:
  *   post:
  *     summary: RSVP to event
  *     tags: [Events]
@@ -237,7 +237,7 @@ router.post("/:eventId/rsvp", eventController.rsvpToEvent);
 
 /**
  * @swagger
- * /api/events/{eventId}/attendees:
+ *  /events/{eventId}/attendees:
  *   get:
  *     summary: Get event attendees
  *     tags: [Events]
