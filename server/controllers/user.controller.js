@@ -162,7 +162,13 @@ export const searchUsers = async (req, res) => {
   try {
     const criteria = req.query;
     const users = await searchUsersModel(criteria);
-
+    if (users.length === 0) {
+      return res.status(200).json({
+        message: `No users found based on the criteria provided -- ${JSON.stringify(
+          criteria
+        )}`,
+      });
+    }
     res.status(200).json({
       message: "Users retrieved successfully",
       count: users.length,
