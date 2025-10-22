@@ -48,6 +48,7 @@ app.use("/api/university", universityRoutes);
 app.use("/api/social", socialRoutes);
 app.use("/api/geofencing", locationRoutes);
 app.use("/api/events", eventRoutes);
+app.use("/api/study-group", studyGroupRoutes);
 
 // ============= MIDDLWAREs ======================
 // =========================404 handler

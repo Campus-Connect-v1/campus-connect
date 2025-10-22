@@ -9,29 +9,36 @@ export const studyGroupController = {
         university_id,
         course_code,
         group_type,
-        is_active = true,
+        is_active, // Don't set default value here
         page = 1,
-        limit = 10,
+        limit = 1000,
       } = req.query;
 
       const filters = {};
       if (university_id) filters.university_id = university_id;
       if (course_code) filters.course_code = course_code;
       if (group_type) filters.group_type = group_type;
-      if (is_active !== undefined) filters.is_active = is_active === "true";
 
-      const groups = await StudyGroup.findAll(
-        filters,
-        parseInt(page),
-        parseInt(limit)
-      );
+      // Only add is_active filter if explicitly provided
+      if (is_active !== undefined) {
+        filters.is_active = is_active === "true";
+      }
+      // If is_active is not provided, don't filter by it (get all groups)
+
+      console.log("🔍 DEBUG - Filters:", filters); // Add this
+
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit) || 10;
+
+      const groups = await StudyGroup.findAll(filters, pageNum, limitNum);
 
       res.json({
         success: true,
+        count: groups.length,
         data: groups,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: pageNum,
+          limit: limitNum,
         },
       });
     } catch (error) {
@@ -43,7 +50,6 @@ export const studyGroupController = {
       });
     }
   },
-
   // Get study group by ID
   getStudyGroupById: async (req, res) => {
     try {
@@ -105,22 +111,18 @@ export const studyGroupController = {
         max_members,
         meeting_frequency,
         preferred_location_type,
-        created_by: req.user.user_id,
+        created_by: req.user.id,
       };
 
       const result = await StudyGroup.create(groupData);
 
       // Add creator as first member
-      await StudyGroup.addMember(
-        groupData.group_id,
-        req.user.user_id,
-        "creator"
-      );
+      await StudyGroup.addMember(groupData.group_id, req.user.id, "creator");
 
       res.status(201).json({
         success: true,
         message: "Study group created successfully",
-        data: { group_id: groupData.group_id },
+        data: { group_id: groupData.group_id, ...groupData },
       });
     } catch (error) {
       console.error("Create study group error:", error);
@@ -148,7 +150,7 @@ export const studyGroupController = {
       }
 
       const members = await StudyGroup.getMembers(groupId);
-      const userMember = members.find((m) => m.user_id === req.user.user_id);
+      const userMember = members.find((m) => m.user_id === req.user.id);
 
       if (!userMember || !["creator", "admin"].includes(userMember.role)) {
         return res.status(403).json({
@@ -161,6 +163,7 @@ export const studyGroupController = {
 
       res.json({
         success: true,
+        data: group,
         message: "Study group updated successfully",
       });
     } catch (error) {
@@ -196,7 +199,7 @@ export const studyGroupController = {
 
       // Check if user is already a member
       const members = await StudyGroup.getMembers(groupId);
-      const isMember = members.some((m) => m.user_id === req.user.user_id);
+      const isMember = members.some((m) => m.user_id === req.user.id);
 
       if (isMember) {
         return res.status(400).json({
@@ -213,10 +216,11 @@ export const studyGroupController = {
         });
       }
 
-      await StudyGroup.addMember(groupId, req.user.user_id);
+      await StudyGroup.addMember(groupId, req.user.id);
 
       res.json({
         success: true,
+        data: group,
         message: "Joined study group successfully",
       });
     } catch (error) {
@@ -236,7 +240,7 @@ export const studyGroupController = {
 
       // Check if user is a member
       const members = await StudyGroup.getMembers(groupId);
-      const userMember = members.find((m) => m.user_id === req.user.user_id);
+      const userMember = members.find((m) => m.user_id === req.user.id);
 
       if (!userMember) {
         return res.status(400).json({
@@ -254,7 +258,7 @@ export const studyGroupController = {
         });
       }
 
-      await StudyGroup.removeMember(groupId, req.user.user_id);
+      await StudyGroup.removeMember(groupId, req.user.id);
 
       res.json({
         success: true,
@@ -279,6 +283,7 @@ export const studyGroupController = {
 
       res.json({
         success: true,
+        count: members.length,
         data: members,
       });
     } catch (error) {
@@ -294,10 +299,11 @@ export const studyGroupController = {
   // Get user's study groups
   getUserStudyGroups: async (req, res) => {
     try {
-      const groups = await StudyGroup.getUserGroups(req.user.user_id);
+      const groups = await StudyGroup.getUserGroups(req.user.id);
 
       res.json({
         success: true,
+        count: groups.length,
         data: groups,
       });
     } catch (error) {

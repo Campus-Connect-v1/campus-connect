@@ -39,11 +39,19 @@ export class Event {
       params.push(filters.is_public);
     }
 
-    query += " ORDER BY e.start_time ASC LIMIT ? OFFSET ?";
-    params.push(limit, offset);
+    // Convert limit and offset to numbers explicitly
+    query += ` ORDER BY e.start_time ASC LIMIT ${parseInt(
+      limit
+    )} OFFSET ${parseInt(offset)}`;
+    params.push(parseInt(limit), parseInt(offset));
 
-    const [events] = await db.execute(query, params);
-    return events;
+    try {
+      const [events] = await db.execute(query, params);
+      return events;
+    } catch (error) {
+      console.error("Database error in Event.findAll:", error);
+      throw error;
+    }
   }
 
   // Get event by ID with creator info
@@ -56,8 +64,13 @@ export class Event {
       JOIN universities uni ON e.university_id = uni.university_id
       WHERE e.event_id = ?
     `;
-    const [events] = await db.execute(query, [eventId]);
-    return events[0] || null;
+    try {
+      const [events] = await db.execute(query, [eventId]);
+      return events[0] || null;
+    } catch (error) {
+      console.error("Database error in Event.findById:", error);
+      throw error;
+    }
   }
 
   // Create new event
@@ -82,37 +95,44 @@ export class Event {
     } = eventData;
 
     const query = `
-      INSERT INTO events (
-        event_id, university_id, created_by, event_title, event_description,
-        event_type, start_time, end_time, is_recurring, recurrence_pattern,
-        location_type, physical_location, virtual_link, max_attendees,
-        is_public, requires_rsvp
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+    INSERT INTO events (
+      event_id, university_id, created_by, event_title, event_description,
+      event_type, start_time, end_time, is_recurring, recurrence_pattern,
+      location_type, physical_location, virtual_link, max_attendees,
+      is_public, requires_rsvp
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
 
+    // Convert undefined values to null
     const params = [
       event_id,
       university_id,
       created_by,
       event_title,
-      event_description,
-      event_type,
+      event_description || null, // Convert undefined to null
+      event_type || null,
       start_time,
       end_time,
-      is_recurring,
-      recurrence_pattern,
-      location_type,
-      physical_location,
-      virtual_link,
-      max_attendees,
-      is_public,
-      requires_rsvp,
+      is_recurring || false,
+      recurrence_pattern || null,
+      location_type || "physical",
+      physical_location || null,
+      virtual_link || null,
+      max_attendees ? parseInt(max_attendees) : null,
+      is_public !== undefined ? is_public : true,
+      requires_rsvp !== undefined ? requires_rsvp : false,
     ];
 
-    const [result] = await db.execute(query, params);
-    return result;
-  }
+    console.log("🔍 DEBUG - Create event params:", params); // Add this for debugging
 
+    try {
+      const [result] = await db.execute(query, params);
+      return result;
+    } catch (error) {
+      console.error("Database error in Event.create:", error);
+      throw error;
+    }
+  }
   // Update event
   static async update(eventId, updateData) {
     const allowedFields = [
@@ -137,7 +157,12 @@ export class Event {
     allowedFields.forEach((field) => {
       if (updateData[field] !== undefined) {
         setClause.push(`${field} = ?`);
-        params.push(updateData[field]);
+        // Convert max_attendees to number if present
+        if (field === "max_attendees" && updateData[field]) {
+          params.push(parseInt(updateData[field]));
+        } else {
+          params.push(updateData[field]);
+        }
       }
     });
 
@@ -151,15 +176,26 @@ export class Event {
     const query = `UPDATE events SET ${setClause.join(
       ", "
     )} WHERE event_id = ?`;
-    const [result] = await db.execute(query, params);
-    return result;
+
+    try {
+      const [result] = await db.execute(query, params);
+      return result;
+    } catch (error) {
+      console.error("Database error in Event.update:", error);
+      throw error;
+    }
   }
 
   // Delete event
   static async delete(eventId) {
     const query = "DELETE FROM events WHERE event_id = ?";
-    const [result] = await db.execute(query, [eventId]);
-    return result;
+    try {
+      const [result] = await db.execute(query, [eventId]);
+      return result;
+    } catch (error) {
+      console.error("Database error in Event.delete:", error);
+      throw error;
+    }
   }
 
   // Get event attendees
@@ -171,8 +207,13 @@ export class Event {
       WHERE ea.event_id = ?
       ORDER BY ea.created_at DESC
     `;
-    const [attendees] = await db.execute(query, [eventId]);
-    return attendees;
+    try {
+      const [attendees] = await db.execute(query, [eventId]);
+      return attendees;
+    } catch (error) {
+      console.error("Database error in Event.getAttendees:", error);
+      throw error;
+    }
   }
 
   // RSVP to event
@@ -185,36 +226,46 @@ export class Event {
     const attendeeId = `ea_${Date.now()}_${Math.random()
       .toString(36)
       .substr(2, 9)}`;
-    const [result] = await db.execute(query, [
-      attendeeId,
-      eventId,
-      userId,
-      rsvpStatus,
-      rsvpStatus,
-    ]);
-    return result;
+
+    try {
+      const [result] = await db.execute(query, [
+        attendeeId,
+        eventId,
+        userId,
+        rsvpStatus,
+        rsvpStatus,
+      ]);
+      return result;
+    } catch (error) {
+      console.error("Database error in Event.rsvp:", error);
+      throw error;
+    }
   }
 
   // Get user's events
   static async getUserEvents(userId, page = 1, limit = 10) {
-    const offset = (page - 1) * limit;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.max(1, parseInt(limit) || 10);
+    const offset = (pageNum - 1) * limitNum;
+
     const query = `
-      SELECT e.*, ea.rsvp_status, uni.name as university_name
-      FROM events e
-      LEFT JOIN event_attendees ea ON e.event_id = ea.event_id AND ea.user_id = ?
-      JOIN universities uni ON e.university_id = uni.university_id
-      WHERE e.created_by = ? OR ea.user_id = ?
-      ORDER BY e.start_time ASC
-      LIMIT ? OFFSET ?
-    `;
-    const [events] = await db.execute(query, [
-      userId,
-      userId,
-      userId,
-      limit,
-      offset,
-    ]);
-    return events;
+    SELECT e.*, ea.rsvp_status, uni.name as university_name
+    FROM events e
+    JOIN event_attendees ea ON e.event_id = ea.event_id
+    JOIN universities uni ON e.university_id = uni.university_id
+    WHERE ea.user_id = '${userId}'
+    ORDER BY e.start_time ASC
+    LIMIT ${limitNum} OFFSET ${offset}
+  `;
+
+    try {
+      const [events] = await db.execute(query);
+      //   console.log("Events user is attending:", events); // for debugging the event failure. but the problem was the req.user.user_id which was wrong. it was req.user.id
+      return events;
+    } catch (error) {
+      console.error("Database error:", error);
+      throw error;
+    }
   }
 }
 

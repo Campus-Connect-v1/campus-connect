@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import Event from "../models/event.model.js";
+import e from "express";
 
 export const eventController = {
   // Get all events with filtering
@@ -12,7 +13,7 @@ export const eventController = {
         end_date,
         is_public,
         page = 1,
-        limit = 10,
+        limit = 100,
       } = req.query;
 
       const filters = {};
@@ -30,6 +31,7 @@ export const eventController = {
 
       res.json({
         success: true,
+        count: events.length,
         data: events,
         pagination: {
           page: parseInt(page),
@@ -80,15 +82,15 @@ export const eventController = {
         university_id,
         event_title,
         event_description,
-        event_type,
+        event_type = "academic", // Provide default
         start_time,
         end_time,
         is_recurring = false,
-        recurrence_pattern,
+        recurrence_pattern = null, // Explicitly set to null if not provided
         location_type = "physical",
-        physical_location,
-        virtual_link,
-        max_attendees,
+        physical_location = null, // Explicitly set to null if not provided
+        virtual_link = null, // Explicitly set to null if not provided
+        max_attendees = null, // Explicitly set to null if not provided
         is_public = true,
         requires_rsvp = false,
       } = req.body;
@@ -105,7 +107,7 @@ export const eventController = {
       const eventData = {
         event_id: `event_${uuidv4()}`,
         university_id,
-        created_by: req.user.user_id,
+        created_by: req.user.id,
         event_title,
         event_description,
         event_type,
@@ -126,7 +128,7 @@ export const eventController = {
       res.status(201).json({
         success: true,
         message: "Event created successfully",
-        data: { event_id: eventData.event_id },
+        data: { event_id: eventData.event_id, eventData },
       });
     } catch (error) {
       console.error("Create event error:", error);
@@ -236,7 +238,7 @@ export const eventController = {
         });
       }
 
-      await Event.rsvp(eventId, req.user.user_id, rsvp_status);
+      await Event.rsvp(eventId, req.user.id, rsvp_status);
 
       res.json({
         success: true,
@@ -261,6 +263,7 @@ export const eventController = {
 
       res.json({
         success: true,
+        count: attendees.length,
         data: attendees,
       });
     } catch (error) {
@@ -278,18 +281,27 @@ export const eventController = {
     try {
       const { page = 1, limit = 10 } = req.query;
 
-      const events = await Event.getUserEvents(
-        req.user.user_id,
-        parseInt(page),
-        parseInt(limit)
-      );
+      // Convert to numbers with validation
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.max(1, parseInt(limit) || 10);
+
+      const events = await Event.getUserEvents(req.user.id, pageNum, limitNum);
 
       res.json({
         success: true,
+        count: events.length,
         data: events,
+
+        // events.map((event) => ({
+        //   event_id: event.event_id,
+        //   title: event.title,
+        //   start_time: event.start_time,
+        //   end_time: event.end_time,
+        // })),
+        count: events.length,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: pageNum,
+          limit: limitNum,
         },
       });
     } catch (error) {

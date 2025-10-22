@@ -5,14 +5,14 @@ export class StudyGroup {
   static async findAll(filters = {}, page = 1, limit = 10) {
     const offset = (page - 1) * limit;
     let query = `
-      SELECT sg.*, u.first_name, u.last_name, uni.name as university_name,
-             COUNT(gm.user_id) as member_count
-      FROM study_groups sg
-      JOIN users u ON sg.created_by = u.user_id
-      JOIN universities uni ON sg.university_id = uni.university_id
-      LEFT JOIN group_members gm ON sg.group_id = gm.group_id
-      WHERE 1=1
-    `;
+    SELECT sg.*, u.first_name, u.last_name, uni.name as university_name,
+           COUNT(gm.user_id) as member_count
+    FROM study_groups sg
+    JOIN users u ON sg.created_by = u.user_id
+    JOIN universities uni ON sg.university_id = uni.university_id
+    LEFT JOIN group_members gm ON sg.group_id = gm.group_id
+    WHERE 1=1
+  `;
     const params = [];
 
     if (filters.university_id) {
@@ -35,11 +35,18 @@ export class StudyGroup {
       params.push(filters.is_active);
     }
 
-    query +=
-      " GROUP BY sg.group_id ORDER BY sg.created_at DESC LIMIT ? OFFSET ?";
-    params.push(limit, offset);
+    // Use template literals for LIMIT/OFFSET - REMOVE the params.push below
+    query += ` GROUP BY sg.group_id ORDER BY sg.created_at DESC LIMIT ${parseInt(
+      limit
+    )} OFFSET ${parseInt(offset)}`;
+
+    // REMOVE THIS LINE: params.push(limit, offset);
+
+    console.log("🔍 DEBUG - Study Group Query:", query); // Add debug log
+    console.log("🔍 DEBUG - Study Group Params:", params); // Add debug log
 
     const [groups] = await db.execute(query, params);
+    console.log("🔍 DEBUG - Study Groups Found:", groups); // Add debug log
     return groups;
   }
 
