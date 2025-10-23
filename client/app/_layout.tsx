@@ -17,6 +17,7 @@ export default function RootLayout() {
     "Gilroy-Regular": require("../assets/fonts/Gilroy-Regular.ttf"),
     "Gilroy-SemiBold": require("../assets/fonts/Gilroy-SemiBold.ttf"),
     "Chillis": require("../assets/fonts/chilispepper.ttf"),
+    "Camood": require("../assets/fonts/camood.otf"),
   });
 
   const [loading, setLoading] = useState(true);

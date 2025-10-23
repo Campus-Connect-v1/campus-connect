@@ -16,7 +16,7 @@ interface CreatePostModalProps {
   onSelectVideo: () => void;
 }
 
-const CreatePostModal: React.FC<CreatePostModalProps> = ({
+export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   visible,
   onClose,
   onSelectCamera,

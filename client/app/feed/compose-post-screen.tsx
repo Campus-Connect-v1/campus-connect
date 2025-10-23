@@ -22,7 +22,7 @@ const ComposePostScreen: React.FC<ComposePostScreenProps> = ({ navigation }) => 
   const [taggedPeople, setTaggedPeople] = useState<string[]>([]);
 
   const handleShare = () => {
-    router.push('/feed/post-settings-screen');
+    router.push('/home/post-settings-screen');
   };
 
   return (
