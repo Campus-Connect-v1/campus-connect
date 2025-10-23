@@ -2,7 +2,7 @@
 import { icons } from '@/src/constants/icons';
 import { router, Tabs } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Image, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, TouchableOpacity, View, Text } from 'react-native';
 import Colors from '@/src/constants/Colors';
 
 
@@ -162,7 +162,7 @@ const TabsLayout = () => {
         name='feed'
         options={{
           headerStyle: { backgroundColor: '#002D69' },
-          title: 'FEED',
+          headerShown: false,
            headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
             color: '#fff',
@@ -171,12 +171,7 @@ const TabsLayout = () => {
             <TabIcon focused={focused} icon={icons.person} title='FEED' />
           ),
            headerLeft: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
-        <Image
-          source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
-          className="w-10 h-10 rounded-full"
-        />
-      </TouchableOpacity>
+      <Text className='font-[Gilroy-Regular] text-2xl text-white'>uniCLIQ</Text>
     ),
         }}
       />

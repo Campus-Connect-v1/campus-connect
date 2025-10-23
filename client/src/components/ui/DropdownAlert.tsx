@@ -128,6 +128,7 @@ export default function DropdownAlert({
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons name="close-circle" size={20} color="white" />
+              
             </TouchableOpacity>
           </View>
         </BlurView>

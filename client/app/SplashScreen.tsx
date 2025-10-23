@@ -14,6 +14,7 @@ import {
     View,
 } from "react-native";
 import '../globals.css'
+import UniversitySelector from "@/src/components/ui/UniversitySelector";
 interface SplashScreenProps {
   onFinish: () => void;
 }
@@ -154,6 +155,8 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
           ))}
         </View>
       )}
+
+      {index === 1 && <UniversitySelector />}
 
       {index === onboardingData.length - 1 && (
         <TouchableOpacity style={styles.getStartedButton} onPress={handleNext}>

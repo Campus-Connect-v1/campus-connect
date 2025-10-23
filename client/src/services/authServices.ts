@@ -139,3 +139,26 @@ export async function isAuthenticated(): Promise<boolean> {
   const token = await storage.getToken();
   return !!token;
 }
+
+
+export async function sendConnectionRequest(userId: string) {
+  try {
+    const response = await api.post(`/user/connections/request`, { 
+      receiver_id: userId,
+      connection_note: "I'd like to connect with you.",
+      shared_courses: null,
+      });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
+export async function cancelConnectionRequest(userId: string) {
+  try {
+    const response = await api.delete(`/user/connections/request`, { data: { user_id: userId } });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
