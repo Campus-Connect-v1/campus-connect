@@ -1,52 +1,67 @@
 // services/ProfileService.js
-import { findById } from "../models/user.model.js"; // Your existing MySQL model
+import { findById } from "../models/user.model.js";
 import { PrivacyService } from "./privacyService.js";
+import { LocationService } from "./locationService.js";
 
 const privacyService = new PrivacyService();
+const locationService = new LocationService();
 
 export class ProfileService {
-  // Get filtered profile combining MySQL user data and privacy settings
-  async getFilteredProfile(profileOwnerId, viewerId) {
-    // Get user data from MySQL
-    const user = await findById(profileOwnerId);
+  // Batch get filtered profiles
+  async batchGetFilteredProfiles(profileOwnerIds, viewerId) {
+    if (!profileOwnerIds.length) return [];
 
-    if (!user) {
-      return null;
-    }
-
-    // Get privacy settings from MySQL
-    const privacySettings = await privacyService.getPrivacySettings(
-      profileOwnerId
+    // Batch privacy check
+    const privacyResults = await privacyService.batchCanViewProfile(
+      viewerId,
+      profileOwnerIds
     );
 
-    if (!privacySettings) {
-      return null;
+    const visibleUserIds = Object.keys(privacyResults).filter(
+      (userId) => privacyResults[userId]
+    );
+
+    // Batch fetch user data from MySQL
+    const users = await this.batchGetUsers(visibleUserIds);
+
+    const profiles = [];
+    for (const user of users) {
+      const profile = await this.buildFilteredProfile(user, viewerId);
+      if (profile) {
+        // Add campus context
+        const building = await locationService.getUserBuilding(user.user_id);
+        if (building) {
+          profile.building = building.building_name;
+          profile.area = building.building_name; // Replace generic "Nearby"
+        }
+
+        profiles.push(profile);
+      }
     }
+
+    return profiles;
+  }
+
+  // Enhanced profile building
+  async buildFilteredProfile(user, viewerId) {
+    const privacySettings = await privacyService.getPrivacySettings(
+      user.user_id
+    );
+    if (!privacySettings) return null;
 
     const filteredProfile = {
-      user_id: profileOwnerId,
-      university_id: user.university_id, // Always include basic reference
+      user_id: user.user_id,
+      university_id: user.university_id,
+      online: await this.isUserOnline(user.user_id),
+      last_seen: await this.getLastSeen(user.user_id),
     };
 
-    // Parse visible fields from JSON string (if stored as string in MySQL)
-    let visibleFields;
-    try {
-      visibleFields =
-        typeof privacySettings.visible_fields === "string"
-          ? JSON.parse(privacySettings.visible_fields)
-          : privacySettings.visible_fields;
-    } catch (error) {
-      visibleFields = {
-        name: true,
-        photo: true,
-        bio: true,
-        program: true,
-        courses: false,
-        contact: false,
-      };
-    }
+    // Parse visible fields
+    const visibleFields = this.parseVisibleFields(
+      privacySettings.visible_fields
+    );
 
-    // Only include fields allowed by privacy settings
+    // Add visible fields
     if (visibleFields.name) {
       filteredProfile.first_name = user.first_name;
       filteredProfile.last_name = user.last_name;
@@ -64,21 +79,31 @@ export class ProfileService {
       filteredProfile.program = user.program;
     }
 
-    if (visibleFields.courses) {
-      // You can add courses logic here
-    }
-
-    // Add approximate location context
+    // Add location context (building name instead of coordinates)
     if (privacySettings.show_exact_location) {
-      const locationService = new LocationService();
-      const location = await locationService.getUserLocation(profileOwnerId);
-      if (location) {
-        filteredProfile.location = location.coordinates;
+      const building = await locationService.getUserBuilding(user.user_id);
+      if (building) {
+        filteredProfile.location_context = building.building_name;
       }
     } else {
-      filteredProfile.area = "Nearby";
+      filteredProfile.location_context = "On Campus";
     }
 
     return filteredProfile;
+  }
+
+  // Check if user is currently online
+  async isUserOnline(userId) {
+    const location = await locationService.getCachedUserLocation(userId);
+    if (!location) return false;
+
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    return new Date(location.last_seen) > fifteenMinutesAgo;
+  }
+
+  // Get user's last seen timestamp
+  async getLastSeen(userId) {
+    const location = await locationService.getCachedUserLocation(userId);
+    return location ? location.last_seen : null;
   }
 }

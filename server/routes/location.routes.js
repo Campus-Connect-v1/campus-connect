@@ -7,6 +7,7 @@ import {
   updatePrivacySettings,
   toggleLocationSharing,
   getLocationHistory,
+  toggleIncognitoMode,
 } from "../controllers/location.controller.js";
 import authenticate from "../middleware/auth.js";
 
@@ -221,5 +222,7 @@ router.post("/location/toggle", toggleLocationSharing);
  *         description: Internal server error
  */
 router.get("/location/history", getLocationHistory);
+
+router.post("/incognito", toggleIncognitoMode);
 
 export default router;

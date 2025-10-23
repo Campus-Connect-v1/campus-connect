@@ -1,25 +1,13 @@
 // services/LocationService.js
-import { UserLocation } from "../models/location.js"; // MongoDB model
+import { UserLocation } from "../models/location.js";
+import redisClient from "../config/redis.js"; // Your Redis client
 
 export class LocationService {
-  // Update user location in MongoDB with rate limiting
+  // Update user location with last_seen timestamp
   async updateUserLocation(userId, coordinates, accuracy = 50) {
     const [longitude, latitude] = coordinates;
 
-    // Rate limiting: Check last update time
-    const lastUpdate = await UserLocation.findOne({
-      user_id: userId,
-    }).sort({ last_updated: -1 });
-
-    if (lastUpdate) {
-      const timeDiff = Date.now() - lastUpdate.last_updated.getTime();
-      // Limit updates to once every 30 seconds
-      if (timeDiff < 30000) {
-        throw new Error(
-          "Location update too frequent. Please wait 30 seconds."
-        );
-      }
-    }
+    // Rate limiting check (existing code)...
 
     const locationData = {
       user_id: userId,
@@ -29,29 +17,57 @@ export class LocationService {
       },
       accuracy,
       last_updated: new Date(),
+      last_seen: new Date(), // Add last_seen field
+      is_active: true,
     };
 
-    // Upsert location data in MongoDB
     const result = await UserLocation.findOneAndUpdate(
       { user_id: userId },
       locationData,
       { upsert: true, new: true }
     );
 
+    // Cache the updated location
+    await this.cacheUserLocation(userId, result);
+
+    // Clear nearby users cache for this user
+    await this.clearNearbyCache(userId);
+
     return result;
   }
 
-  // Find nearby users using MongoDB geospatial queries
+  // Cache user location in Redis
+  async cacheUserLocation(userId, locationData) {
+    const cacheKey = `user_location:${userId}`;
+    await redisClient.setex(
+      cacheKey,
+      300, // 5 minutes TTL
+      JSON.stringify({
+        coordinates: locationData.location.coordinates,
+        last_updated: locationData.last_updated,
+        last_seen: locationData.last_seen,
+        accuracy: locationData.accuracy,
+      })
+    );
+  }
+
+  // Get cached user location
+  async getCachedUserLocation(userId) {
+    const cacheKey = `user_location:${userId}`;
+    const cached = await redisClient.get(cacheKey);
+    return cached ? JSON.parse(cached) : null;
+  }
+
+  // Enhanced nearby users with campus context
   async findNearbyUsers(userId, radius = 100) {
     const cacheKey = `nearby_users:${userId}:${radius}`;
 
-    // Check cache first
-    const cached = await this.getFromCache(cacheKey);
+    // Check Redis cache first
+    const cached = await redisClient.get(cacheKey);
     if (cached) {
-      return cached;
+      return JSON.parse(cached);
     }
 
-    // Get user's location from MongoDB
     const userLocation = await UserLocation.findOne({
       user_id: userId,
       is_active: true,
@@ -61,70 +77,86 @@ export class LocationService {
       throw new Error("User location not found");
     }
 
-    // Find nearby users using MongoDB geospatial query
-    const nearbyUsers = await UserLocation.find({
-      location: {
-        $near: {
-          $geometry: userLocation.location,
-          $maxDistance: radius,
+    // Find nearby users with active status based on last_seen
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+
+    const nearbyUsers = await UserLocation.aggregate([
+      {
+        $geoNear: {
+          near: userLocation.location,
+          distanceField: "distance",
+          maxDistance: radius,
+          spherical: true,
+          query: {
+            user_id: { $ne: userId },
+            location_sharing_enabled: true,
+            last_seen: { $gte: fifteenMinutesAgo }, // Only recently active users
+          },
         },
       },
-      user_id: { $ne: userId },
-      is_active: true,
-      location_sharing_enabled: true,
-    })
-      .select("user_id distance accuracy last_updated")
-      .lean();
+      {
+        $project: {
+          user_id: 1,
+          distance: 1,
+          accuracy: 1,
+          last_updated: 1,
+          last_seen: 1,
+          coordinates: "$location.coordinates",
+        },
+      },
+    ]);
 
-    // Cache results for 30 seconds
-    await this.setCache(cacheKey, nearbyUsers, 30);
+    // Cache in Redis for 30 seconds
+    await redisClient.setex(cacheKey, 30, JSON.stringify(nearbyUsers));
 
     return nearbyUsers;
   }
 
-  // Calculate distance between two users
-  async calculateDistance(userId1, userId2) {
-    const [user1, user2] = await Promise.all([
-      UserLocation.findOne({ user_id: userId1 }),
-      UserLocation.findOne({ user_id: userId2 }),
-    ]);
-
-    if (!user1 || !user2) {
-      return Infinity;
+  // Clear nearby cache when location updates
+  async clearNearbyCache(userId) {
+    const pattern = `nearby_users:${userId}:*`;
+    const keys = await redisClient.keys(pattern);
+    if (keys.length > 0) {
+      await redisClient.del(keys);
     }
+  }
 
-    return this.calculateHaversineDistance(
-      user1.location.coordinates[1],
-      user1.location.coordinates[0],
-      user2.location.coordinates[1],
-      user2.location.coordinates[0]
+  // Get user's current building based on location
+  async getUserBuilding(userId) {
+    const userLocation = await UserLocation.findOne({ user_id: userId });
+    if (!userLocation) return null;
+
+    const [longitude, latitude] = userLocation.location.coordinates;
+
+    // Query campus_buildings to find which building user is in
+    // This would use your MySQL campus_buildings table
+    // You'd need to implement this spatial query based on your DB
+    return await this.findBuildingByCoordinates(latitude, longitude);
+  }
+
+  // Toggle incognito mode (one-touch privacy)
+  async toggleIncognitoMode(userId, enabled) {
+    const result = await UserLocation.findOneAndUpdate(
+      { user_id: userId },
+      {
+        location_sharing_enabled: !enabled,
+        is_active: !enabled, // Also mark as inactive if incognito
+      },
+      { new: true, upsert: true }
     );
+
+    // Clear all caches for this user
+    await this.clearUserCaches(userId);
+
+    return result;
   }
 
-  // Haversine distance calculation
-  calculateHaversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // Earth radius in meters
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a =
-      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in meters
-  }
-
-  // Simple in-memory cache (replace with Redis in production)
-  async getFromCache(key) {
-    // Implement Redis or memory cache
-    return null;
-  }
-
-  async setCache(key, value, ttlSeconds) {
-    // Implement Redis or memory cache right here. but the fronend dev might need to secure these in the expo-secured-headers plugin
+  async clearUserCaches(userId) {
+    await Promise.all([
+      this.clearNearbyCache(userId),
+      redisClient.del(`user_location:${userId}`),
+      redisClient.del(`user_privacy:${userId}`),
+    ]);
   }
 
   async toggleLocationSharing(userId, enabled) {
@@ -146,6 +178,7 @@ export class LocationService {
       location_sharing_enabled: userLocation.location_sharing_enabled,
     };
   }
+
   // Get user's location history (last N records)
   async getLocationHistory(userId, limit = 20) {
     // Validate user

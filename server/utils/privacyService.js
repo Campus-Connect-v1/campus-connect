@@ -2,9 +2,119 @@
 import {
   getPrivacySettingsModel,
   updatePrivacySettingsModel,
-} from "../models/user.model.js"; // Your existing MySQL models
+} from "../models/user.model.js";
+import redisClient from "../config/redis.js";
 
 export class PrivacyService {
+  // Batch check privacy for multiple users at once
+  async batchCanViewProfile(viewerId, profileOwnerIds) {
+    if (!profileOwnerIds.length) return {};
+
+    const cacheKey = `privacy_batch:${viewerId}:${profileOwnerIds
+      .sort()
+      .join("_")}`;
+
+    // Check Redis cache first
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
+    const results = {};
+    const privacySettingsMap = await this.batchGetPrivacySettings(
+      profileOwnerIds
+    );
+
+    for (const profileOwnerId of profileOwnerIds) {
+      const settings = privacySettingsMap[profileOwnerId];
+      results[profileOwnerId] = await this.evaluatePrivacyAccess(
+        viewerId,
+        profileOwnerId,
+        settings
+      );
+    }
+
+    // Cache batch results for 1 minute
+    await redisClient.setex(cacheKey, 60, JSON.stringify(results));
+
+    return results;
+  }
+
+  // Get privacy settings for multiple users at once
+  async batchGetPrivacySettings(userIds) {
+    const settingsMap = {};
+    const uncachedUsers = [];
+    const cachedSettings = {};
+
+    // Check Redis cache for each user
+    for (const userId of userIds) {
+      const cacheKey = `user_privacy:${userId}`;
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        cachedSettings[userId] = JSON.parse(cached);
+      } else {
+        uncachedUsers.push(userId);
+      }
+    }
+
+    // Batch fetch uncached settings from MySQL
+    if (uncachedUsers.length > 0) {
+      const dbSettings = await this.fetchPrivacySettingsFromDB(uncachedUsers);
+
+      // Cache each setting individually
+      for (const [userId, settings] of Object.entries(dbSettings)) {
+        await redisClient.setex(
+          `user_privacy:${userId}`,
+          300, // 5 minutes
+          JSON.stringify(settings)
+        );
+        settingsMap[userId] = settings;
+      }
+    }
+
+    // Combine cached and newly fetched settings
+    return { ...cachedSettings, ...settingsMap };
+  }
+
+  // Enhanced privacy evaluation with campus context
+  async evaluatePrivacyAccess(viewerId, profileOwnerId, privacySettings) {
+    if (!privacySettings) return false;
+
+    switch (privacySettings.profile_visibility) {
+      case "public":
+        return true;
+
+      case "private":
+        return false;
+
+      case "geofenced":
+        const locationService = new LocationService();
+        const distance = await locationService.calculateDistance(
+          viewerId,
+          profileOwnerId
+        );
+        return distance <= privacySettings.custom_radius;
+
+      case "friends_only":
+        return await this.areConnected(viewerId, profileOwnerId);
+
+      default:
+        return false;
+    }
+  }
+
+  // Quick incognito mode toggle
+  async toggleIncognitoMode(userId, enabled) {
+    const locationService = new LocationService();
+    await locationService.toggleIncognitoMode(userId, enabled);
+
+    return {
+      incognito_mode: enabled,
+      location_sharing_enabled: !enabled,
+      message: `Incognito mode ${enabled ? "enabled" : "disabled"}`,
+    };
+  }
+
   // Get privacy settings from MySQL
   async getPrivacySettings(userId) {
     // Use your existing MySQL model function
@@ -57,43 +167,5 @@ export class PrivacyService {
     }
 
     return true;
-  }
-
-  // Check if viewer can see profile based on MySQL privacy settings
-  async canViewProfile(viewerId, profileOwnerId) {
-    const privacySettings = await this.getPrivacySettings(profileOwnerId);
-
-    if (!privacySettings) {
-      return false;
-    }
-
-    switch (privacySettings.profile_visibility) {
-      case "public":
-        return true;
-
-      case "private":
-        return false;
-
-      case "geofenced":
-        const locationService = new LocationService();
-        const distance = await locationService.calculateDistance(
-          viewerId,
-          profileOwnerId
-        );
-        return distance <= privacySettings.custom_radius;
-
-      case "friends_only":
-        return await this.areConnected(viewerId, profileOwnerId);
-
-      default:
-        return false;
-    }
-  }
-
-  // Check if users are connected (from your MySQL connections table)
-  async areConnected(userId1, userId2) {
-    // Use your existing MySQL connection check
-    const connection = await checkExistingConnectionModel(userId1, userId2);
-    return connection && connection.status === "accepted";
   }
 }

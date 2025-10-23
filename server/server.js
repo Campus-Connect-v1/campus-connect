@@ -14,7 +14,9 @@ import studyGroupRoutes from "./routes/studyGroup.routes.js";
 
 import connectMongoDB from "./config/mongoDB.js";
 
-dotenv.config();
+process.env.DOTENV_CONFIG_DEBUG = "false";
+dotenv.config({ debug: false });
+
 const app = express();
 
 // ============= MONGO DB ====================
