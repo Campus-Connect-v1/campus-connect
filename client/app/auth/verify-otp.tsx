@@ -13,14 +13,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
 } from "react-native";
+import DropdownAlert from "@/src/components/ui/DropdownAlert";
 import { verifyOtpSchema, VerifyOtpSchema } from "@/src/schemas/authSchemas";
 import { verifyOtp } from "@/src/services/authServices";
 import { useState } from "react";
+import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
 
 export default function VerifyOtpScreen() {
   const router = useRouter();
+    const { alert, hideAlert, success, error } = useDropdownAlert()
   const params = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const email = params.email as string || "";
@@ -43,13 +45,13 @@ export default function VerifyOtpScreen() {
     try {
       // Validate email and OTP format first
       if (!email) {
-        Alert.alert("Error", "Email address is required for verification.");
+        error("Error", "Email address is required for verification.", 4000);
         router.push("/auth/verify-email");
         return;
       }
       
       if (!data.otp || data.otp.length !== 6) {
-        Alert.alert("Invalid OTP", "Please enter a 6-digit verification code.");
+        error("Invalid OTP", "Please enter a 6-digit verification code.", 4000);
         return;
       }
       
@@ -58,15 +60,15 @@ export default function VerifyOtpScreen() {
       console.log("Verify OTP result:", result);
       
       if (result.success) {
-        Alert.alert("Success", "Email verified successfully! You can now log in.");
+        success("Success", "Email verified successfully! You can now log in.", 4000);
         router.push("/auth/login");
       } else {
         console.log("OTP verification failed:", result.error);
-        Alert.alert("Failed", result.error || "Invalid OTP. Please try again.");
+        error("Failed", result.error || "Invalid OTP. Please try again.", 4000);
       }
     } catch (error: any) {
       console.error("Verify OTP error:", error);
-      Alert.alert("Error", error.message || "An unexpected error occurred");
+      error("Error", error.message || "An unexpected error occurred", 4000);
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +80,13 @@ export default function VerifyOtpScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.inner}>
+        <DropdownAlert
+                visible={alert.visible}
+                type={alert.type}
+                title={alert.title}
+                message={alert.message}
+                onDismiss={hideAlert}
+              />
         <Text style={styles.title}>Enter Verification Code</Text>
         <Text style={styles.subtitle}>
           Please enter the 6-digit code sent to {email || "your email address"}.
@@ -137,12 +146,14 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginBottom: 8,
     textAlign: "center",
+    fontFamily: "Gilroy-SemiBold",
   },
   subtitle: {
     fontSize: 15,
     color: Colors.light.textSecondary,
     marginBottom: 32,
     textAlign: "center",
+    fontFamily: "Gilroy-Regular",
   },
   input: {
     borderWidth: 1,
@@ -153,10 +164,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     backgroundColor: Colors.light.inputBackground,
     marginBottom: 12,
-    fontFamily: "monospace",
+    fontFamily: "Gilroy-Medium",
+
   },
   inputError: { borderColor: Colors.light.error },
-  errorText: { color: Colors.light.error, marginBottom: 12, textAlign: "center" },
+  errorText: { color: Colors.light.error, marginBottom: 12, textAlign: "center", fontFamily: "Gilroy-Regular", },
   button: {
     backgroundColor: Colors.light.primary,
     borderRadius: 12,
@@ -165,7 +177,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 16,
   },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "bold" },
+  buttonText: { color: "white", fontSize: 16, fontWeight: "bold", fontFamily: "Gilroy-SemiBold", },
   buttonDisabled: { opacity: 0.7 },
   linkButton: {
     marginTop: 16,
@@ -174,6 +186,6 @@ const styles = StyleSheet.create({
   linkText: {
     color: Colors.light.primary,
     fontSize: 14,
-    textDecorationLine: "underline",
+    fontFamily: "Gilroy-Medium",
   },
 });

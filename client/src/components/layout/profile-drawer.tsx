@@ -85,6 +85,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       icon: 'person-outline',
       onPress: () => {
         router.push('/(tabs)/profile');
+         onClose();
       },
     },
     {

@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import '../globals.css';
 import Colors from "@/src/constants/Colors";
+import { Easing } from "react-native-reanimated";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -56,18 +57,41 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView>
+    <GestureHandlerRootView className="bg-white">
       <SafeAreaProvider>
-        <Stack
-          screenOptions={{ headerShown: false }}
-          initialRouteName={initialRoute}
-        >
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="/(tabs)/home" />
-          <Stack.Screen name="auth/login" />
-          <Stack.Screen name="auth/register" />
-        </Stack>
+      <Stack
+  screenOptions={{
+    headerShown: false,
+    contentStyle: { backgroundColor: '#fff' },
+    animation: 'slide_from_right', // default
+    gestureEnabled: true,
+  }}
+>
+  <Stack.Screen
+    name="onboarding"
+    options={{
+      animation: 'fade', // fade transition
+            
+    }}
+  />
+  <Stack.Screen
+    name="auth/login"
+    options={{
+      animation: 'slide_from_bottom', 
+
+    }}
+  />
+  <Stack.Screen
+    name="auth/register"
+    options={{
+      animation: 'fade_from_bottom', 
+    }}
+  />
+</Stack>
+
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
+

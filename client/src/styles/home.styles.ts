@@ -5,11 +5,16 @@ export const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f9fafb" },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  justifyContent: "flex-end", // pushes items to the right
+    gap: 1,
     paddingHorizontal: 20,
     paddingTop: 60,
     marginBottom: 16,
+  },
+  greetingContainer: {
+    alignItems: "flex-start",
+    marginBottom: 16,
+    marginLeft: 20,
   },
   greeting: { fontSize: 20, fontWeight: "700", color: "#222", fontFamily:"Gilroy-SemiBold" },
   searchBar: {
@@ -85,9 +90,6 @@ export const styles = StyleSheet.create({
     marginHorizontal: 5,
     borderRadius: 14,
     padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
   },
   statValue: { fontSize: 20, fontWeight: "700", color: "#111", fontFamily:"Gilroy-Regular" },
   statLabel: { fontSize: 13, color: "#555", marginTop: 4, fontFamily:"Gilroy-Medium" },
