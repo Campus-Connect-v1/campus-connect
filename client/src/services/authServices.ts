@@ -77,6 +77,14 @@ export async function signInWithGoogle(accessToken: string) {
   }
 }
 
+export async function updateProfile(data: any) {
+    try {
+      const response = await api.put('/user/profile', data);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: error.response?.data || error.message };
+    }
+  }
 
 export async function forgotPassword(data: ForgotSchema) {
   try {
@@ -157,6 +165,112 @@ export async function sendConnectionRequest(userId: string) {
 export async function cancelConnectionRequest(userId: string) {
   try {
     const response = await api.delete(`/user/connections/request`, { data: { user_id: userId } });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+export async function getUserConnections(params?: {
+  status?: "accepted" | "pending" | "declined" | "blocked";
+  limit?: number;
+  offset?: number;
+}) {
+  try {
+    const response = await api.get(`/user/connections`, { params });
+    return { success: true, data: response.data.connections };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
+// 🧭 Get connections by status
+export async function getConnectionsByStatus(status: string) {
+  try {
+    const response = await api.get(`/user/connections/${status}`);
+    return { success: true, data: response.data.connections };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
+
+// ✅ Respond to a connection request (accept or decline)
+export async function respondToConnectionRequest(
+  connectionId: string,
+  action: "accept" | "decline"
+) {
+  try {
+    const response = await api.post(`/user/connections/respond`, {
+      connection_id: connectionId,
+      action,
+    });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
+
+
+// post likes and omments api
+export async function deletePost(postId: string) {
+  try {
+    const response = await api.delete(`/social/posts/${postId}`);
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
+// -------------------- LIKES -------------------- //
+
+// POST /api/social/posts/:post_id/like
+export async function likePost(postId: string) {
+  try {
+    const response = await api.post(`/social/posts/${postId}/like`);
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
+// DELETE /api/social/posts/:post_id/like
+export async function unlikePost(postId: string) {
+  try {
+    const response = await api.delete(`/social/posts/${postId}/like`);
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
+// -------------------- COMMENTS -------------------- //
+
+interface AddCommentData {
+  content: string;
+  parent_comment_id?: string;
+}
+
+// POST /api/social/posts/:post_id/comments
+export async function addComment(postId: string, data: AddCommentData) {
+  try {
+    const response = await api.post(`/social/posts/${postId}/comments`, data);
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
+// GET /api/social/posts/:post_id/comments
+interface GetCommentsParams {
+  limit?: number;
+  offset?: number;
+}
+export async function getComments(postId: string, params?: GetCommentsParams) {
+  try {
+    const response = await api.get(`/social/posts/${postId}/comments`, {
+      params: params || { limit: 50, offset: 0 },
+    });
     return { success: true, data: response.data };
   } catch (error: any) {
     return { success: false, error: error.response?.data || error.message };

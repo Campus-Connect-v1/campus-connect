@@ -76,7 +76,7 @@ export default function LoginScreen(props: LoginScreenProps = {}) {
           
           success("uniCLIQ", "Login successful!", 4000)
           setTimeout(() => {
-            router.push("/(tabs)/home")
+            router.replace("/(tabs)/home")
           }, 2000)
         } catch (storageError) {
           console.error("Storage error:", storageError)

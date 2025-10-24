@@ -1,218 +1,3 @@
-// // import { fetcher } from '@/services/fetcher';
-// import { Ionicons } from '@expo/vector-icons';
-// import { router } from 'expo-router';
-// import React, { useState } from 'react';
-// import {
-//   Image,
-//   ScrollView,
-//   StatusBar,
-//   Text,
-//   TouchableOpacity,
-//   View,
-//   ActivityIndicator
-// } from 'react-native';
-// import { SafeAreaView } from 'react-native-safe-area-context';
-// import useSWR from 'swr';
-// import { fetcher } from '@/src/utils/fetcher';
-// import { Profile } from '@/src/types/profile';
-// import Colors from '@/src/constants/Colors';
-// import EditProfileModal from '@/src/components/ui/EditProfileModal';
-// import { userApi } from '@/src/services/api';
-
-
-// interface ProfileScreenProps {
-//   navigation?: any;
-// }
-
-// const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
-//   const { data, error, isLoading, mutate } = useSWR<any>("/user/profile", fetcher);
-//   console.log("Profile data:", data?.user);
-//   const [isEditModalVisible, setEditModalVisible] = useState(false);
-  
-
-// if (isLoading || !data?.user) {
-//   return (
-//     <SafeAreaView className="flex-1 items-center justify-center bg-white">
-//       <ActivityIndicator size="large" color="#000" />
-//       <Text className="mt-4 text-gray-500">Loading profile...</Text>
-//     </SafeAreaView>
-//   );
-// }
-
-//   if (error) {
-//     return (
-//       <SafeAreaView className="flex-1 items-center justify-center bg-white">
-//         <Text>Error loading profile.</Text>
-//       </SafeAreaView>
-//     );
-//   }
-
-//   const handleSave = async (updatedProfile: any) => {
-//  try {
-//     await userApi.updateProfile(updatedProfile);
-//     console.log(updatedProfile);
-//     await mutate({ user: updatedProfile }, false);
-//     setEditModalVisible(false);
-//   } catch (error) {
-//     console.error("Error updating profile:", error);
-//   }
-//   };
-//   return (
-//     <SafeAreaView className="flex-1 bg-white">
-//   <StatusBar barStyle="dark-content" />
-//   <ScrollView className="flex-1">
-
-//     {/* Header */}
-//     <View className="flex-row items-center px-4 py-3">
-//       <TouchableOpacity onPress={() => router.back()}>
-//         <Ionicons name="arrow-back" size={24} color="#000" />
-//       </TouchableOpacity>
-//       <View className="flex-row items-center ml-4">
-//         <Image
-//           source={{ uri: data?.user?.profile_picture_url || "https://via.placeholder.com/150" }}
-//           className="w-8 h-8 rounded-full mr-3"
-//         />
-//         <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-base font-semibold">
-//           {data?.user?.first_name} {data?.user?.last_name}
-//         </Text>
-//       </View>
-//     </View>
-
-//     {/* Hero Section */}
-//     <View className="relative h-48 bg-black">
-//       <Image
-//         source={{ uri: data?.user?.profile_picture_url || "https://via.placeholder.com/150"  }}
-//         className="w-full h-full opacity-70"
-//         resizeMode="cover"
-//       />
-//       <View className="absolute inset-0 items-center justify-center">
-//         <Text className="text-yellow-400 text-lg font-light italic">
-//           I am a winner
-//         </Text>
-//       </View>
-//     </View>
-
-//     {/* Profile Picture */}
-//     <View className="px-4 -mt-16 mb-4">
-//       <View className="relative w-32 h-32">
-//         <Image
-//           source={{ uri: data?.user?.profile_picture_url || "https://via.placeholder.com/150" }}
-//           className="w-32 h-32 rounded-full border-4 border-white"
-//         />
-//         <TouchableOpacity
-//           style={{ backgroundColor: Colors.light.primary }}
-//           className="absolute -bottom-0 -right-0 w-8 h-8 rounded-full items-center justify-center"
-//         >
-//           <Ionicons name="add" size={18} color="white" />
-//         </TouchableOpacity>
-//       </View>
-
-//     </View>
-
-//     {/* Stats */}
-//     <View className="flex-row px-4 mb-6">
-//       <View className="mr-8">
-//         <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-500 text-md">
-//           Year
-//         </Text>
-//         <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-black text-base font-semibold">
-//           {data?.user?.year_of_study || '-'}
-//         </Text>
-//       </View>
-//       <View className="mr-8">
-//         <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-500 text-md">
-//           Graduation
-//         </Text>
-//         <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-black text-base font-semibold">
-//           {data?.user?.graduation_year || '-'}
-//         </Text>
-//       </View>
-//       <View>
-//         <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-500 text-md">
-//           Gender
-//         </Text>
-//         <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-black text-base font-semibold">
-//           {data?.user?.gender || '-'}
-//         </Text>
-//       </View>
-//     </View>
-
-//     {/* Personal Info */}
-//     <View className="px-4 mb-6">
-//       <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-lg font-semibold text-black mb-2">
-//         About
-//       </Text>
-//       <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-600 leading-5 text-md mb-4">
-//         {data?.user?.bio || 'This is a sample bio. Update your profile to add a personal bio.'}
-//       </Text>
-
-//       <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-lg font-semibold text-black mb-2">
-//         Program
-//       </Text>
-//       <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-600 leading-5 text-md mb-4">
-//         {data?.user?.program || '-'}
-//       </Text>
-
-//       <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-lg font-semibold text-black mb-2">
-//         Contact
-//       </Text>
-//       <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-600 leading-5 text-md mb-1">
-//         Email: {data?.user?.email || '-'}
-//       </Text>
-//       <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-600 leading-5 text-md mb-1">
-//         Phone: {data?.user?.phone_number || '-'}
-//       </Text>
-
-
-//             <View>
-//         <TouchableOpacity
-//           style={{ backgroundColor: Colors.light.primary }}
-//           className="absolute -top-50 -right-0 w-12 h-12 rounded-full items-center justify-center"
-//           onPress={() => setEditModalVisible(true)}
-//         >
-//           <Ionicons name="pencil" size={28} color="white" />
-//         </TouchableOpacity>
-//       </View>
-
-//       {/* Social links (if any) */}
-//       {/* {data?.user?.social_links && Object.keys(data.user.social_links).length > 0 && (
-//         <View className="mt-4">
-//           <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-lg font-semibold text-black mb-2">
-//             Social
-//           </Text>
-//           {Object.entries(data.user.social_links).map(([key, value]) => (
-//             <Text key={key} style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-600 leading-5 text-md">
-//               {key}: {value}
-//             </Text>
-//           ))}
-//         </View>
-//       )} */}
-//     </View>
-
-//   </ScrollView>
-//   <EditProfileModal
-//         visible={isEditModalVisible}
-//         profile={data?.user}
-//         onClose={() => setEditModalVisible(false)}
-//         onSave={handleSave}
-//       />
-// </SafeAreaView>
-
-//   );
-// };
-
-// export default ProfileScreen;
-
-
-
-
-
-
-
-
-
-
-
 "use client"
 
 import React, { useEffect, useRef, useState } from "react";
@@ -337,13 +122,11 @@ const UserProfileScreen: React.FC = () => {
 
 
   return (
-    // <SafeAreaView style={{ flex: 1, backgroundColor: "#f8fafc" }}>
-    <>
-    
-      <StatusBar barStyle="dark-content" />
-      <ScrollView>
-        <DropdownAlert visible={alert.visible} type={alert.type} title={alert.title} message={alert.message} onDismiss={hideAlert} />
 
+    <>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView className="flex-1 bg-white">
+                   <DropdownAlert visible={alert.visible} type={alert.type} title={alert.title} message={alert.message} onDismiss={hideAlert} />
         {/* Header (image + blur overlay) */}
         <View style={{ height: HEADER_HEIGHT, width }}>
           <Image
@@ -351,13 +134,20 @@ const UserProfileScreen: React.FC = () => {
             style={{ width: "100%", height: HEADER_HEIGHT }}
             resizeMode="cover"
           />
-          <BlurView intensity={40} style={{ position: "absolute", left: 0, right: 0, top: 0, height: HEADER_HEIGHT }} />
+          <BlurView intensity={10} style={{ position: "absolute", left: 0, right: 0, top: 0, height: HEADER_HEIGHT }} />
           {/* Top left back */}
-          <View style={{ position: "absolute", top: 18, left: 14 }}>
+          <View style={{ position: "absolute", top: 45, left: 14 }}>
             <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
-              <Ionicons name="arrow-back" size={22} color="#fff" />
+              <Ionicons name="chevron-back" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
+          <View style={{ position: "absolute", top: 45, right: 14 }}>
+            <TouchableOpacity className="ml-4 flex-row items-center border border-gray-100 px-3 py-2 rounded-full bg-white shadow-sm">
+            <Ionicons name="menu-outline" size={20} color="#003554" />
+            <Text className="font-[Gilroy-Medium] ml-1">Settings</Text>
+          </TouchableOpacity>
+          </View>
+           
         </View>
 
         {/* White card with wave top */}
@@ -422,7 +212,7 @@ const UserProfileScreen: React.FC = () => {
               <Text style={{ fontFamily: "Gilroy-SemiBold", fontSize: 20, color: "#0f172a" }}>
                 {user.first_name} {user.last_name}
               </Text>
-              <Text style={{ fontFamily: "Gilroy-Regular", color: "#475569", marginTop: 4 }}>{user.profile_headline || "No headline"}</Text>
+              <Text style={{ fontFamily: "Gilroy-Regular", color: "#475569", marginTop: 4 }}>{user?.profile_headline || "No headline"}</Text>
             </View>
 
                  <AnimatedTouchable
@@ -522,6 +312,7 @@ const UserProfileScreen: React.FC = () => {
                 <InfoPill label="Year" value={user.year_of_study || "Not available"} />
                 <InfoPill label="Grad🎓" value={user.graduation_year || "Not available"} />
                 <InfoPill label="Email" value={user.email || "Not available"} />
+                <InfoPill label="Phone" value={user.phone_number || "Not available"} />
               </View>
             </View>
           </View>

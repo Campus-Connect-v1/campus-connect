@@ -77,6 +77,7 @@ const TabsLayout = () => {
           justifyContent: 'center',
           alignItems: 'center',
         },
+        
         tabBarStyle: {
           borderRadius: 50,
           marginHorizontal: 10,
@@ -89,7 +90,9 @@ const TabsLayout = () => {
           backgroundColor: '#ffffff',
           borderTopWidth: 0,
         },
-       
+       sceneStyle: {
+          backgroundColor: '#ffffff',
+        },
       }}
     >
       <Tabs.Screen
@@ -114,29 +117,25 @@ const TabsLayout = () => {
           ),
         }}
       />
+   
       <Tabs.Screen
-        name='profile'
+        name='feed'
         options={{
           headerStyle: { backgroundColor: '#002D69' },
-          title: 'PROFILE',
-          headerTitleStyle: {
+          headerShown: false,
+           headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
             color: '#fff',
           },
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.person} title='SEARCH' />
+            <TabIcon focused={focused} icon={icons.more} title='FEED' />
           ),
            headerLeft: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
-        <Image
-          source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
-          className="w-10 h-10 rounded-full"
-        />
-      </TouchableOpacity>
+      <Text className='font-[Gilroy-Regular] text-2xl text-white'>uniCLIQ</Text>
     ),
         }}
       />
-      <Tabs.Screen
+         <Tabs.Screen
       name='chat'
         options={{
           headerStyle: { backgroundColor: '#002D69' },
@@ -159,33 +158,16 @@ const TabsLayout = () => {
         }}
       />
       <Tabs.Screen
-        name='feed'
+        name='connections'
         options={{
           headerStyle: { backgroundColor: '#002D69' },
-          headerShown: false,
-           headerTitleStyle: {
-            fontFamily: 'Gilroy-SemiBold',
-            color: '#fff',
-          },
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.person} title='FEED' />
-          ),
-           headerLeft: () => (
-      <Text className='font-[Gilroy-Regular] text-2xl text-white'>uniCLIQ</Text>
-    ),
-        }}
-      />
-      <Tabs.Screen
-        name='notifications'
-        options={{
-          headerStyle: { backgroundColor: '#002D69' },
-          title: 'NOTIFICATIONS',
+          title: 'CONNECTIONS',
           headerTitleStyle: {
             fontFamily: 'Gilroy-SemiBold',
             color: '#fff',
           },
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.bell} title='NOTIFICATIONS' />
+            <TabIcon focused={focused} icon={icons.person} title='CONNECTIONS' />
           ),
            headerLeft: () => (
       <TouchableOpacity onPress={handleProfilePress} className="ml-4">
@@ -197,6 +179,35 @@ const TabsLayout = () => {
     ),
         }}
       />
+      <Tabs.Screen
+        name='profile'
+        options={{
+          headerStyle: { backgroundColor: '#002D69' },
+          title: 'PROFILE',
+          headerTitleStyle: {
+            fontFamily: 'Gilroy-SemiBold',
+            color: '#fff',
+          },
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.user} title='SEARCH' />
+          ),
+           headerLeft: () => (
+      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
+        <Image
+          source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
+          className="w-10 h-10 rounded-full"
+        />
+      </TouchableOpacity>
+    ),
+        }}
+      />
+            <Tabs.Screen
+      options={{
+        headerShown: false,
+        href: null, 
+      }}
+    name="notifications"
+  />
     </Tabs>
         </>
   );

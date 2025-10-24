@@ -248,11 +248,6 @@ export default function RegisterScreen(props: RegisterScreenProps = {}) {
             {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword.message}</Text>}
           </View>
 
-          {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotPasswordContainer}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
           {/* Login Button */}
           <TouchableOpacity
             style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
@@ -394,6 +389,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 24,
+    marginTop: 12,
   },
   loginButtonDisabled: {
     opacity: 0.7,
