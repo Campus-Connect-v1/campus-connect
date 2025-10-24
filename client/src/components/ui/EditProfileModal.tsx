@@ -14,6 +14,10 @@ import {
   Platform,
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
+import { userApi } from "@/src/services/api"
+import { useDropdownAlert } from "@/src/hooks/useDropdownAlert"
+import DropdownAlert from "./DropdownAlert"
+import { updateProfile } from "@/src/services/authServices"
 
 interface EditProfileModalProps {
   visible: boolean
@@ -25,6 +29,7 @@ interface EditProfileModalProps {
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, onClose, onSave }) => {
   const [formData, setFormData] = useState(profile || {})
   const [isSaving, setIsSaving] = useState(false)
+  const { success, error, alert, hideAlert } = useDropdownAlert()
 
   useEffect(() => {
     if (profile) {
@@ -35,7 +40,10 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      await onSave(formData)
+      await updateProfile(formData)
+      success("Profile Updated", "Your profile has been updated successfully.", 3000)
+      onSave(formData)
+      onClose()
     } finally {
       setIsSaving(false)
     }
@@ -52,6 +60,13 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
     <Modal visible={visible} animationType="slide" transparent={false}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
         <View className="flex-1 bg-white mt-10">
+          <DropdownAlert
+                  visible={alert.visible}
+                  type={alert.type}
+                  title={alert.title}
+                  message={alert.message}
+                  onDismiss={hideAlert}
+                />
           {/* Header */}
           <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200">
             <TouchableOpacity onPress={onClose}>

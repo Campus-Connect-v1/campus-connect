@@ -15,13 +15,17 @@ import {
   Platform,
  Alert } from "react-native";
 import { forgotSchema, ForgotSchema } from "@/src/schemas/authSchemas";
-
+import DropdownAlert from "@/src/components/ui/DropdownAlert";
 import { forgotPassword } from "@/src/services/authServices";
 import { useState } from "react";
+import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
+import Ionicons from "@expo/vector-icons/build/Ionicons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const { alert, hideAlert, success, error } = useDropdownAlert();
   const [isLoading, setIsLoading] = useState(false);
   const { control, handleSubmit, formState: { errors } } = useForm<ForgotSchema>({
     resolver: zodResolver(forgotSchema),
@@ -38,23 +42,46 @@ export default function ForgotPasswordScreen() {
     const onSubmit = async (data: ForgotSchema) => {
     setIsLoading(true)
     try {
-      const result = await forgotPassword(data)
+      const result = await forgotPassword({ email: data.email })
       if (result.success) {
-        Alert.alert("Success", result.data || "Reset link sent to your email")
-        router.push("/auth/reset-password");
-      } else {
-        Alert.alert("Login Failed", result.error || "Please try again")
-      }
-    } catch {
-      Alert.alert("Error", "An unexpected error occurred")
-    } finally {
+  const msg =
+    typeof result.data === "string"
+      ? result.data
+      : result.data?.message || "Reset link sent to your email";
+
+  success("Success", msg, 3000);
+  router.push("/auth/reset-password");
+} else {
+  const errMsg =
+    typeof result.error === "string"
+      ? result.error
+      : result.error?.message || "Please try again";
+
+  error("Failed", errMsg, 3000);
+} 
+} catch {
+  error("Error", "An unexpected error occurred", 3000);
+} finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <SafeAreaView className="flex-1">
+
+  <TouchableOpacity className="flex-row items-center" onPress={() => router.back()} style={{ padding: 8 }}>
+          <Ionicons name="chevron-back" size={22} color="#000" />
+          <Text className="font-[Gilroy-Medium] text-lg">Back</Text>
+        </TouchableOpacity>
+<KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <View style={styles.inner}>
+      <DropdownAlert
+                visible={alert.visible}
+                type={alert.type}
+                title={alert.title}
+                message={alert.message}
+                onDismiss={hideAlert}
+              />
         <Text style={styles.title}>Forgot Password?</Text>
         <Text style={styles.subtitle}>
           Enter your email to reset your password.
@@ -85,14 +112,18 @@ export default function ForgotPasswordScreen() {
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+
+
+    </SafeAreaView>
+    
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background, padding: 24 },
   inner: { flex: 1, justifyContent: "center" },
-  title: { fontSize: 26, fontWeight: "bold", color: Colors.light.text, marginBottom: 8 },
-  subtitle: { fontSize: 15, color: Colors.light.textSecondary, marginBottom: 32 },
+  title: { fontSize: 26, fontWeight: "bold", color: Colors.light.text, marginBottom: 8, fontFamily: "Gilroy-SemiBold", },
+  subtitle: { fontSize: 16, color: Colors.light.textSecondary, marginBottom: 32, fontFamily: "Gilroy-Regular", },
   input: {
     borderWidth: 1,
     borderColor: Colors.light.border,
@@ -101,9 +132,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     backgroundColor: Colors.light.inputBackground,
+    fontFamily: "Gilroy-Medium",
   },
   inputError: { borderColor: Colors.light.error },
-  errorText: { color: Colors.light.error, marginBottom: 12 },
+  errorText: { color: Colors.light.error, marginBottom: 12, fontFamily: "Gilroy-Regular", },
   button: {
     backgroundColor: Colors.light.primary,
     borderRadius: 12,
@@ -112,5 +144,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 16,
   },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "bold" },
+  buttonText: { color: "white", fontSize: 16, fontWeight: "bold", fontFamily: "Gilroy-SemiBold", },
 });

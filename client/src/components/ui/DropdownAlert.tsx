@@ -31,7 +31,7 @@ const getAlertColors = (type: AlertType) => {
   switch (type) {
     case "success":
       return {
-        gradient: ["rgb(52, 211, 153)", "rgb(16, 185, 129)"],
+        gradient: ["rgb(0, 140, 20)", "rgb(0, 120, 10)"],
         icon: "✓",
       }
     case "error":
@@ -111,7 +111,7 @@ export default function DropdownAlert({
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
       >
-        <BlurView intensity={60} tint="light" style={styles.blur}>
+        <BlurView intensity={0} tint="light" style={styles.blur}>
           <View style={styles.content}>
             <View style={styles.iconContainer}>
               <Text style={styles.icon}>{colors.icon}</Text>
