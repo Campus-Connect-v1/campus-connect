@@ -1,6 +1,7 @@
-// services/LocationService.js
+// utils/locationService.js
+
 import { UserLocation } from "../models/location.js";
-import redisClient from "../config/redis.js"; // Your Redis client
+import redisClient from "../config/redis.js";
 
 export class LocationService {
   // Update user location with last_seen timestamp
@@ -8,6 +9,16 @@ export class LocationService {
     const [longitude, latitude] = coordinates;
 
     // Rate limiting check (existing code)...
+    const existingLocation = await UserLocation.findOne({ user_id: userId });
+    if (existingLocation) {
+      const timeDiff = Date.now() - existingLocation.last_updated.getTime();
+      if (timeDiff < 30000) {
+        // 30 second cooldown
+        throw new Error(
+          "Location update too frequent. Please wait 30 seconds."
+        );
+      }
+    }
 
     const locationData = {
       user_id: userId,
@@ -17,7 +28,7 @@ export class LocationService {
       },
       accuracy,
       last_updated: new Date(),
-      last_seen: new Date(), // Add last_seen field
+      last_seen: new Date(),
       is_active: true,
     };
 
@@ -27,7 +38,7 @@ export class LocationService {
       { upsert: true, new: true }
     );
 
-    // Cache the updated location
+    // Cache the updated location with consistent format
     await this.cacheUserLocation(userId, result);
 
     // Clear nearby users cache for this user
@@ -36,18 +47,21 @@ export class LocationService {
     return result;
   }
 
-  // Cache user location in Redis
+  // Cache user location in Redis with consistent format
   async cacheUserLocation(userId, locationData) {
     const cacheKey = `user_location:${userId}`;
+    const cacheData = {
+      latitude: locationData.location.coordinates[1],
+      longitude: locationData.location.coordinates[0],
+      last_updated: locationData.last_updated,
+      last_seen: locationData.last_seen,
+      accuracy: locationData.accuracy,
+    };
+
     await redisClient.setex(
       cacheKey,
       300, // 5 minutes TTL
-      JSON.stringify({
-        coordinates: locationData.location.coordinates,
-        last_updated: locationData.last_updated,
-        last_seen: locationData.last_seen,
-        accuracy: locationData.accuracy,
-      })
+      JSON.stringify(cacheData)
     );
   }
 
@@ -59,7 +73,7 @@ export class LocationService {
   }
 
   // Enhanced nearby users with campus context
-  async findNearbyUsers(userId, radius = 100) {
+  async findNearbyUsers(userId, radius = 500) {
     const cacheKey = `nearby_users:${userId}:${radius}`;
 
     // Check Redis cache first
@@ -77,9 +91,7 @@ export class LocationService {
       throw new Error("User location not found");
     }
 
-    // Find nearby users with active status based on last_seen
-    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
-
+    // Find nearby users with active status
     const nearbyUsers = await UserLocation.aggregate([
       {
         $geoNear: {
@@ -87,10 +99,11 @@ export class LocationService {
           distanceField: "distance",
           maxDistance: radius,
           spherical: true,
+          key: "location",
           query: {
             user_id: { $ne: userId },
             location_sharing_enabled: true,
-            last_seen: { $gte: fifteenMinutesAgo }, // Only recently active users
+            is_active: true,
           },
         },
       },
@@ -121,16 +134,61 @@ export class LocationService {
     }
   }
 
+  // Calculate distance between two users
+  async calculateDistanceBetweenUsers(userId1, userId2) {
+    try {
+      // Get both users' locations
+      const [user1, user2] = await Promise.all([
+        UserLocation.findOne({ user_id: userId1 }),
+        UserLocation.findOne({ user_id: userId2 }),
+      ]);
+
+      if (!user1 || !user2) {
+        console.log(
+          `❌ Could not find locations for users: ${userId1}, ${userId2}`
+        );
+        return Infinity;
+      }
+
+      // Extract coordinates
+      const [lon1, lat1] = user1.location.coordinates;
+      const [lon2, lat2] = user2.location.coordinates;
+
+      // Calculate distance using Haversine formula
+      return this.calculateHaversineDistance(lat1, lon1, lat2, lon2);
+    } catch (error) {
+      console.error("❌ Error calculating distance:", error);
+      return Infinity;
+    }
+  }
+
+  // Haversine distance calculation
+  calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+  }
+
+  // Simple distance calculation for coordinates (used by PrivacyService)
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    return this.calculateHaversineDistance(lat1, lon1, lat2, lon2);
+  }
+
   // Get user's current building based on location
   async getUserBuilding(userId) {
     const userLocation = await UserLocation.findOne({ user_id: userId });
     if (!userLocation) return null;
 
     const [longitude, latitude] = userLocation.location.coordinates;
-
-    // Query campus_buildings to find which building user is in
-    // This would use your MySQL campus_buildings table
-    // You'd need to implement this spatial query based on your DB
     return await this.findBuildingByCoordinates(latitude, longitude);
   }
 
@@ -140,7 +198,7 @@ export class LocationService {
       { user_id: userId },
       {
         location_sharing_enabled: !enabled,
-        is_active: !enabled, // Also mark as inactive if incognito
+        is_active: !enabled,
       },
       { new: true, upsert: true }
     );
@@ -179,22 +237,24 @@ export class LocationService {
     };
   }
 
-  // Get user's location history (last N records)
-  async getLocationHistory(userId, limit = 20) {
-    // Validate user
+  // Get user's location history
+  async getLocationHistory(userId, hours = 24) {
     if (!userId) {
       throw new Error("User ID is required");
     }
 
-    // Fetch location history sorted by last_updated descending
-    const history = await UserLocation.find({ user_id: userId })
+    const timeThreshold = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    const history = await UserLocation.find({
+      user_id: userId,
+      last_updated: { $gte: timeThreshold },
+    })
       .sort({ last_updated: -1 })
-      .limit(limit)
       .select("location accuracy last_updated is_active")
       .lean();
 
     if (!history || history.length === 0) {
-      throw new Error("No location history found for this user");
+      return [];
     }
 
     return history.map((record) => ({
@@ -204,5 +264,79 @@ export class LocationService {
       last_updated: record.last_updated,
       active: record.is_active || false,
     }));
+  }
+
+  async findBuildingByCoordinates(latitude, longitude) {
+    try {
+      // Mock implementation - replace with actual spatial queries
+      const mockBuildings = [
+        {
+          building_name: "Main Library",
+          building_type: "academic",
+          coordinates: { lat: 37.4275, lon: -122.1697 },
+        },
+        {
+          building_name: "Student Center",
+          building_type: "student_life",
+          coordinates: { lat: 37.428, lon: -122.17 },
+        },
+        {
+          building_name: "Science Building",
+          building_type: "academic",
+          coordinates: { lat: 37.4265, lon: -122.1685 },
+        },
+      ];
+
+      let closestBuilding = null;
+      let minDistance = Infinity;
+
+      for (const building of mockBuildings) {
+        const distance = this.calculateHaversineDistance(
+          latitude,
+          longitude,
+          building.coordinates.lat,
+          building.coordinates.lon
+        );
+
+        if (distance < minDistance && distance < 100) {
+          minDistance = distance;
+          closestBuilding = building;
+        }
+      }
+
+      return (
+        closestBuilding || {
+          building_name: "On Campus",
+          building_type: "campus",
+        }
+      );
+    } catch (error) {
+      console.error("Error finding building:", error);
+      return { building_name: "On Campus", building_type: "campus" };
+    }
+  }
+
+  async getUserLocationFromDB(userId) {
+    try {
+      const userLocation = await UserLocation.findOne({
+        user_id: userId,
+        is_active: true,
+      });
+
+      if (!userLocation) {
+        console.log(`📍 No location found in DB for user: ${userId}`);
+        return null;
+      }
+
+      console.log(`📍 Found location in DB for ${userId}:`, {
+        coordinates: userLocation.location.coordinates,
+        last_updated: userLocation.last_updated,
+      });
+
+      return userLocation;
+    } catch (error) {
+      console.error(`❌ Error fetching location from DB for ${userId}:`, error);
+      return null;
+    }
   }
 }

@@ -1,30 +1,37 @@
-// models/Location.js (MongoDB)
+// models/location.js
+
 import mongoose from "mongoose";
 
 const userLocationSchema = new mongoose.Schema(
   {
     user_id: {
-      type: String, // References MySQL user_id
+      type: String,
       required: true,
       index: true,
+      unique: true,
     },
     location: {
       type: {
         type: String,
         enum: ["Point"],
         default: "Point",
+        required: true,
       },
       coordinates: {
-        type: [Number], // [longitude, latitude]
+        type: [Number],
         required: true,
-        index: "2dsphere",
       },
     },
     accuracy: {
       type: Number,
-      default: 50, // meters
+      default: 50,
     },
     last_updated: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+    last_seen: {
       type: Date,
       default: Date.now,
       index: true,
@@ -35,7 +42,7 @@ const userLocationSchema = new mongoose.Schema(
     },
     geofence_radius: {
       type: Number,
-      default: 100, // meters
+      default: 100,
     },
     location_sharing_enabled: {
       type: Boolean,
@@ -44,6 +51,7 @@ const userLocationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    autoIndex: false,
   }
 );
 
@@ -51,5 +59,6 @@ const userLocationSchema = new mongoose.Schema(
 userLocationSchema.index({ location: "2dsphere" });
 // Compound index for active users
 userLocationSchema.index({ user_id: 1, is_active: 1 });
+userLocationSchema.index({ last_updated: 1 });
 
 export const UserLocation = mongoose.model("UserLocation", userLocationSchema);

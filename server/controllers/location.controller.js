@@ -11,13 +11,19 @@ const profileService = new ProfileService();
 export const getNearbyProfiles = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { radius = 100 } = req.query;
+    const { radius = 500 } = req.query;
+
+    // console.log(
+    //   `📍 Finding nearby profiles for user ${userId} within ${radius}m`
+    // );
 
     // Get nearby users
     const nearbyUsers = await locationService.findNearbyUsers(
       userId,
       parseInt(radius)
     );
+
+    // console.log(`👥 Found ${nearbyUsers.length} nearby users`);
 
     // Batch privacy check for all nearby users
     const nearbyUserIds = nearbyUsers.map((user) => user.user_id);
@@ -26,22 +32,28 @@ export const getNearbyProfiles = async (req, res) => {
       userId
     );
 
+    // console.log(
+    //   `🔐 ${visibleProfiles.length} profiles visible after privacy check`
+    // );
+
     // Enhance with distance and online status
     const enhancedProfiles = visibleProfiles.map((profile) => {
       const nearbyUser = nearbyUsers.find((u) => u.user_id === profile.user_id);
       return {
         ...profile,
-        distance: nearbyUser?.distance,
-        accuracy: nearbyUser?.accuracy,
-        last_seen: profile.last_seen || nearbyUser?.last_seen,
+        distance: nearbyUser?.distance || 0,
+        accuracy: nearbyUser?.accuracy || 50,
+        last_seen: profile.last_seen || nearbyUser?.last_seen || new Date(),
       };
     });
 
     if (enhancedProfiles.length === 0) {
       return res.status(200).json({
+        user: userId,
         message: "No nearby profiles found",
         radius: parseInt(radius),
         suggestion: "Try increasing the search radius",
+        profiles: [], // Explicitly return empty array
       });
     }
 
@@ -49,7 +61,7 @@ export const getNearbyProfiles = async (req, res) => {
       message: "Nearby profiles retrieved successfully",
       count: enhancedProfiles.length,
       radius: parseInt(radius),
-      profiles: enhancedProfiles,
+      profiles: enhancedProfiles, // FIXED: Added missing profiles array
     });
   } catch (error) {
     console.error("Get nearby profiles error:", error);
@@ -94,7 +106,6 @@ export const getLocationHistory = async (req, res) => {
     const userId = req.user.id;
     const { hours = 24 } = req.query;
 
-    const locationService = new LocationService();
     const history = await locationService.getLocationHistory(
       userId,
       parseInt(hours)
@@ -113,6 +124,7 @@ export const getLocationHistory = async (req, res) => {
     });
   }
 };
+
 export const getPrivacySettings = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -143,7 +155,6 @@ export const toggleLocationSharing = async (req, res) => {
     }
 
     // Update in MongoDB
-    const locationService = new LocationService();
     await locationService.toggleLocationSharing(userId, enabled);
 
     res.json({
@@ -177,7 +188,7 @@ export const updateLocation = async (req, res) => {
     const result = await locationService.updateUserLocation(
       userId,
       coordinates,
-      accuracy
+      parseFloat(accuracy)
     );
 
     res.json({
