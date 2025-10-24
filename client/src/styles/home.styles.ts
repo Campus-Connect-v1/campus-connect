@@ -19,7 +19,7 @@ export const styles = StyleSheet.create({
     marginHorizontal: 20,
     borderRadius: 24,
     paddingHorizontal: 12,
-    paddingVertical: 14,
+    paddingVertical: 9,
     marginBottom: 20,
     borderColor: "#f5f5f5"
   },

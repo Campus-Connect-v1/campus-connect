@@ -11,7 +11,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-// import { fetcher } from '@/services/fetcher';
+import useSWR from 'swr';
+import { fetcher } from '@/src/utils/fetcher';
 
 interface ProfileDrawerProps {
   isVisible: boolean;
@@ -41,9 +42,9 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 }) => {
   const slideAnim = React.useRef(new Animated.Value(-300)).current;
   const overlayOpacity = React.useRef(new Animated.Value(0)).current;
-    // const { data, error, isLoading } = useSWR('/api/v1/status/profile', fetcher);
+      const { data } = useSWR<any>("/user/profile", fetcher);
 
-      // const profile = data?.data;
+      const profile = data?.user;
 
   React.useEffect(() => {
     if (isVisible) {
@@ -154,30 +155,25 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
         }}
       >
         {/* User Profile Section */}
-        <View className="pt-16 pb-8 px-6">
+        <View className="pt-16 pb-8 px-4">
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center flex-1">
               <TouchableOpacity onPress={() => router.push("/(tabs)/profile")} className="w-12 h-12 rounded-full overflow-hidden mr-3">
                 <Image
-                  source={{ uri: user.avatar }}
+                  source={{ uri: profile?.profile_picture_url }}
                   className="w-full h-full"
                   resizeMode="cover"
                 />
               </TouchableOpacity>
               <View className="flex-1">
                 <Text style={{fontFamily: "Gilroy-Medium"}}  className="text-white text-lg font-semibold">
-                  {/* {profile?.fullName } */}
+                  {profile?.first_name} {profile?.last_name}
                 </Text>
-                <Text style={{fontFamily: "Gilroy-Regular"}} className="text-blue-200 text-lg">
-                  {/* @{profile?.userName} */}
+                <Text style={{fontFamily: "Gilroy-Regular"}} className="text-blue-200 text-sm">
+                  @{profile?.email}
                 </Text>
               </View>
             </View>
-            
-            {/* Add/Plus Icon */}
-            <TouchableOpacity className="w-8 h-8 rounded-full border border-white items-center justify-center">
-              <Ionicons name="add" size={20} color="white" />
-            </TouchableOpacity>
           </View>
         </View>
 
