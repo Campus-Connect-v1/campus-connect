@@ -1,29 +1,17 @@
-import { StyleSheet, Text, View } from "react-native"
-import Colors from "@/src/constants/Colors"
+import { StyleSheet, Text, View } from 'react-native'
+import React from 'react'
 
-export default function HomeScreen() {
+import MessagesScreen from '../messaging'
+
+const Chat = () => {
   return (
-    <View >
-      <Text className="text-red-500 text-4xl">Home Screen</Text>
-      <Text >Welcome to CampusConnect!</Text>
+    <View className='flex-1'>
+  
+      <MessagesScreen/>
     </View>
   )
 }
 
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     justifyContent: "center",
-//     alignItems: "center",
-//     backgroundColor: Colors.light.background,
-//   },
-//   title: {
-//     fontSize: 24,
-//     fontWeight: "bold",
-//     color: Colors.light.text,
-//     marginBottom: 8,
-//   },
-//   subtitle: {
-//     fontSize: 16,
-//   },
-// })
+export default Chat
+
+const styles = StyleSheet.create({})
