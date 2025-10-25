@@ -24,6 +24,7 @@ import { useRouter } from "expo-router"
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert"
 import { Image } from "expo-image"
 import logo from "@/assets/images/logo.png"
+import DropdownAlert from "@/src/components/ui/DropdownAlert"
 
 interface RegisterScreenProps {
   onRegisterSuccess?: (message: string) => void
@@ -79,11 +80,12 @@ export default function RegisterScreen(props: RegisterScreenProps = {}) {
         }
         success("uniCLIQ", "Registration successful! Please check your email to verify your account.", 4000)
         setTimeout(()=>{
+          success("uniCLIQ", "Registration successful! Please check your email to verify your account.", 4000)
           router.push({
             pathname: "/auth/verify-otp",
             params: { email: data.email }
           });
-        }, 2000)
+        }, 3000)
       } else {
         error("uniCLIQ","Registration Failed", 4000)
       }
@@ -116,8 +118,13 @@ export default function RegisterScreen(props: RegisterScreenProps = {}) {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-
-
+         <DropdownAlert
+              visible={alert.visible}
+              type={alert.type}
+              title={alert.title}
+              message={alert.message}
+              onDismiss={hideAlert}
+            />
         {/* Welcome Text */}
         <View style={styles.welcomeContainer}>
         <Image
