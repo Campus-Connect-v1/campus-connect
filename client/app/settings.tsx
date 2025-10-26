@@ -11,11 +11,7 @@ import {
     View,
 } from 'react-native';
 
-interface SettingsScreenProps {
-  navigation?: any;
-}
-
-const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
+const SettingsScreen: React.FC = () => {
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [privateProfile, setPrivateProfile] = useState(false);
@@ -39,7 +35,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
         <View className="mb-8">
           <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-lg font-semibold text-black mb-4">Account</Text>
           
-          <TouchableOpacity className="flex-row items-center justify-between py-4 border-b border-gray-100">
+          <TouchableOpacity onPress={() => router.back()} className="flex-row items-center justify-between py-4 border-b border-gray-100">
             <View className="flex-row items-center">
               <Ionicons name="person-outline" size={20} color="#666" />
               <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-black text-base ml-3">Edit Profile</Text>
@@ -47,7 +43,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={16} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity className="flex-row items-center justify-between py-4 border-b border-gray-100">
+          <TouchableOpacity onPress={() => console.log('Change Password')} className="flex-row items-center justify-between py-4 border-b border-gray-100">
             <View className="flex-row items-center">
               <Ionicons name="key-outline" size={20} color="#666" />
               <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-black text-base ml-3">Change Password</Text>
@@ -55,7 +51,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={16} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity className="flex-row items-center justify-between py-4 border-b border-gray-100">
+          <TouchableOpacity onPress={() => console.log('Email Settings')} className="flex-row items-center justify-between py-4 border-b border-gray-100">
             <View className="flex-row items-center">
               <Ionicons name="mail-outline" size={20} color="#666" />
               <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-black text-base ml-3">Email Settings</Text>
@@ -98,7 +94,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
             />
           </View>
 
-          <TouchableOpacity className="flex-row items-center justify-between py-4 border-t border-gray-100 mt-3">
+          <TouchableOpacity onPress={() => console.log('Blocked Users')} className="flex-row items-center justify-between py-4 border-t border-gray-100 mt-3">
             <View className="flex-row items-center">
               <Ionicons name="shield-outline" size={20} color="#666" />
               <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-black text-base ml-3">Blocked Users</Text>
@@ -146,7 +142,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
         <View className="mb-8">
           <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-lg font-semibold text-black mb-4">About</Text>
           
-          <TouchableOpacity className="flex-row items-center justify-between py-4 border-b border-gray-100">
+          <TouchableOpacity onPress={() => console.log('Help & Support')} className="flex-row items-center justify-between py-4 border-b border-gray-100">
             <View className="flex-row items-center">
               <Ionicons name="help-circle-outline" size={20} color="#666" />
               <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-black text-base ml-3">Help & Support</Text>
@@ -154,7 +150,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={16} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity className="flex-row items-center justify-between py-4 border-b border-gray-100">
+          <TouchableOpacity onPress={() => console.log('Terms of Service')} className="flex-row items-center justify-between py-4 border-b border-gray-100">
             <View className="flex-row items-center">
               <Ionicons name="document-text-outline" size={20} color="#666" />
               <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-black text-base ml-3">Terms of Service</Text>
@@ -162,7 +158,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={16} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity className="flex-row items-center justify-between py-4 border-b border-gray-100">
+          <TouchableOpacity onPress={() => console.log('Privacy Policy')} className="flex-row items-center justify-between py-4 border-b border-gray-100">
             <View className="flex-row items-center">
               <Ionicons name="lock-closed-outline" size={20} color="#666" />
               <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-black text-base ml-3">Privacy Policy</Text>
@@ -170,7 +166,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={16} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity className="flex-row items-center justify-between py-4">
+          <TouchableOpacity onPress={() => console.log('About Campus Connect')} className="flex-row items-center justify-between py-4">
             <View className="flex-row items-center">
               <Ionicons name="information-circle-outline" size={20} color="#666" />
               <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-black text-base ml-3">About Campus Connect</Text>
@@ -184,12 +180,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 
         {/* Danger Zone */}
         <View className="mb-8">
-          <TouchableOpacity className="flex-row items-center justify-center py-4 border border-red-200 rounded-lg bg-red-50">
+          <TouchableOpacity onPress={() => console.log('Log Out')} className="flex-row items-center justify-center py-4 border border-red-200 rounded-lg bg-red-50">
             <Ionicons name="log-out-outline" size={20} color="#dc2626" />
             <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-red-600 text-base ml-2">Log Out</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity className="flex-row items-center justify-center py-4 border border-gray-200 rounded-lg mt-3">
+          <TouchableOpacity onPress={() => console.log('Delete Account')} className="flex-row items-center justify-center py-4 border border-gray-200 rounded-lg mt-3">
             <Ionicons name="trash-outline" size={20} color="#666" />
             <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-600 text-base ml-2">Delete Account</Text>
           </TouchableOpacity>
