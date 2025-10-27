@@ -142,7 +142,7 @@ const UserProfileScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
           <View style={{ position: "absolute", top: 45, right: 14 }}>
-            <TouchableOpacity className="ml-4 flex-row items-center border border-gray-100 px-3 py-2 rounded-full bg-white shadow-sm">
+            <TouchableOpacity onPress={() => router.push('/settings')} className="ml-4 flex-row items-center border border-gray-100 px-3 py-2 rounded-full bg-white shadow-sm">
             <Ionicons name="menu-outline" size={20} color="#003554" />
             <Text className="font-[Gilroy-Medium] ml-1">Settings</Text>
           </TouchableOpacity>
