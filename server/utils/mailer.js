@@ -1,4 +1,8 @@
 import nodemailer from "nodemailer";
+import { COLORS } from "../helper/logger.js";
+
+import dotenv from "dotenv";
+dotenv.config();
 
 // Create transporter
 const transporter = nodemailer.createTransport({
@@ -12,9 +16,9 @@ const transporter = nodemailer.createTransport({
 // Verify transporter configuration
 transporter.verify((error, success) => {
   if (error) {
-    console.error("Mail transporter failed:", error);
+    console.error(COLORS[process.env.ERROR], "Mail transporter failed:", error);
   } else {
-    console.log("Mail transporter is ready");
+    console.log(COLORS[process.env.SUCCESS], "Mail transporter is ready");
   }
 });
 

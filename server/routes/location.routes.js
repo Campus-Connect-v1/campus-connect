@@ -181,7 +181,7 @@ router.post("/location", updateLocation);
  *                       location_context:
  *                         type: string
  *                         example: "Main Library"
- *       200:
+ *       201:
  *         description: No nearby profiles found
  *         content:
  *           application/json:

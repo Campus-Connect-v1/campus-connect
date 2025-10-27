@@ -59,6 +59,6 @@ const userLocationSchema = new mongoose.Schema(
 userLocationSchema.index({ location: "2dsphere" });
 // Compound index for active users
 userLocationSchema.index({ user_id: 1, is_active: 1 });
-userLocationSchema.index({ last_updated: 1 });
+// userLocationSchema.index({ last_updated: 1 });
 
 export const UserLocation = mongoose.model("UserLocation", userLocationSchema);

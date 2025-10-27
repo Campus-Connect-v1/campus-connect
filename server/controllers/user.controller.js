@@ -393,7 +393,7 @@ export const getConnections = async (req, res) => {
           connection_id: conn.connection_id,
           status: conn.status,
           created_at: conn.created_at,
-          user: otherUser,
+          receiver: otherUser,
         };
       }),
     });
@@ -450,7 +450,7 @@ export const getAllConnections = async (req, res) => {
         shared_courses: conn.shared_courses,
         created_at: conn.created_at,
         updated_at: conn.updated_at,
-        user: otherUser,
+        receiver: otherUser,
         your_role: isRequester ? "requester" : "receiver",
         is_pending_action: conn.status === "pending" && !isRequester,
       };

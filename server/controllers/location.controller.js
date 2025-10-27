@@ -18,10 +18,10 @@ export const getNearbyProfiles = async (req, res) => {
     // );
 
     // Get nearby users
-    const nearbyUsers = await locationService.findNearbyUsers(
-      userId,
-      parseInt(radius)
-    );
+    const [nearbyUsers, viewerLocation] = await Promise.all([
+      locationService.findNearbyUsers(userId, parseInt(radius)),
+      locationService.getUserLocationWithFallback(userId),
+    ]);
 
     // console.log(`👥 Found ${nearbyUsers.length} nearby users`);
 

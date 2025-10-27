@@ -458,15 +458,59 @@ Retrieve all user connections with optional filters.
 
 ```json
 {
-  "message": "Connections retrieved successfully",
-  "connections": [
-    {
-      "connection_id": "conn_001",
-      "user_id": "user_002",
-      "status": "accepted",
-      "shared_courses": ["CS101", "MATH204"]
-    }
-  ]
+  "message": "All connections retrieved successfully",
+  "counts": {
+    "accepted": 13,
+    "pending": 4,
+    "declined": 2,
+    "blocked": 1,
+    "total": 20
+  },
+  "connections": {
+    "accepted": [
+      {
+        "connection_id": "conn_239",
+        "status": "accepted",
+        "connection_note": "Class project collaboration",
+        "shared_courses": "CS106",
+        "created_at": "2025-10-17T21:14:45.000Z",
+        "updated_at": "2025-10-17T21:14:45.000Z",
+        "user": {
+          "id": "user_11",
+          "first_name": "James",
+          "last_name": "Taylor",
+          "profile_picture_url": "https://example.com/avatar.jpg",
+          "profile_headline": "English Literature Student",
+          "program": "English Literature",
+          "university_id": "STU12345"
+        },
+        "your_role": "requester",
+        "is_pending_action": false
+      }
+    ],
+    "pending": [
+      {
+        "connection_id": "conn_333",
+        "status": "pending",
+        "connection_note": "Would love to connect!",
+        "shared_courses": null,
+        "created_at": "2025-10-17T21:14:45.000Z",
+        "updated_at": "2025-10-17T21:14:45.000Z",
+        "user": {
+          "id": "user_10",
+          "first_name": "Karen",
+          "last_name": "Anderson",
+          "profile_picture_url": null,
+          "profile_headline": null,
+          "program": "Chemistry"
+        },
+        "your_role": "receiver",
+        "is_pending_action": true
+      }
+    ],
+    "declined": [...],
+    "blocked": [...]
+  }
 }
 ```
 
@@ -476,6 +520,37 @@ Retrieve all user connections with optional filters.
 
 **GET** `/api/users/connections/:status`
 Retrieve user connections filtered by a specific status (e.g., `accepted`).
+
+```json
+{
+  "message": "All connections retrieved successfully",
+  "counts": {
+    "accepted": 1
+  },
+  "connections": {
+    "accepted": [
+      {
+        "connection_id": "conn_239",
+        "status": "accepted",
+        "connection_note": "Class project collaboration",
+        "shared_courses": "CS106",
+        "created_at": "2025-10-17T21:14:45.000Z",
+        "updated_at": "2025-10-17T21:14:45.000Z",
+        "user": {
+          "id": "user_11",
+          "first_name": "James",
+          "last_name": "Taylor",
+          "profile_picture_url": null,
+          "profile_headline": null,
+          "program": "English Literature"
+        },
+        "your_role": "requester",
+        "is_pending_action": false
+      }
+    ]
+  }
+}
+```
 
 ---
 

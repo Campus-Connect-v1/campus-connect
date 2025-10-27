@@ -3,15 +3,23 @@
 import { findById } from "../models/user.model.js";
 import { PrivacyService } from "./privacyService.js";
 import { LocationService } from "./locationService.js";
-
+import { findByIds } from "../models/location.model.js";
 const privacyService = new PrivacyService();
 const locationService = new LocationService();
 
 export class ProfileService {
   async batchGetUsers(userIds) {
     try {
-      const users = [];
+      // const users = []; // optimization below
+      if (!userIds.length) return [];
+      const users = await findByIds(userIds); // You'll need to implement this
+      const userMap = {};
+      users.forEach((user) => {
+        userMap[user.user_id] = user;
+      });
+      return userIds.map((id) => userMap[id]).filter((user) => user);
 
+      //code below is unreachable, fr good reasons.
       for (const userId of userIds) {
         try {
           const user = await findById(userId);
@@ -137,13 +145,13 @@ export class ProfileService {
         return null;
       }
 
-      console.log(`🔧 Building profile for user ${user.user_id}`);
+      // console.log(`🔧 Building profile for user ${user.user_id}`);
 
       const privacySettings = await privacyService.getPrivacySettings(
         user.user_id
       );
       if (!privacySettings) {
-        console.log(`❌ No privacy settings for user ${user.user_id}`);
+        // console.log(`❌ No privacy settings for user ${user.user_id}`);
         return null;
       }
 
@@ -193,9 +201,9 @@ export class ProfileService {
         filteredProfile.location_context = "On Campus";
       }
 
-      console.log(
-        `✅ Successfully built profile for ${filteredProfile.display_name}`
-      );
+      // console.log(
+      //   `✅ Successfully built profile for ${filteredProfile.display_name}`
+      // );
       return filteredProfile;
     } catch (error) {
       console.error(

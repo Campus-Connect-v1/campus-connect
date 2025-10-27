@@ -1,12 +1,17 @@
 // config/redis.js
 import Redis from "ioredis";
 import dotenv from "dotenv";
+import { COLORS } from "../helper/logger.js";
+
 dotenv.config();
 // ✅ Fallback in-memory cache for when Redis is unavailable
 class MemoryCache {
   constructor() {
     this.store = new Map();
-    console.log("Using in-memory cache (Redis not available)");
+    console.log(
+      COLORS[process.env.WARNING],
+      "Using in-memory cache (Redis not available)"
+    );
   }
 
   async get(key) {
@@ -46,6 +51,7 @@ async function initializeRedis() {
 
   try {
     console.log(
+      COLORS[process.env.WARNING],
       `Initializing Redis Client: ${
         isLocal ? "Local" : "Cloud (Redis Cloud)"
       } mode`
@@ -64,7 +70,7 @@ async function initializeRedis() {
 
     // Try a ping test
     await client.ping();
-    console.log("Connected to Redis successfully");
+    console.log(COLORS[process.env.SUCCESS], "Connected to Redis successfully");
 
     redisClient = client;
     return redisClient;

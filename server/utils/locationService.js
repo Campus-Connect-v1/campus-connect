@@ -60,7 +60,7 @@ export class LocationService {
 
     await redisClient.setex(
       cacheKey,
-      300, // 5 minutes TTL
+      1800, // 30 minutes TTL
       JSON.stringify(cacheData)
     );
   }
@@ -120,7 +120,7 @@ export class LocationService {
     ]);
 
     // Cache in Redis for 30 seconds
-    await redisClient.setex(cacheKey, 30, JSON.stringify(nearbyUsers));
+    await redisClient.setex(cacheKey, 1800, JSON.stringify(nearbyUsers));
 
     return nearbyUsers;
   }
@@ -324,18 +324,55 @@ export class LocationService {
       });
 
       if (!userLocation) {
-        console.log(`📍 No location found in DB for user: ${userId}`);
+        // console.log(`📍 No location found in DB for user: ${userId}`);
         return null;
       }
 
-      console.log(`📍 Found location in DB for ${userId}:`, {
-        coordinates: userLocation.location.coordinates,
-        last_updated: userLocation.last_updated,
-      });
+      // console.log(`📍 Found location in DB for ${userId}:`, {
+      //   coordinates: userLocation.location.coordinates,
+      //   last_updated: userLocation.last_updated,
+      // });
 
       return userLocation;
     } catch (error) {
       console.error(`❌ Error fetching location from DB for ${userId}:`, error);
+      return null;
+    }
+  }
+
+  async getUserLocationWithFallback(userId) {
+    try {
+      // 1. Try cached location first
+      let location = await this.getCachedUserLocation(userId);
+
+      if (location) {
+        return location;
+      }
+
+      // 2. Fallback to database
+      console.log(`📍 No cached location for ${userId}, checking database...`);
+      const userLocation = await this.getUserLocationFromDB(userId);
+
+      if (userLocation) {
+        // Transform to consistent format
+        location = {
+          latitude: userLocation.location.coordinates[1],
+          longitude: userLocation.location.coordinates[0],
+          last_updated: userLocation.last_updated,
+          last_seen: userLocation.last_seen,
+          accuracy: userLocation.accuracy,
+        };
+
+        // Cache for future use
+        await this.cacheUserLocation(userId, userLocation);
+        console.log(`💾 Retrieved and cached location from DB for ${userId}`);
+        return location;
+      }
+
+      console.log(`❌ No location found in DB for user: ${userId}`);
+      return null;
+    } catch (error) {
+      console.error(`❌ Error getting location for ${userId}:`, error.message);
       return null;
     }
   }

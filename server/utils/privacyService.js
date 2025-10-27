@@ -172,8 +172,8 @@ export class PrivacyService {
 
       // Cache batch results for 1 minute
       try {
-        await redisClient.setex(cacheKey, 60, JSON.stringify(results));
-        console.log(`💾 Cached results in Redis for 60 seconds`);
+        await redisClient.setex(cacheKey, 1800, JSON.stringify(results));
+        console.log(`💾 Cached results in Redis for 1800 seconds`);
       } catch (cacheError) {
         console.error("⚠️ Failed to cache results:", cacheError.message);
       }
@@ -286,7 +286,7 @@ export class PrivacyService {
   }
 
   // Enhanced geofence checking with location validation
-  async isViewerInGeofence(viewerId, profileOwnerId, radius = 100) {
+  async isViewerInGeofence(viewerId, profileOwnerId, radius = 5000) {
     try {
       // console.log(`   📍 Checking geofence proximity:`);
       // console.log(
@@ -301,25 +301,26 @@ export class PrivacyService {
 
       // Validate locations
       if (!viewerLocation || viewerLocation.latitude === undefined) {
-        console.log(`   ❌ Missing or invalid viewer location for ${viewerId}`);
-        console.log(`   📍 Viewer location data:`, viewerLocation);
+        // console.log(`   ❌ Missing or invalid viewer location for ${viewerId}`);
+        // console.log(`   📍 Viewer location data:`, viewerLocation);
         return false;
       }
 
       if (!ownerLocation || ownerLocation.latitude === undefined) {
-        console.log(
-          `   ❌ Missing or invalid owner location for ${profileOwnerId}`
-        );
-        console.log(`   📍 Owner location data:`, ownerLocation);
+        // console.log(
+        //   `   ❌ Missing or invalid owner location for ${profileOwnerId}`
+        // );
+        // console.log(`   📍 Owner location data:`, ownerLocation);
         return false;
       }
 
-      console.log(
-        `   📍 Viewer location: ${viewerLocation.latitude}, ${viewerLocation.longitude}`
-      );
-      console.log(
-        `   📍 Owner location: ${ownerLocation.latitude}, ${ownerLocation.longitude}`
-      );
+      // console.log(
+      //   `   📍 Viewer location: ${viewerLocation.latitude}, ${viewerLocation.longitude}`
+      // );
+
+      // console.log(
+      //   `   📍 Owner location: ${ownerLocation.latitude}, ${ownerLocation.longitude}`
+      // );
 
       // Calculate distance using the fixed method
       const distance = this.locationService.calculateDistance(
@@ -329,14 +330,14 @@ export class PrivacyService {
         ownerLocation.longitude
       );
 
-      console.log(
-        `   📏 Calculated distance: ${distance.toFixed(
-          2
-        )}m (max allowed: ${radius}m)`
-      );
+      // console.log(
+      //   `   📏 Calculated distance: ${distance.toFixed(
+      //     2
+      //   )}m (max allowed: ${radius}m)`
+      // );
 
       const isWithinRadius = distance <= radius;
-      console.log(`   🎯 Within radius: ${isWithinRadius}`);
+      // console.log(`   🎯 Within radius: ${isWithinRadius}`);
 
       return isWithinRadius;
     } catch (error) {
