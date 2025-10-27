@@ -2,24 +2,53 @@ import { db } from "../config/db.js";
 import { v4 as uuidv4 } from "uuid";
 
 export const createUser = async (userData) => {
-  const { first_name, last_name, email, password, university_id } = userData;
-  const user_id = uuidv4();
+  const {
+    first_name,
+    last_name,
+    email,
+    password,
+    university_id,
+    auth_provider = "email",
+    provider_id = null,
+    profile_picture_url = null,
+    is_email_verified = false,
+    is_edu_verified = false,
+    is_active = true,
+    gender = "not specified",
+  } = userData;
+
+  const user_id = `user_${Date.now()}_${Math.random()
+    .toString(36)
+    .substr(2, 9)}`;
+
+  if (auth_provider === "email" && !password) {
+    throw new Error("Password is required for email authentication");
+  }
 
   const [result] = await db.execute(
-    `INSERT INTO users (user_id, university_id, email, password_hash, first_name, last_name, is_email_verified) 
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO users (
+      user_id, university_id, email, password_hash, first_name, last_name, 
+      auth_provider, provider_id, profile_picture_url, is_email_verified, 
+      is_edu_verified, is_active, gender
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       user_id,
       university_id,
       email,
-      password,
+      password, // This can be null for OAuth users
       first_name,
       last_name,
-      false, // Email not verified initially
+      auth_provider,
+      provider_id,
+      profile_picture_url,
+      is_email_verified,
+      is_edu_verified,
+      is_active,
+      gender,
     ]
   );
 
-  return user_id; // Return the user_id
+  return user_id;
 };
 
 export const findUserByEmail = async (email) => {
@@ -146,4 +175,35 @@ export const cleanupExpiredOTPs = async () => {
     "DELETE FROM otps WHERE expires_at <= NOW()"
   );
   return result.affectedRows;
+};
+
+export const findUserByProvider = async (provider, providerId) => {
+  if (!provider || !providerId) {
+    console.error("Invalid parameters for findUserByProvider");
+    return null;
+  }
+  const [rows] = await db.execute(
+    `SELECT user_id, university_id, email, first_name, last_name, 
+              is_active, is_email_verified, created_at, graduation_year, program,
+              auth_provider, provider_id, profile_picture_url, last_login
+       FROM users WHERE auth_provider = ? AND provider_id = ? AND is_active = TRUE`,
+    [provider, providerId]
+  );
+  return rows[0];
+};
+
+export const findUniversityByDomain = async (domain) => {
+  const [rows] = await db.execute(
+    "SELECT university_id, name, domain FROM universities WHERE domain = ? AND is_verified = TRUE",
+    [domain]
+  );
+  return rows[0];
+};
+
+export const updateUserLastLogin = async (userId) => {
+  const [result] = await db.execute(
+    "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?",
+    [userId]
+  );
+  return result.affectedRows > 0;
 };

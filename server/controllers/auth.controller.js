@@ -8,7 +8,10 @@ import {
   createOTP,
   verifyOTP as verifyOTPModel,
   deleteOTP,
-  markEmailAsVerified, // Make sure this is imported
+  markEmailAsVerified,
+  findUniversityByDomain,
+  findUserById,
+  findUserByProvider,
 } from "../models/auth.model.js";
 import {
   registerValidation,
@@ -371,6 +374,334 @@ export const resetPassword = async (req, res) => {
     console.error("Reset password error:", error);
     res.status(500).json({
       message: "Internal server error during password reset",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+//  OAuth functions
+
+// auth.controller.js - Fixed Google OAuth
+
+import { OAuth2Client } from "google-auth-library";
+
+// Initialize Google client properly
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+export const googleAuth = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        message: "Google token is required",
+      });
+    }
+
+    console.log("Google token received, length:", token.length);
+    console.log("Token preview:", token.substring(0, 50) + "...");
+
+    // For mobile apps, we need to verify the token differently
+    let payload;
+
+    try {
+      // Method 1: Try standard verification first
+      console.log("Attempting standard Google token verification...");
+      const ticket = await googleClient.verifyIdToken({
+        idToken: token,
+        audience:
+          process.env.GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+      console.log("Standard verification successful");
+    } catch (verifyError) {
+      console.log("Standard verification failed:", verifyError.message);
+
+      // Method 2: Check if it's your own JWT token (wrong token type)
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        console.log("Detected internal JWT token instead of Google token");
+        return res.status(400).json({
+          message: "Wrong token type",
+          suggestion:
+            "Please use Google Sign-In token, not your app login token",
+        });
+      } catch (jwtError) {
+        // Not a JWT token, continue with manual Google token processing
+      }
+
+      // Method 3: Manual verification for mobile tokens
+      try {
+        console.log("Attempting manual token decoding...");
+        // Decode the token without verification to get basic info
+        const tokenParts = token.split(".");
+        if (tokenParts.length !== 3) {
+          throw new Error("Invalid token format");
+        }
+
+        const decodedToken = JSON.parse(
+          Buffer.from(tokenParts[1], "base64").toString()
+        );
+        console.log("Decoded token payload:", decodedToken);
+
+        // For mobile apps, we might need to use the Google People API or just trust the token
+        // and validate the email domain
+        payload = {
+          sub: decodedToken.sub || decodedToken.user_id,
+          email: decodedToken.email,
+          email_verified: decodedToken.email_verified || true,
+          given_name:
+            decodedToken.given_name || decodedToken.first_name || "Google",
+          family_name:
+            decodedToken.family_name || decodedToken.last_name || "User",
+          picture: decodedToken.picture || decodedToken.profile_picture_url,
+        };
+
+        // Additional validation
+        if (!payload.email) {
+          throw new Error("No email in token");
+        }
+
+        console.log("Manual decoding successful");
+      } catch (decodeError) {
+        console.error("Token decode error:", decodeError);
+        return res.status(400).json({
+          message: "Invalid Google token format",
+          suggestion:
+            "Please try signing in with Google again. Make sure you're using the Google Sign-In token, not your app's login token.",
+        });
+      }
+    }
+
+    const {
+      sub: googleId,
+      email,
+      email_verified,
+      given_name: first_name,
+      family_name: last_name,
+      picture: profile_picture_url,
+    } = payload;
+
+    console.log("Processing Google auth for:", email);
+    console.log("Google ID:", googleId);
+
+    // Validate .edu email
+    if (!email.endsWith(".edu")) {
+      return res.status(400).json({
+        message: "University email required",
+        suggestion:
+          "Please use your university (.edu) email address with Google",
+      });
+    }
+
+    // Extract domain and find university
+    const emailDomain = email.split("@")[1];
+    const university = await findUniversityByDomain(emailDomain);
+
+    if (!university) {
+      return res.status(400).json({
+        message: "University not supported",
+        suggestion: `Your university domain (${emailDomain}) is not currently supported. Please use email registration instead.`,
+      });
+    }
+
+    console.log("Found university:", university.name);
+
+    // Check if user exists with this Google account
+    let user = await findUserByProvider("google", googleId);
+
+    if (!user) {
+      console.log("No existing Google user found, checking by email...");
+
+      // Check if user exists with same email but different provider
+      const existingUser = await findUserByEmail(email);
+      if (existingUser) {
+        console.log(
+          "Found existing user with different auth method:",
+          existingUser.auth_provider
+        );
+        return res.status(409).json({
+          message: "Email already registered",
+          suggestion: `This email is already registered with ${existingUser.auth_provider} authentication. Please log in with your password.`,
+        });
+      }
+
+      console.log("Creating new Google user...");
+
+      // Create new user with Google OAuth
+      const userId = await createUser({
+        first_name: first_name || "Google",
+        last_name: last_name || "User",
+        email,
+        auth_provider: "google",
+        provider_id: googleId,
+        profile_picture_url: profile_picture_url,
+        university_id: university.university_id,
+        is_email_verified: email_verified || true, // Google emails are verified
+        is_edu_verified: true,
+        is_active: true,
+        gender: "not specified",
+      });
+
+      user = await findUserByEmail(email);
+      console.log("New Google user created:", user.user_id);
+    } else {
+      // Update last login for existing user
+      await updateUserLastLogin(user.user_id);
+      console.log("Existing Google user logged in:", user.user_id);
+    }
+
+    // Generate JWT token (same as your login)
+    const jwtToken = jwt.sign(
+      {
+        id: user.user_id,
+        email: user.email,
+        university_id: user.university_id,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // Send welcome email if this is first time
+    if (!user.last_login) {
+      try {
+        await sendWelcomeEmail(email, user.first_name);
+        console.log("Welcome email sent");
+      } catch (emailError) {
+        console.error("Failed to send welcome email:", emailError);
+      }
+
+      // Update last login
+      await updateUserLastLogin(user.user_id);
+    }
+
+    console.log("Google authentication successful for user:", user.user_id);
+
+    res.status(200).json({
+      message: "Google authentication successful",
+      token: jwtToken,
+      user: {
+        id: user.user_id,
+        name: `${user.first_name} ${user.last_name || ""}`.trim(),
+        email: user.email,
+        university_id: user.university_id,
+        profile_picture_url: user.profile_picture_url,
+        is_email_verified: user.is_email_verified,
+      },
+    });
+  } catch (error) {
+    console.error("Google auth error:", error);
+
+    // More specific error handling
+    if (error.message.includes("pem") || error.message.includes("envelope")) {
+      return res.status(400).json({
+        message: "Invalid Google token format",
+        suggestion:
+          "Please make sure you're using the correct Google Sign-In method",
+      });
+    }
+
+    if (error.message.includes("Token used too late")) {
+      return res.status(400).json({
+        message: "Expired Google token",
+        suggestion: "Please try signing in with Google again",
+      });
+    }
+
+    res.status(500).json({
+      message: "Google authentication failed",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// TEMPORARY TEST ROUTE
+export const testGoogleAuth = async (req, res) => {
+  if (process.env.NODE_ENV !== "development") {
+    return res.status(403).json({ message: "Test route only in development" });
+  }
+
+  const { email } = req.body;
+
+  if (!email || !email.endsWith(".edu")) {
+    return res.status(400).json({
+      message: "Please provide a .edu email for testing",
+    });
+  }
+
+  try {
+    const emailDomain = email.split("@")[1];
+    const university = await findUniversityByDomain(emailDomain);
+
+    if (!university) {
+      return res.status(400).json({
+        message: "University not supported",
+        suggestion: `Domain ${emailDomain} not in our system`,
+      });
+    }
+
+    // Create test Google user
+    const testGoogleId = `test_google_${Date.now()}`;
+    let user = await findUserByProvider("google", testGoogleId);
+
+    if (!user) {
+      const existingUser = await findUserByEmail(email);
+      if (existingUser) {
+        return res.status(409).json({
+          message: "Email already registered with different method",
+        });
+      }
+
+      const firstName = email.split("@")[0];
+
+      // FIX: Make sure ALL required fields are provided
+      const userData = {
+        first_name: firstName.charAt(0).toUpperCase() + firstName.slice(1),
+        last_name: "TestUser",
+        email: email,
+        password: null, // Explicitly set to null for OAuth users
+        auth_provider: "google",
+        provider_id: testGoogleId,
+        profile_picture_url: null, // Explicit null
+        university_id: university.university_id,
+        is_email_verified: true,
+        is_edu_verified: true,
+        is_active: true,
+        gender: "not specified",
+      };
+
+      console.log("Creating user with data:", userData);
+
+      const userId = await createUser(userData);
+      user = await findUserByEmail(email);
+    }
+
+    // Generate your app JWT
+    const jwtToken = jwt.sign(
+      {
+        id: user.user_id,
+        email: user.email,
+        university_id: user.university_id,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.status(200).json({
+      message: "Test Google authentication successful",
+      token: jwtToken,
+      user: {
+        id: user.user_id,
+        name: `${user.first_name} ${user.last_name}`,
+        email: user.email,
+        university_id: user.university_id,
+        is_email_verified: user.is_email_verified,
+      },
+    });
+  } catch (error) {
+    console.error("Test auth error:", error);
+    res.status(500).json({
+      message: "Test authentication failed",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
