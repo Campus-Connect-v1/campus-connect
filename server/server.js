@@ -2,23 +2,33 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
-import { db } from "./config/db.js";
 import { swaggerDocs } from "./utils/swagger.js";
+import { COLORS } from "./helper/logger.js";
+
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import universityRoutes from "./routes/university.routes.js";
 import socialRoutes from "./routes/social.routes.js";
-dotenv.config();
+import locationRoutes from "./routes/location.routes.js";
+import eventRoutes from "./routes/event.routes.js";
+import studyGroupRoutes from "./routes/studyGroup.routes.js";
+
+import connectMongoDB from "./config/mongoDB.js";
+
+// ============= DOTENV ======================
+dotenv.config({ debug: false });
+
 const app = express();
+
+// ============= MONGO DB ====================
+connectMongoDB();
 
 // ============= SWAGGER =====================
 swaggerDocs(app);
 
-dotenv.config();
-
 // ============ DEBUG =====================
-console.log("PORT:", process.env.PORT);
-console.log("NODE_ENV:", process.env.NODE_ENV);
+console.log(COLORS[process.env.SUCCESS], "PORT:", process.env.PORT);
+console.log(COLORS[process.env.SUCCESS], "NODE_ENV:", process.env.NODE_ENV);
 
 // ============= EXPRESS ======================
 app.use(express.urlencoded({ extended: true }));
@@ -38,6 +48,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/university", universityRoutes);
 app.use("/api/social", socialRoutes);
+app.use("/api/geofencing", locationRoutes);
+app.use("/api/events", eventRoutes);
+app.use("/api/study-group", studyGroupRoutes);
 
 // ============= MIDDLWAREs ======================
 // =========================404 handler
@@ -54,7 +67,7 @@ app.use((req, res, next) => {
 
 // =========================Error handling middleware
 app.use((error, req, res, next) => {
-  console.error("Unhandled error:", error);
+  console.error(COLORS[process.env.ERROR], "Unhandled error:", error);
   res.status(500).json({
     message: "Internal server error",
     error: process.env.NODE_ENV === "development" ? error.message : undefined,
@@ -64,5 +77,8 @@ app.use((error, req, res, next) => {
 app.get("/", (req, res) => res.send("Campus Connect API running..."));
 
 app.listen(process.env.PORT || 5000, () =>
-  console.log(`Server running on port ${process.env.PORT}`)
+  console.log(
+    COLORS[process.env.SUCCESS],
+    `Server running on port ${process.env.PORT}`
+  )
 );

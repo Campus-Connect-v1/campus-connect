@@ -6,6 +6,7 @@ import {
   resendOTP,
   forgotPassword,
   resetPassword,
+  testGoogleAuth,
 } from "../controllers/auth.controller.js";
 import { otpLimiter, authLimiter } from "../utils/rateLimiter.js";
 
@@ -341,5 +342,93 @@ router.post("/forgot-password", authLimiter, forgotPassword);
  *         description: Internal server error
  */
 router.post("/reset-password", authLimiter, resetPassword);
+
+import {
+  googleAuth,
+  // getGoogleAuthUrl,
+} from "../controllers/auth.controller.js";
+
+/**
+ * @swagger
+ * /auth/google:
+ *   post:
+ *     summary: Authenticate with Google OAuth
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: Google OAuth ID token
+ *                 example: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFm..."
+ *     responses:
+ *       200:
+ *         description: Google authentication successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Google authentication successful"
+ *                 token:
+ *                   type: string
+ *                   example: "jwt_token_here"
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     university_id:
+ *                       type: string
+ *                     profile_picture_url:
+ *                       type: string
+ *       400:
+ *         description: Invalid token or non-edu email
+ *       409:
+ *         description: Email already registered with different provider
+ *       500:
+ *         description: Internal server error
+ */
+router.post("/google", authLimiter, googleAuth);
+
+/**
+ * @swagger
+ * /auth/google/url:
+ *   get:
+ *     summary: Get Google OAuth URL for frontend redirect
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: query
+ *         name: redirect_uri
+ *         schema:
+ *           type: string
+ *         description: URI to redirect after authentication
+ *     responses:
+ *       200:
+ *         description: Google OAuth URL generated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 authUrl:
+ *                   type: string
+ *                   example: "https://accounts.google.com/o/oauth2/v2/auth?..."
+ */
+// router.get("/google/url", getGoogleAuthUrl);
+// In auth.routes.js
+router.post("/google/test", testGoogleAuth);
 
 export default router;

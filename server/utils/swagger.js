@@ -1,5 +1,6 @@
 import swaggerJSDoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
+import { COLORS } from "../helper/logger.js";
 
 const options = {
   definition: {
@@ -18,5 +19,8 @@ export const swaggerSpec = swaggerJSDoc(options);
 
 export function swaggerDocs(app) {
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-  console.log("Swagger docs available at: http://localhost:8000/api-docs");
+  console.log(
+    COLORS[process.env.WARNING],
+    "Swagger docs available at: http://localhost:8000/api-docs"
+  );
 }

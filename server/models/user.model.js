@@ -902,3 +902,54 @@ export const recoverProfileModel = async (userId) => {
     throw new Error(`Database error in recoverProfile: ${error.message}`);
   }
 };
+
+export const getPrivacySettingsModel = async (userId) => {
+  try {
+    const query = `
+      SELECT 
+        profile_visibility,
+        custom_radius,
+        show_exact_location,
+        visible_fields
+      FROM user_privacy_settings 
+      WHERE user_id = ?
+    `;
+
+    const [rows] = await db.execute(query, [userId]);
+    return rows[0] || null;
+  } catch (error) {
+    console.error("Get privacy settings model error:", error);
+    throw error;
+  }
+};
+
+export const updatePrivacySettingsModel = async (userId, settings) => {
+  try {
+    const query = `
+      INSERT INTO user_privacy_settings 
+        (user_id, profile_visibility, custom_radius, show_exact_location, visible_fields)
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        profile_visibility = VALUES(profile_visibility),
+        custom_radius = VALUES(custom_radius),
+        show_exact_location = VALUES(show_exact_location),
+        visible_fields = VALUES(visible_fields),
+        updated_at = CURRENT_TIMESTAMP
+    `;
+
+    const [result] = await db.execute(query, [
+      userId,
+      settings.profile_visibility,
+      settings.custom_radius,
+      settings.show_exact_location,
+      typeof settings.visible_fields === "string"
+        ? settings.visible_fields
+        : JSON.stringify(settings.visible_fields),
+    ]);
+
+    return await getPrivacySettingsModel(userId);
+  } catch (error) {
+    console.error("Update privacy settings model error:", error);
+    throw error;
+  }
+};

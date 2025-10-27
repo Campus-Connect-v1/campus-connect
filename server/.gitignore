@@ -4,6 +4,18 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# ignore the postman collection
+# Postman collections
+*.postman_collection.json
+CampusConnect.postman_collection.json
+
+# API testing files
+*.postman_collection.json
+*postman*
+*insomnia*
+*.rest
+*.http
+
 # Environment variables
 .env
 .env.local

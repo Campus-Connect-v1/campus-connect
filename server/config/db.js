@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
+import { COLORS } from "../helper/logger.js";
 dotenv.config();
 
 const isWindows = process.platform === "win32";
@@ -42,10 +43,17 @@ export const db = mysql.createPool({
 (async () => {
   try {
     const connection = await db.getConnection();
-    console.log("Successfully connected to the database");
+    console.log(
+      COLORS[process.env.SUCCESS],
+      "Successfully connected to the database"
+    );
     connection.release();
   } catch (err) {
-    console.error("Database connection failed:", err);
+    console.error(
+      COLORS[process.env.SUCCESS],
+      "Database connection failed:",
+      err
+    );
     process.exit(1);
   }
 })();
