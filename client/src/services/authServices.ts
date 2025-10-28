@@ -216,7 +216,19 @@ export async function respondToConnectionRequest(
 
 
 
-// post likes and omments api
+// -------------------- POSTS -------------------- //
+
+// GET /api/social/posts/:post_id
+export async function getPostById(postId: string) {
+  try {
+    const response = await api.get(`/social/posts/${postId}`);
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
+// DELETE /api/social/posts/:post_id
 export async function deletePost(postId: string) {
   try {
     const response = await api.delete(`/social/posts/${postId}`);

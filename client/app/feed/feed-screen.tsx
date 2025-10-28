@@ -1,12 +1,22 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, FlatList, ActivityIndicator, Text } from "react-native";
 import useSWR from "swr";
 import { fetcher } from "@/src/utils/fetcher";
 import FeedCard from "../../src/components/ui/feed-card";
 import FloatingAddButton from "@/src/components/ui/floating-add-button";
+import { storage } from "@/src/utils/storage";
 
 export default function FeedScreen() {
   const { data, error, isLoading } = useSWR("/social/posts/feed", fetcher);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadUserId = async () => {
+      const userData = await storage.getUserData();
+      setCurrentUserId(userData?.user_id || null);
+    };
+    loadUserId();
+  }, []);
 
   if (isLoading) return <ActivityIndicator size="large" color="#000" />;
   if (error) return <Text>Failed to load feed.</Text>;
@@ -45,6 +55,7 @@ export default function FeedScreen() {
             },
             isLiked: item.user_actions?.has_liked ?? false,
           }}
+          isOwnPost={currentUserId === item.author?.user_id}
         />
       )}
       contentContainerStyle={{ padding: 16 }}
