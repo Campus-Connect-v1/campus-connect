@@ -50,7 +50,7 @@ export default function ResetPasswordScreen() {
   const onSubmit = async (data: ResetSchema) => {
     setIsLoading(true);
     try {
-      // Only password and token are sent to the API
+      // confirmPassword is only for client-side validation, not sent to API
       const result = await resetPassword({ 
         password: data.password,
         token: data.token,
