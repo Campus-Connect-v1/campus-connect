@@ -13,12 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import useSWR from 'swr';
 import { fetcher } from '@/src/utils/fetcher';
 import { Facility } from '@/src/services/universityServices';
-
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  message?: string;
-}
+import { ApiResponse } from '@/src/types/api';
 
 const FacilityDetailsScreen: React.FC = () => {
   const { facilityId } = useLocalSearchParams<{ facilityId: string }>();

@@ -15,16 +15,10 @@ import useSWR from 'swr';
 import { fetcher } from '@/src/utils/fetcher';
 import { storage } from '@/src/utils/storage';
 import { Building, Facility } from '@/src/services/universityServices';
+import { ApiResponse } from '@/src/types/api';
 
 interface UniversityScreenProps {
   navigation?: any;
-}
-
-interface ApiResponse<T> {
-  success: boolean;
-  count?: number;
-  data?: T;
-  message?: string;
 }
 
 const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
