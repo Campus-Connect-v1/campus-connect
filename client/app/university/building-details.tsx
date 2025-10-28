@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   ScrollView,
   StatusBar,
   Text,
@@ -23,13 +22,13 @@ const BuildingDetailsScreen: React.FC = () => {
     fetcher
   );
 
-  const { data: facilitiesData, error: facilitiesError, isLoading: facilitiesLoading } = useSWR(
+  const { data: facilitiesData, isLoading: facilitiesLoading } = useSWR(
     buildingId ? `/university/buildings/${buildingId}/facilities` : null,
     fetcher
   );
 
-  const building: Building = buildingData?.data;
-  const facilities: Facility[] = facilitiesData?.data || [];
+  const building: Building = (buildingData as any)?.data;
+  const facilities: Facility[] = (facilitiesData as any)?.data || [];
 
   if (buildingLoading) {
     return (

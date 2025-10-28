@@ -29,6 +29,7 @@ const SearchScreen: React.FC = () => {
     if (q) {
       performSearch(q);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
   const performSearch = async (query: string) => {
@@ -152,17 +153,17 @@ const SearchScreen: React.FC = () => {
     }
 
     return (
-      <View className="flex-1 items-center justify-center px-4 py-20">
-        <View className="w-20 h-20 bg-gray-100 rounded-2xl items-center justify-center mb-4">
-          <Ionicons name="search-outline" size={32} color="#9CA3AF" />
+        <View className="flex-1 items-center justify-center px-4 py-20">
+          <View className="w-20 h-20 bg-gray-100 rounded-2xl items-center justify-center mb-4">
+            <Ionicons name="search-outline" size={32} color="#9CA3AF" />
+          </View>
+          <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-500 text-base text-center">
+            No results found for &quot;{searchQuery}&quot;
+          </Text>
+          <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-400 text-sm text-center mt-2">
+            Try searching with different keywords
+          </Text>
         </View>
-        <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-500 text-base text-center">
-          No results found for "{searchQuery}"
-        </Text>
-        <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-gray-400 text-sm text-center mt-2">
-          Try searching with different keywords
-        </Text>
-      </View>
     );
   };
 
@@ -212,13 +213,17 @@ const SearchScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
-          data={results}
-          keyExtractor={(item) =>
+          data={results as any[]}
+          keyExtractor={(item: any) =>
             type === 'buildings'
               ? (item as Building).building_id
               : (item as Facility).facility_id
           }
-          renderItem={type === 'buildings' ? renderBuildingItem : renderFacilityItem}
+          renderItem={({ item }: { item: any }) =>
+            type === 'buildings'
+              ? renderBuildingItem({ item: item as Building })
+              : renderFacilityItem({ item: item as Facility })
+          }
           contentContainerStyle={{ padding: 16, flexGrow: 1 }}
           ListEmptyComponent={renderEmptyState}
         />

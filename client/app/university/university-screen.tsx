@@ -24,7 +24,6 @@ const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState<'buildings' | 'facilities'>('buildings');
   const [searchQuery, setSearchQuery] = useState('');
   const [universityId, setUniversityId] = useState<string | null>(null);
-  const [selectedFilter, setSelectedFilter] = useState<string>('all');
 
   useEffect(() => {
     const loadUniversityId = async () => {
@@ -35,19 +34,19 @@ const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
   }, []);
 
   // Fetch buildings
-  const { data: buildingsData, error: buildingsError, isLoading: buildingsLoading } = useSWR(
+  const { data: buildingsData, isLoading: buildingsLoading } = useSWR(
     universityId && activeTab === 'buildings' ? `/university/${universityId}/buildings` : null,
     fetcher
   );
 
   // Fetch facilities
-  const { data: facilitiesData, error: facilitiesError, isLoading: facilitiesLoading } = useSWR(
+  const { data: facilitiesData, isLoading: facilitiesLoading } = useSWR(
     universityId && activeTab === 'facilities' ? `/university/${universityId}/facilities/reservable` : null,
     fetcher
   );
 
-  const buildings: Building[] = buildingsData?.data || [];
-  const facilities: Facility[] = facilitiesData?.data || [];
+  const buildings: Building[] = (buildingsData as any)?.data || [];
+  const facilities: Facility[] = (facilitiesData as any)?.data || [];
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -223,9 +222,13 @@ const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
         </View>
       ) : (
         <FlatList
-          data={activeTab === 'buildings' ? buildings : facilities}
-          keyExtractor={(item) => activeTab === 'buildings' ? (item as Building).building_id : (item as Facility).facility_id}
-          renderItem={activeTab === 'buildings' ? renderBuildingItem : renderFacilityItem}
+          data={(activeTab === 'buildings' ? buildings : facilities) as any[]}
+          keyExtractor={(item: any) => activeTab === 'buildings' ? (item as Building).building_id : (item as Facility).facility_id}
+          renderItem={({ item }: { item: any }) =>
+            activeTab === 'buildings'
+              ? renderBuildingItem({ item: item as Building })
+              : renderFacilityItem({ item: item as Facility })
+          }
           contentContainerStyle={{ padding: 16 }}
           ListEmptyComponent={renderEmptyState}
         />

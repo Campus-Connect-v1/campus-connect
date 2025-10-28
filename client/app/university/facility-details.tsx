@@ -22,7 +22,7 @@ const FacilityDetailsScreen: React.FC = () => {
     fetcher
   );
 
-  const facility: Facility = facilityData?.data;
+  const facility: Facility = (facilityData as any)?.data;
 
   if (facilityLoading) {
     return (
