@@ -44,6 +44,9 @@ export const getNearbyProfiles = async (req, res) => {
         distance: nearbyUser?.distance || 0,
         accuracy: nearbyUser?.accuracy || 50,
         last_seen: profile.last_seen || nearbyUser?.last_seen || new Date(),
+        coordinates: nearbyUser?.coordinates || null,
+        latitude: nearbyUser?.coordinates[0] || null, // need not be ...coordinates[0] as it is a 2D array in the locationService. TODO in prod
+        longitude: nearbyUser?.coordinates[1] || null,
       };
     });
 
@@ -53,7 +56,7 @@ export const getNearbyProfiles = async (req, res) => {
         message: "No nearby profiles found",
         radius: parseInt(radius),
         suggestion: "Try increasing the search radius",
-        profiles: [], // Explicitly return empty array
+        profiles: [], // Explicitly return empty array, to be set so as when empty have an empty array msg
       });
     }
 

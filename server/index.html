@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Socket.IO Auth Messaging Test</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+      /* Your existing CSS remains the same */
+      body {
+        font-family: Arial, sans-serif;
+        background: #0d1117;
+        color: #c9d1d9;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px;
+      }
+      h2 {
+        color: #58a6ff;
+      }
+      .container {
+        width: 400px;
+        background: #161b22;
+        border: 1px solid #30363d;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px #0003;
+      }
+      input,
+      button {
+        width: 100%;
+        margin: 6px 0;
+        padding: 10px;
+        border-radius: 5px;
+        border: none;
+        font-size: 1em;
+      }
+      input {
+        background: #0d1117;
+        color: #c9d1d9;
+        border: 1px solid #30363d;
+      }
+      button {
+        background: #238636;
+        color: white;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #2ea043;
+      }
+      button:disabled {
+        background: #484f58;
+        cursor: not-allowed;
+      }
+      #chat {
+        height: 200px;
+        overflow-y: auto;
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 10px;
+        margin-top: 10px;
+      }
+      .msg {
+        margin-bottom: 6px;
+      }
+      .sent {
+        color: #58a6ff;
+      }
+      .received {
+        color: #7ee787;
+      }
+      .status {
+        color: #8b949e;
+        font-size: 0.9em;
+        text-align: center;
+        margin: 10px 0;
+      }
+      .error {
+        color: #f85149;
+      }
+      .success {
+        color: #7ee787;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Realtime Messaging Test</h2>
+    <div class="container">
+      <div id="loginDiv">
+        <h3>Login</h3>
+        <input type="email" id="email" placeholder="Enter email" />
+        <input type="password" id="password" placeholder="Enter password" />
+        <button onclick="login()" id="loginBtn">Login</button>
+        <div id="loginStatus" class="status"></div>
+      </div>
+
+      <div id="chatDiv" style="display: none">
+        <h4 id="loggedInAs"></h4>
+        <input id="receiver" placeholder="Receiver email" />
+        <input id="message" placeholder="Type a message" />
+        <button onclick="sendMessage()">Send</button>
+        <div id="chatStatus" class="status"></div>
+        <div id="chat"></div>
+      </div>
+    </div>
+
+    <script>
+      const API_BASE = "http://localhost:8000";
+      let socket, token, currentUser;
+
+      async function login() {
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value.trim();
+
+        if (!email || !password) {
+          showLoginStatus("Please enter both email and password", "error");
+          return;
+        }
+
+        if (!isValidEmail(email)) {
+          showLoginStatus("Please enter a valid email address", "error");
+          return;
+        }
+
+        const loginBtn = document.getElementById("loginBtn");
+        loginBtn.disabled = true;
+        loginBtn.textContent = "Logging in...";
+        showLoginStatus("", "info");
+
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            throw new Error(data.message || "Login failed");
+          }
+
+          if (!data.token) {
+            throw new Error("Invalid login response - no token received");
+          }
+
+          if (!data.user) {
+            throw new Error("Invalid login response - no user data received");
+          }
+
+          token = data.token;
+          currentUser = data.user;
+
+          document.getElementById("loginDiv").style.display = "none";
+          document.getElementById("chatDiv").style.display = "block";
+          document.getElementById("loggedInAs").innerText = `Logged in as: ${
+            data.user.username || data.user.email
+          }`;
+
+          showLoginStatus("Login successful!", "success");
+          connectSocket();
+        } catch (err) {
+          console.error("Login error:", err);
+          showLoginStatus(
+            err.message || "Login failed. Please try again.",
+            "error"
+          );
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.textContent = "Login";
+        }
+      }
+
+      function isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+      }
+
+      function showLoginStatus(message, type) {
+        const statusEl = document.getElementById("loginStatus");
+        statusEl.textContent = message;
+        statusEl.className = `status ${type}`;
+      }
+
+      function showChatStatus(message, type) {
+        const statusEl = document.getElementById("chatStatus");
+        statusEl.textContent = message;
+        statusEl.className = `status ${type}`;
+        // Clear status after 3 seconds
+        if (type === "success" || type === "error") {
+          setTimeout(() => {
+            statusEl.textContent = "";
+            statusEl.className = "status";
+          }, 3000);
+        }
+      }
+
+      function connectSocket() {
+        socket = io(API_BASE, {
+          auth: { token },
+        });
+
+        socket.on("connect", () => {
+          console.log("✅ Connected with socket id:", socket.id);
+          showChatStatus("Connected to server!", "success");
+        });
+
+        socket.on("disconnect", () => {
+          console.log("❌ Disconnected from server");
+          showChatStatus("Disconnected from server", "error");
+        });
+
+        socket.on("receive_message", (msg) => {
+          const displayName =
+            msg.senderId?.username || msg.senderId?.email || "Unknown";
+          appendMessage(displayName, msg.content, "received");
+          showChatStatus(`New message from ${displayName}`, "success");
+        });
+
+        socket.on("message_sent", (msg) => {
+          const displayName =
+            msg.receiverId?.username || msg.receiverId?.email || "Unknown";
+          appendMessage("You", msg.content, "sent");
+          showChatStatus(`Message sent to ${displayName}`, "success");
+        });
+
+        socket.on("error_message", (errorMsg) => {
+          console.error("Server error:", errorMsg);
+          showChatStatus(`Error: ${errorMsg}`, "error");
+        });
+
+        socket.on("connect_error", (error) => {
+          console.error("Connection error:", error);
+          showChatStatus(`Connection failed: ${error.message}`, "error");
+        });
+      }
+
+      function sendMessage() {
+        const receiverEmail = document.getElementById("receiver").value.trim();
+        const content = document.getElementById("message").value.trim();
+
+        if (!receiverEmail || !content) {
+          showChatStatus("Receiver email and message required", "error");
+          return;
+        }
+
+        if (!isValidEmail(receiverEmail)) {
+          showChatStatus("Please enter a valid receiver email", "error");
+          return;
+        }
+
+        socket.emit("send_message", { receiverId: receiverEmail, content });
+        document.getElementById("message").value = "";
+        showChatStatus("Sending message...", "info");
+      }
+
+      function appendMessage(sender, text, type) {
+        const div = document.getElementById("chat");
+        const msg = document.createElement("div");
+        msg.classList.add("msg", type);
+        msg.textContent = `${sender}: ${text}`;
+        div.appendChild(msg);
+        div.scrollTop = div.scrollHeight;
+      }
+
+      // Allow pressing Enter to login
+      document
+        .getElementById("password")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") {
+            login();
+          }
+        });
+
+      // Allow pressing Enter to send messages
+      document
+        .getElementById("message")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") {
+            sendMessage();
+          }
+        });
+    </script>
+  </body>
+</html>
