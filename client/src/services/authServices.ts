@@ -1,9 +1,13 @@
 import axios from "axios";
 import type { ForgotSchema, LoginSchema, ResetPasswordSchema, SignupSchema, VerifyEmailSchema } from "../schemas/authSchemas";
 import { storage } from "../utils/storage";
+import * as Location from "expo-location";
+import useSWR from "swr";
+
+
 
 const api = axios.create({
-  baseURL: "http://172.20.10.14:8000/api", 
+  baseURL: "http://172.20.10.4:8000/api", 
   headers: {
     "Content-Type": "application/json",
   },
@@ -276,3 +280,104 @@ export async function getComments(postId: string, params?: GetCommentsParams) {
     return { success: false, error: error.response?.data || error.message };
   }
 }
+
+
+
+
+
+
+
+
+// geoservices
+
+
+export async function shareLocation() {
+  try {
+    // Step 1: Ask permission
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      throw new Error("Location permission not granted");
+    }
+
+    // Step 2: Get current location
+    const location = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
+
+    const { latitude, longitude, accuracy } = location.coords;
+
+    // Step 3: Send to backend
+    const res = await api.post("/geofencing/location", {
+      latitude,
+      longitude,
+      accuracy,
+    });
+
+    return res.data; // backend might respond with confirmation or nearby users
+  } catch (error: any) {
+    // Handle rate limiting gracefully
+    if (error.response?.status === 429) {
+      console.log("Location update too frequent, using cached location");
+      return { message: "Location update too frequent, using cached location" };
+    }
+    
+    console.error("Error sharing location:", error.message);
+    throw error;
+  }
+}
+
+
+
+// export const fetchNearbyUsers = async (radius: number) => {
+//   const { status } = await Location.requestForegroundPermissionsAsync();
+//   if (status !== "granted") throw new Error("Location permission not granted");
+
+//   const location = await Location.getCurrentPositionAsync({});
+//   const { latitude, longitude } = location.coords;
+
+//   const res = await api.get("/geofencing/nearby?radius=500", {
+//     params: { radius, latitude, longitude },
+//   });
+//   console.log("Nearby users response:", res.data);
+
+//   return res.data.users || [];
+// };
+
+export const fetchNearbyUsers = async (radius: number) => {
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  if (status !== "granted") throw new Error("Location permission not granted");
+
+  // Send location to backend first
+  await shareLocation();
+
+  // Then fetch nearby users
+  const res = await api.get(`/geofencing/nearby?radius=${radius}`);
+
+  console.log("Nearby users response:", res.data);
+  return res.data.profiles || [];
+};
+
+
+export function useNearbyUsers(radius = 500) {
+  const { data, error, isLoading, mutate } = useSWR(
+    radius > 0 ? ["/geofencing/nearby", radius] : null,
+    () => fetchNearbyUsers(radius),
+    {
+      revalidateOnFocus: true,
+      refreshInterval: 30_000, // refresh every 30s if user stays nearby
+    }
+  );
+
+  return {
+    nearbyUsers: data || [],
+    isLoading: radius > 0 ? isLoading : false,
+    isError: error,
+    refetchNearby: mutate, // you can call this manually when user moves
+  };
+}
+
+
+export const fetchNearby = async (url: string) => {
+  const res = await api.get(url);
+  return res.data.profiles || [];
+};
