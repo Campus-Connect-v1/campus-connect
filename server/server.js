@@ -14,6 +14,7 @@ import socialRoutes from "./routes/social.routes.js";
 import locationRoutes from "./routes/location.routes.js";
 import eventRoutes from "./routes/event.routes.js";
 import studyGroupRoutes from "./routes/studyGroup.routes.js";
+import conversationRoutes from "./routes/conversation.routes.js";
 
 import connectMongoDB from "./config/mongoDB.js";
 
@@ -56,6 +57,7 @@ app.use("/api/social", socialRoutes);
 app.use("/api/geofencing", locationRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/study-group", studyGroupRoutes);
+app.use("/api/conversations", conversationRoutes);
 
 // ============= MIDDLWAREs ======================
 // =========================404 handler

@@ -115,6 +115,8 @@ export class LocationService {
           last_updated: 1,
           last_seen: 1,
           coordinates: "$location.coordinates",
+          latitude: { $arrayElemAt: ["$location.coordinates", 1] }, // fixed the loc of user
+          longitude: { $arrayElemAt: ["$location.coordinates", 0] }, // fixed the loc of user
         },
       },
     ]);
