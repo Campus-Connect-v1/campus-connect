@@ -2,6 +2,8 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
+import http from "http";
+
 import { swaggerDocs } from "./utils/swagger.js";
 import { COLORS } from "./helper/logger.js";
 
@@ -12,13 +14,17 @@ import socialRoutes from "./routes/social.routes.js";
 import locationRoutes from "./routes/location.routes.js";
 import eventRoutes from "./routes/event.routes.js";
 import studyGroupRoutes from "./routes/studyGroup.routes.js";
+import conversationRoutes from "./routes/conversation.routes.js";
 
 import connectMongoDB from "./config/mongoDB.js";
+
+import socketServer from "./socket.js";
 
 // ============= DOTENV ======================
 dotenv.config({ debug: false });
 
 const app = express();
+const server = http.createServer(app);
 
 // ============= MONGO DB ====================
 connectMongoDB();
@@ -51,6 +57,7 @@ app.use("/api/social", socialRoutes);
 app.use("/api/geofencing", locationRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/study-group", studyGroupRoutes);
+app.use("/api/conversations", conversationRoutes);
 
 // ============= MIDDLWAREs ======================
 // =========================404 handler
@@ -76,7 +83,11 @@ app.use((error, req, res, next) => {
 
 app.get("/", (req, res) => res.send("Campus Connect API running..."));
 
-app.listen(process.env.PORT || 5000, () =>
+// ========================= SOCKET SERVER ======================
+socketServer(server);
+
+// ========================= SERVER ======================
+server.listen(process.env.PORT || 5000, () =>
   console.log(
     COLORS[process.env.SUCCESS],
     `Server running on port ${process.env.PORT}`
