@@ -78,7 +78,7 @@
 
 
 
-import React, { useState } from "react"
+import React from "react"
 import { View, Text, StyleSheet, ImageBackground } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { BlurView } from "expo-blur"
@@ -86,41 +86,10 @@ import { router } from "expo-router"
 
 import FeedScreen from "../feed/feed-screen"
 import FloatingAddButton from "@/src/components/ui/floating-add-button"
-import CreatePostModal from "@/src/components/ui/create-post-modal"
-import MediaPermissionModal from "@/src/components/ui/media-permission-modal"
 
 export default function HomeScreen() {
-  const [createPostVisible, setCreatePostVisible] = useState(false)
-  const [permissionVisible, setPermissionVisible] = useState(false)
-  const [permissionType, setPermissionType] = useState<"camera" | "photos">("photos")
-
-  const handleSelectCamera = () => {
-    setPermissionType("camera")
-    setPermissionVisible(true)
-  }
-
-  const handleSelectLibrary = () => {
-    setPermissionType("photos")
-    setPermissionVisible(true)
-  }
-
-  const handleSelectVideo = () => {
-    setPermissionType("camera")
-    setPermissionVisible(true)
-  }
-
-  const handleAllowAccess = () => {
-    setPermissionVisible(false)
-    if (permissionType === "photos" || permissionType === "camera") {
-      router.push("/feed/media-selection-screen")
-    } else {
-      console.log("Open camera")
-    }
-  }
-
-  const handleDenyAccess = () => {
-    setPermissionVisible(false)
-    console.log("Permission denied")
+  const handleCreatePost = () => {
+    router.push("/feed/compose-post")
   }
 
   return (
@@ -137,29 +106,9 @@ export default function HomeScreen() {
         <BlurView intensity={0} tint="light" style={StyleSheet.absoluteFill} />
         <View style={styles.contentContainer}>
           <FeedScreen />
-          <FloatingAddButton onPress={() => setCreatePostVisible(true)} />
+          <FloatingAddButton onPress={handleCreatePost} />
         </View>
       </ImageBackground>
-
-      {/* Create Post Modal */}
-      <CreatePostModal
-        visible={createPostVisible}
-        onClose={() => setCreatePostVisible(false)}
-        onSelectCamera={handleSelectCamera}
-        onSelectLibrary={handleSelectLibrary}
-        onSelectVideo={handleSelectVideo}
-      />
-
-      {/* Media Permission Modal */}
-      {permissionVisible && (
-        <MediaPermissionModal
-          visible={permissionVisible}
-          permissionType={permissionType}
-          onAllowAccess={handleAllowAccess}
-          onDenyAccess={handleDenyAccess}
-          onClose={() => setPermissionVisible(false)}
-        />
-      )}
     </SafeAreaView>
   )
 }

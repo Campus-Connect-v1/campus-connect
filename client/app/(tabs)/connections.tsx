@@ -253,7 +253,7 @@ export default function ConnectionsMapScreen() {
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapType, setMapType] = useState<"standard" | "satellite" | "terrain" | "hybrid">("standard");
   const [isSharing, setIsSharing] = useState(false);
-  const radius = 1000000; // meters
+  const radius = 500; // meters
   const lastSharedRef = useRef<number | null>(null);
 
  const { nearbyUsers, isLoading, isError: error, refetchNearby: mutate } = useNearbyUsers(userLocation ? radius : 0);

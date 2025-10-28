@@ -104,6 +104,7 @@ export async function resetPassword(data: ResetPasswordSchema) {
   try {
     const response = await api.post("/auth/reset-password", {
       password: data.password,
+      token: data.token,
     });
     return { success: true, data: response.data };
   } catch (error: any) {

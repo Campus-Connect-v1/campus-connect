@@ -12,8 +12,11 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  Alert,
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
+import * as ImagePicker from "expo-image-picker"
 import { userApi } from "@/src/services/api"
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert"
 import DropdownAlert from "./DropdownAlert"
@@ -29,13 +32,40 @@ interface EditProfileModalProps {
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, onClose, onSave }) => {
   const [formData, setFormData] = useState(profile || {})
   const [isSaving, setIsSaving] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const { success, error, alert, hideAlert } = useDropdownAlert()
 
   useEffect(() => {
     if (profile) {
       setFormData(profile)
+      setSelectedImage(profile.profile_picture_url || null)
     }
   }, [profile, visible])
+
+  const handleSelectImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Please allow access to your photo library.')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    })
+
+    if (!result.canceled && result.assets[0]) {
+      setSelectedImage(result.assets[0].uri)
+      // Update formData with new image URI
+      setFormData((prev: any) => ({
+        ...prev,
+        profile_picture_url: result.assets[0].uri,
+      }))
+    }
+  }
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -44,6 +74,8 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
       success("Profile Updated", "Your profile has been updated successfully.", 3000)
       onSave(formData)
       onClose()
+    } catch (err) {
+      error("Update Failed", "Failed to update profile. Please try again.", 3000)
     } finally {
       setIsSaving(false)
     }
@@ -61,12 +93,12 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
         <View className="flex-1 bg-white mt-10">
           <DropdownAlert
-                  visible={alert.visible}
-                  type={alert.type}
-                  title={alert.title}
-                  message={alert.message}
-                  onDismiss={hideAlert}
-                />
+            visible={alert.visible}
+            type={alert.type}
+            title={alert.title}
+            message={alert.message}
+            onDismiss={hideAlert}
+          />
           {/* Header */}
           <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200">
             <TouchableOpacity onPress={onClose}>
@@ -88,6 +120,28 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
 
           {/* Form Content */}
           <ScrollView className="flex-1 px-4 py-6">
+            {/* Profile Picture */}
+            <View className="items-center mb-6">
+              <View className="relative">
+                <Image
+                  source={{
+                    uri: selectedImage || formData?.profile_picture_url || "https://images.unsplash.com/photo-1544005313-94ddf0286df2",
+                  }}
+                  style={{ width: 100, height: 100, borderRadius: 50 }}
+                />
+                <TouchableOpacity
+                  onPress={handleSelectImage}
+                  className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-2"
+                  style={{ elevation: 4, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 4 }}
+                >
+                  <Ionicons name="pencil" size={18} color="white" />
+                </TouchableOpacity>
+              </View>
+              <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-500 text-sm mt-2">
+                Tap the pencil to change photo
+              </Text>
+            </View>
+
             {/* First Name */}
             <View className="mb-6">
               <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-600 text-sm mb-2">
@@ -116,6 +170,36 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
               />
             </View>
 
+            {/* Profile Headline */}
+            <View className="mb-6">
+              <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-600 text-sm mb-2">
+                Profile Headline
+              </Text>
+              <TextInput
+                style={{ fontFamily: "Gilroy-Regular" }}
+                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                placeholder="e.g., Computer Science Student"
+                value={formData?.profile_headline || ""}
+                onChangeText={(value) => updateField("profile_headline", value)}
+              />
+            </View>
+
+            {/* Bio */}
+            <View className="mb-6">
+              <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-600 text-sm mb-2">
+                Bio
+              </Text>
+              <TextInput
+                style={{ fontFamily: "Gilroy-Regular" }}
+                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                placeholder="Tell us about yourself"
+                value={formData?.bio || ""}
+                onChangeText={(value) => updateField("bio", value)}
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+
             {/* Email */}
             <View className="mb-6">
               <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-600 text-sm mb-2">
@@ -123,10 +207,9 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
               </Text>
               <TextInput
                 style={{ fontFamily: "Gilroy-Regular" }}
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-gray-100"
                 placeholder="Email"
                 value={formData?.email || ""}
-                onChangeText={(value) => updateField("email", value)}
                 editable={false}
               />
             </View>
@@ -142,6 +225,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
                 placeholder="Phone number"
                 value={formData?.phone_number || ""}
                 onChangeText={(value) => updateField("phone_number", value)}
+                keyboardType="phone-pad"
               />
             </View>
 
@@ -153,7 +237,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
               <TextInput
                 style={{ fontFamily: "Gilroy-Regular" }}
                 className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                placeholder="Program"
+                placeholder="e.g., Computer Science"
                 value={formData?.program || ""}
                 onChangeText={(value) => updateField("program", value)}
               />
@@ -167,7 +251,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
               <TextInput
                 style={{ fontFamily: "Gilroy-Regular" }}
                 className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                placeholder="Year"
+                placeholder="e.g., 2nd Year"
                 value={formData?.year_of_study || ""}
                 onChangeText={(value) => updateField("year_of_study", value)}
               />
@@ -181,9 +265,10 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
               <TextInput
                 style={{ fontFamily: "Gilroy-Regular" }}
                 className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                placeholder="Graduation year"
+                placeholder="e.g., 2025"
                 value={formData?.graduation_year || ""}
                 onChangeText={(value) => updateField("graduation_year", value)}
+                keyboardType="numeric"
               />
             </View>
 
@@ -201,19 +286,33 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
               />
             </View>
 
-            {/* Bio */}
+            {/* LinkedIn URL */}
             <View className="mb-6">
               <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-600 text-sm mb-2">
-                Bio
+                LinkedIn Profile
               </Text>
               <TextInput
                 style={{ fontFamily: "Gilroy-Regular" }}
                 className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                placeholder="Tell us about yourself"
-                value={formData?.bio || ""}
-                onChangeText={(value) => updateField("bio", value)}
-                multiline
-                numberOfLines={4}
+                placeholder="https://linkedin.com/in/yourprofile"
+                value={formData?.linkedin_url || ""}
+                onChangeText={(value) => updateField("linkedin_url", value)}
+                autoCapitalize="none"
+              />
+            </View>
+
+            {/* Website URL */}
+            <View className="mb-6">
+              <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-600 text-sm mb-2">
+                Website
+              </Text>
+              <TextInput
+                style={{ fontFamily: "Gilroy-Regular" }}
+                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                placeholder="https://yourwebsite.com"
+                value={formData?.website_url || ""}
+                onChangeText={(value) => updateField("website_url", value)}
+                autoCapitalize="none"
               />
             </View>
           </ScrollView>
