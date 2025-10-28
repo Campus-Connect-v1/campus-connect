@@ -14,15 +14,21 @@ import useSWR from 'swr';
 import { fetcher } from '@/src/utils/fetcher';
 import { Facility } from '@/src/services/universityServices';
 
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message?: string;
+}
+
 const FacilityDetailsScreen: React.FC = () => {
   const { facilityId } = useLocalSearchParams<{ facilityId: string }>();
 
-  const { data: facilityData, error: facilityError, isLoading: facilityLoading } = useSWR(
+  const { data: facilityData, error: facilityError, isLoading: facilityLoading } = useSWR<ApiResponse<Facility>>(
     facilityId ? `/university/facilities/${facilityId}` : null,
     fetcher
   );
 
-  const facility: Facility = (facilityData as any)?.data;
+  const facility: Facility | undefined = facilityData?.data;
 
   if (facilityLoading) {
     return (

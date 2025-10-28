@@ -13,26 +13,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Building, Facility, universityServices } from '@/src/services/universityServices';
 
+interface SearchScreenProps {
+  type: 'buildings' | 'facilities';
+  q: string;
+  universityId: string;
+}
+
 const SearchScreen: React.FC = () => {
-  const { type, q, universityId } = useLocalSearchParams<{
-    type: 'buildings' | 'facilities';
-    q: string;
-    universityId: string;
-  }>();
+  const params = useLocalSearchParams();
+  const type = params.type as 'buildings' | 'facilities';
+  const q = params.q as string;
+  const universityId = params.universityId as string;
 
   const [searchQuery, setSearchQuery] = useState(q || '');
-  const [results, setResults] = useState<(Building | Facility)[]>([]);
+  const [results, setResults] = useState<Building[] | Facility[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  useEffect(() => {
-    if (q) {
-      performSearch(q);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
-
-  const performSearch = async (query: string) => {
+  const performSearch = React.useCallback(async (query: string) => {
     if (!query.trim() || !universityId) return;
 
     setIsLoading(true);
@@ -42,14 +40,14 @@ const SearchScreen: React.FC = () => {
       if (type === 'buildings') {
         const response = await universityServices.searchBuildings(universityId, query);
         if (response.success && response.data?.data) {
-          setResults(response.data.data);
+          setResults(response.data.data as Building[]);
         } else {
           setResults([]);
         }
       } else {
         const response = await universityServices.searchFacilities(universityId, query);
         if (response.success && response.data?.data) {
-          setResults(response.data.data);
+          setResults(response.data.data as Facility[]);
         } else {
           setResults([]);
         }
@@ -60,7 +58,13 @@ const SearchScreen: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [type, universityId]);
+
+  useEffect(() => {
+    if (q) {
+      performSearch(q);
+    }
+  }, [q, performSearch]);
 
   const handleSearch = () => {
     performSearch(searchQuery);
@@ -212,18 +216,19 @@ const SearchScreen: React.FC = () => {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={results as any[]}
-          keyExtractor={(item: any) =>
+        <FlatList<Building | Facility>
+          data={results}
+          keyExtractor={(item) =>
             type === 'buildings'
               ? (item as Building).building_id
               : (item as Facility).facility_id
           }
-          renderItem={({ item }: { item: any }) =>
-            type === 'buildings'
-              ? renderBuildingItem({ item: item as Building })
-              : renderFacilityItem({ item: item as Facility })
-          }
+          renderItem={({ item }) => {
+            if (type === 'buildings') {
+              return renderBuildingItem({ item: item as Building });
+            }
+            return renderFacilityItem({ item: item as Facility });
+          }}
           contentContainerStyle={{ padding: 16, flexGrow: 1 }}
           ListEmptyComponent={renderEmptyState}
         />

@@ -20,6 +20,13 @@ interface UniversityScreenProps {
   navigation?: any;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  count?: number;
+  data?: T;
+  message?: string;
+}
+
 const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState<'buildings' | 'facilities'>('buildings');
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,19 +41,19 @@ const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
   }, []);
 
   // Fetch buildings
-  const { data: buildingsData, isLoading: buildingsLoading } = useSWR(
+  const { data: buildingsData, isLoading: buildingsLoading } = useSWR<ApiResponse<Building[]>>(
     universityId && activeTab === 'buildings' ? `/university/${universityId}/buildings` : null,
     fetcher
   );
 
   // Fetch facilities
-  const { data: facilitiesData, isLoading: facilitiesLoading } = useSWR(
+  const { data: facilitiesData, isLoading: facilitiesLoading } = useSWR<ApiResponse<Facility[]>>(
     universityId && activeTab === 'facilities' ? `/university/${universityId}/facilities/reservable` : null,
     fetcher
   );
 
-  const buildings: Building[] = (buildingsData as any)?.data || [];
-  const facilities: Facility[] = (facilitiesData as any)?.data || [];
+  const buildings: Building[] = buildingsData?.data || [];
+  const facilities: Facility[] = facilitiesData?.data || [];
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -221,14 +228,20 @@ const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
           <ActivityIndicator size="large" color="#002D69" />
         </View>
       ) : (
-        <FlatList
-          data={(activeTab === 'buildings' ? buildings : facilities) as any[]}
-          keyExtractor={(item: any) => activeTab === 'buildings' ? (item as Building).building_id : (item as Facility).facility_id}
-          renderItem={({ item }: { item: any }) =>
-            activeTab === 'buildings'
-              ? renderBuildingItem({ item: item as Building })
-              : renderFacilityItem({ item: item as Facility })
-          }
+        <FlatList<Building | Facility>
+          data={activeTab === 'buildings' ? buildings : facilities}
+          keyExtractor={(item) => {
+            if (activeTab === 'buildings') {
+              return (item as Building).building_id;
+            }
+            return (item as Facility).facility_id;
+          }}
+          renderItem={({ item }) => {
+            if (activeTab === 'buildings') {
+              return renderBuildingItem({ item: item as Building });
+            }
+            return renderFacilityItem({ item: item as Facility });
+          }}
           contentContainerStyle={{ padding: 16 }}
           ListEmptyComponent={renderEmptyState}
         />
