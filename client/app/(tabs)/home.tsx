@@ -22,7 +22,7 @@ import { LinearGradient } from "expo-linear-gradient"
 import { BlurView } from "expo-blur"
 import { useRouter } from "expo-router"
 import ProfileDrawer from "@/src/components/layout/profile-drawer"
-import CustomDropdown from "@/src/components/ui/SearchDropwdown"
+import UserSearchModal from "@/src/components/ui/user-search-modal"
 import { Ionicons } from "@expo/vector-icons"
 import { styles } from "@/src/styles/home.styles"
 import Colors from "@/src/constants/Colors"
@@ -126,36 +126,6 @@ export default function HomeScreen() {
   const handleLogout = () => {
     logout()
     router.replace("/auth/login")
-  }
-
-  const searchOptions = (searchResults?.users || []).map((user: any) => ({
-    label: `${user.first_name} ${user.last_name}`,
-    value: user.id,
-  }))
-
-  const renderSearchResult = (item: any) => {
-    const user = searchResults?.users?.find((u: any) => u.id === item.value)
-    return (
-      <View style={{ flexDirection: "row", alignItems: "center", padding: 10 }}>
-        <Image
-          source={{
-            uri: user?.profile_picture_url ?? "https://plus.unsplash.com/premium_photo-1738854510296-116ebc8870e7?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=436",
-          }}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            marginRight: 10,
-          }}
-        />
-        <View>
-          <Text style={{ fontWeight: "bold", fontSize: 14 }}>
-            {user?.first_name} {user?.last_name}
-          </Text>
-          <Text style={{ color: "#666", fontSize: 12 }}>{user?.program}</Text>
-        </View>
-      </View>
-    )
   }
 
   return (
@@ -275,21 +245,14 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {showDropdown && (
-        <CustomDropdown
-          options={searchOptions}
-          onSelect={(userId) => {
-            router.push({
-              pathname: '/(users)/[id]',
-              params: { id: userId },
-            });
-            setShowDropdown(false)
-            setQuery("")
-          }}
-          renderItem={renderSearchResult}
-          isSearchDropdown={true}
-        />
-      )}
+      <UserSearchModal
+        visible={showDropdown}
+        onClose={() => {
+          setShowDropdown(false)
+          setQuery("")
+        }}
+        users={searchResults?.users || []}
+      />
     </View>
   )
 }
