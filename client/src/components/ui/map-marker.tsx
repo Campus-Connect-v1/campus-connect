@@ -5,6 +5,7 @@ import { useRef, useEffect } from "react"
 import { View, Image, Text, TouchableOpacity, Animated } from "react-native"
 import { BlurView } from "expo-blur"
 import { Ionicons } from "@expo/vector-icons"
+import type { Building } from "@/src/services/universityServices"
 
 interface NearbyUser {
   user_id: string
@@ -225,6 +226,262 @@ export const MapMarkerCallout: React.FC<MapMarkerProps & { onConnect?: (userId: 
               Connect
             </Text>
           </TouchableOpacity>
+        </View>
+      </BlurView>
+    </Animated.View>
+  )
+}
+
+// Custom Building Marker Component
+interface BuildingMarkerProps {
+  building: Building
+}
+
+export const CustomBuildingMarker: React.FC<BuildingMarkerProps> = ({ building }) => {
+  const getBuildingIcon = (buildingType: string) => {
+    const iconMap: { [key: string]: keyof typeof Ionicons.glyphMap } = {
+      "Academic": "school",
+      "Library": "library",
+      "Laboratory": "flask",
+      "Administrative": "business",
+      "Residential": "home",
+      "Sports": "fitness",
+      "Dining": "restaurant",
+      "Medical": "medical",
+      "default": "business"
+    }
+    return iconMap[buildingType] || iconMap.default
+  }
+
+  const getBuildingColor = (buildingType: string) => {
+    const colorMap: { [key: string]: string } = {
+      "Academic": "#3b82f6", // Blue
+      "Library": "#8b5cf6", // Purple
+      "Laboratory": "#10b981", // Green
+      "Administrative": "#f59e0b", // Amber
+      "Residential": "#ec4899", // Pink
+      "Sports": "#ef4444", // Red
+      "Dining": "#f97316", // Orange
+      "Medical": "#14b8a6", // Teal
+      "default": "#6b7280" // Gray
+    }
+    return colorMap[buildingType] || colorMap.default
+  }
+
+  const iconName = getBuildingIcon(building.building_type)
+  const backgroundColor = getBuildingColor(building.building_type)
+
+  return (
+    <View className="items-center justify-center">
+      {/* Building marker container */}
+      <View
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          backgroundColor: backgroundColor,
+          justifyContent: "center",
+          alignItems: "center",
+          shadowColor: backgroundColor,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 6,
+          elevation: 5,
+          borderWidth: 3,
+          borderColor: "#ffffff",
+        }}
+      >
+        <Ionicons name={iconName} size={24} color="#ffffff" />
+      </View>
+
+      {/* Pointer/pin bottom */}
+      <View
+        style={{
+          width: 0,
+          height: 0,
+          backgroundColor: "transparent",
+          borderStyle: "solid",
+          borderLeftWidth: 6,
+          borderRightWidth: 6,
+          borderTopWidth: 8,
+          borderLeftColor: "transparent",
+          borderRightColor: "transparent",
+          borderTopColor: backgroundColor,
+          marginTop: -1,
+        }}
+      />
+    </View>
+  )
+}
+
+// Building Callout Component
+interface BuildingCalloutProps {
+  building: Building
+  onViewDetails?: (buildingId: string) => void
+}
+
+export const BuildingMarkerCallout: React.FC<BuildingCalloutProps> = ({ building, onViewDetails }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current
+  const slideAnim = useRef(new Animated.Value(20)).current
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start()
+  }, [])
+
+  const getBuildingIcon = (buildingType: string) => {
+    const iconMap: { [key: string]: keyof typeof Ionicons.glyphMap } = {
+      "Academic": "school",
+      "Library": "library",
+      "Laboratory": "flask",
+      "Administrative": "business",
+      "Residential": "home",
+      "Sports": "fitness",
+      "Dining": "restaurant",
+      "Medical": "medical",
+      "default": "business"
+    }
+    return iconMap[buildingType] || iconMap.default
+  }
+
+  const getBuildingColor = (buildingType: string) => {
+    const colorMap: { [key: string]: string } = {
+      "Academic": "#3b82f6",
+      "Library": "#8b5cf6",
+      "Laboratory": "#10b981",
+      "Administrative": "#f59e0b",
+      "Residential": "#ec4899",
+      "Sports": "#ef4444",
+      "Dining": "#f97316",
+      "Medical": "#14b8a6",
+      "default": "#6b7280"
+    }
+    return colorMap[buildingType] || colorMap.default
+  }
+
+  const iconName = getBuildingIcon(building.building_type)
+  const backgroundColor = getBuildingColor(building.building_type)
+
+  return (
+    <Animated.View
+      style={{
+        opacity: fadeAnim,
+        transform: [{ translateY: slideAnim }],
+      }}
+    >
+      <BlurView intensity={90} style={{ borderRadius: 20 }} className="overflow-hidden">
+        <View className="bg-white/40 border border-white/60 px-4 py-4 w-80">
+          {/* Header with icon and info */}
+          <View className="flex-row items-start gap-3 mb-4">
+            {/* Building Icon */}
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: backgroundColor,
+                justifyContent: "center",
+                alignItems: "center",
+                borderWidth: 2,
+                borderColor: "#ffffff",
+              }}
+            >
+              <Ionicons name={iconName} size={28} color="#ffffff" />
+            </View>
+
+            {/* Building Name and Code */}
+            <View className="flex-1">
+              <Text style={{ fontFamily: "Gilroy-SemiBold" }} className="text-black font-bold text-base">
+                {building.building_name}
+              </Text>
+              <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-600 text-xs mt-1">
+                {building.building_code}
+              </Text>
+              <View className="mt-2">
+                <View
+                  style={{ backgroundColor: `${backgroundColor}20` }}
+                  className="px-2 py-1 rounded-lg self-start"
+                >
+                  <Text
+                    style={{ fontFamily: "Gilroy-Medium", color: backgroundColor }}
+                    className="text-xs"
+                  >
+                    {building.building_type}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Description Section */}
+          {building.description && (
+            <View className="mb-4 pb-4 border-b border-white/40">
+              <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-700 text-sm leading-5">
+                {building.description.length > 100
+                  ? `${building.description.substring(0, 100)}...`
+                  : building.description}
+              </Text>
+            </View>
+          )}
+
+          {/* Additional Info */}
+          <View className="mb-4 space-y-2">
+            {building.address && (
+              <View className="flex-row items-start gap-2">
+                <Ionicons name="location" size={16} color="#6b7280" />
+                <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-600 text-xs flex-1">
+                  {building.address}
+                </Text>
+              </View>
+            )}
+            {building.floors && (
+              <View className="flex-row items-center gap-2">
+                <Ionicons name="layers" size={16} color="#6b7280" />
+                <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-gray-600 text-xs">
+                  {building.floors} floors
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* View Details Button */}
+          {onViewDetails && (
+            <TouchableOpacity
+              onPress={() => onViewDetails(building.building_id)}
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                backgroundColor: backgroundColor,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <Ionicons name="information-circle" size={18} color="#ffffff" />
+              <Text
+                style={{
+                  color: "#ffffff",
+                  textAlign: "center",
+                  fontSize: 14,
+                  fontFamily: "Gilroy-SemiBold",
+                }}
+              >
+                View Details
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </BlurView>
     </Animated.View>

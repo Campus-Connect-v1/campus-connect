@@ -1,4 +1,5 @@
 import { api } from "./authServices";
+import useSWR from "swr";
 
 export interface Building {
   building_id: string;
@@ -117,3 +118,27 @@ export const universityServices = {
     }
   },
 };
+
+// Hook for fetching buildings for map display
+export function useMapBuildings(universityId: string | null) {
+  const fetcher = async (url: string) => {
+    const response = await api.get(url);
+    return response.data.data || response.data || [];
+  };
+
+  const { data, error, isLoading, mutate } = useSWR(
+    universityId ? `/university/${universityId}/buildings` : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      refreshInterval: 0, // Buildings don't change often
+    }
+  );
+
+  return {
+    buildings: data || [],
+    isLoading,
+    isError: error,
+    refetchBuildings: mutate,
+  };
+}
