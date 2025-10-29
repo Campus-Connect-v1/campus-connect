@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { shareLocation, useNearbyUsers } from "@/src/services/authServices";
 import { MapMarkerCallout, CustomMapMarker, CustomBuildingMarker, BuildingMarkerCallout } from "@/src/components/ui/map-marker";
-import { useMapBuildings } from "@/src/services/universityServices";
+import { useMapBuildings, Building } from "@/src/services/universityServices";
 import { storage } from "@/src/utils/storage";
 import { router } from "expo-router";
 import { DEFAULT_UNIVERSITY_ID } from "@/src/constants/app";
@@ -236,7 +236,7 @@ export default function ConnectionsMapScreen() {
 })}
 
         {/* Markers for buildings */}
-        {buildings?.filter((building) => building.latitude && building.longitude).map((building) => {
+        {buildings?.filter((building: Building) => building.latitude && building.longitude).map((building: Building) => {
           console.log(`Building ${building.building_name} coordinates:`, { 
             lat: building.latitude, 
             lng: building.longitude 
