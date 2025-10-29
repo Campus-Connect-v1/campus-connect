@@ -10,6 +10,7 @@ import { MapMarkerCallout, CustomMapMarker, CustomBuildingMarker, BuildingMarker
 import { useMapBuildings } from "@/src/services/universityServices";
 import { storage } from "@/src/utils/storage";
 import { router } from "expo-router";
+import { DEFAULT_UNIVERSITY_ID } from "@/src/constants/app";
 
 
 // Fetcher for SWR
@@ -93,7 +94,7 @@ export default function ConnectionsMapScreen() {
   useEffect(() => {
     const loadUniversityId = async () => {
       const userData = await storage.getUserData();
-      setUniversityId(userData?.university_id || 'uni_1');
+      setUniversityId(userData?.university_id || DEFAULT_UNIVERSITY_ID);
     };
     loadUniversityId();
   }, []);
@@ -235,7 +236,7 @@ export default function ConnectionsMapScreen() {
 })}
 
         {/* Markers for buildings */}
-        {buildings?.filter((building: any) => building.latitude && building.longitude).map((building: any, index: number) => {
+        {buildings?.filter((building) => building.latitude && building.longitude).map((building) => {
           console.log(`Building ${building.building_name} coordinates:`, { 
             lat: building.latitude, 
             lng: building.longitude 

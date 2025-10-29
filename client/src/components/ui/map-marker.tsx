@@ -6,6 +6,7 @@ import { View, Image, Text, TouchableOpacity, Animated } from "react-native"
 import { BlurView } from "expo-blur"
 import { Ionicons } from "@expo/vector-icons"
 import type { Building } from "@/src/services/universityServices"
+import { getBuildingIcon, getBuildingColor } from "@/src/utils/buildingHelpers"
 
 interface NearbyUser {
   user_id: string
@@ -238,36 +239,6 @@ interface BuildingMarkerProps {
 }
 
 export const CustomBuildingMarker: React.FC<BuildingMarkerProps> = ({ building }) => {
-  const getBuildingIcon = (buildingType: string) => {
-    const iconMap: { [key: string]: keyof typeof Ionicons.glyphMap } = {
-      "Academic": "school",
-      "Library": "library",
-      "Laboratory": "flask",
-      "Administrative": "business",
-      "Residential": "home",
-      "Sports": "fitness",
-      "Dining": "restaurant",
-      "Medical": "medical",
-      "default": "business"
-    }
-    return iconMap[buildingType] || iconMap.default
-  }
-
-  const getBuildingColor = (buildingType: string) => {
-    const colorMap: { [key: string]: string } = {
-      "Academic": "#3b82f6", // Blue
-      "Library": "#8b5cf6", // Purple
-      "Laboratory": "#10b981", // Green
-      "Administrative": "#f59e0b", // Amber
-      "Residential": "#ec4899", // Pink
-      "Sports": "#ef4444", // Red
-      "Dining": "#f97316", // Orange
-      "Medical": "#14b8a6", // Teal
-      "default": "#6b7280" // Gray
-    }
-    return colorMap[buildingType] || colorMap.default
-  }
-
   const iconName = getBuildingIcon(building.building_type)
   const backgroundColor = getBuildingColor(building.building_type)
 
@@ -338,36 +309,6 @@ export const BuildingMarkerCallout: React.FC<BuildingCalloutProps> = ({ building
       }),
     ]).start()
   }, [])
-
-  const getBuildingIcon = (buildingType: string) => {
-    const iconMap: { [key: string]: keyof typeof Ionicons.glyphMap } = {
-      "Academic": "school",
-      "Library": "library",
-      "Laboratory": "flask",
-      "Administrative": "business",
-      "Residential": "home",
-      "Sports": "fitness",
-      "Dining": "restaurant",
-      "Medical": "medical",
-      "default": "business"
-    }
-    return iconMap[buildingType] || iconMap.default
-  }
-
-  const getBuildingColor = (buildingType: string) => {
-    const colorMap: { [key: string]: string } = {
-      "Academic": "#3b82f6",
-      "Library": "#8b5cf6",
-      "Laboratory": "#10b981",
-      "Administrative": "#f59e0b",
-      "Residential": "#ec4899",
-      "Sports": "#ef4444",
-      "Dining": "#f97316",
-      "Medical": "#14b8a6",
-      "default": "#6b7280"
-    }
-    return colorMap[buildingType] || colorMap.default
-  }
 
   const iconName = getBuildingIcon(building.building_type)
   const backgroundColor = getBuildingColor(building.building_type)
