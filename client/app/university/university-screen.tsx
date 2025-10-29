@@ -67,10 +67,10 @@ const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
       <View className="flex-row items-start justify-between">
         <View className="flex-1">
           <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-lg text-gray-900">
-            {item.name}
+            {item.building_name}
           </Text>
           <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-sm text-gray-500 mt-1">
-            {item.code}
+            {item.building_code}
           </Text>
           {item.building_type && (
             <View className="flex-row items-center mt-2">
@@ -104,7 +104,7 @@ const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
       <View className="flex-row items-start justify-between">
         <View className="flex-1">
           <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-lg text-gray-900">
-            {item.name}
+            {item.building_name}
           </Text>
           {item.room_number && (
             <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-sm text-gray-500 mt-1">

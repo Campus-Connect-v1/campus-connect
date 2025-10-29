@@ -46,6 +46,9 @@ export default function PostDetailScreen() {
   const [likeCount, setLikeCount] = useState(0);
   const [showActionsModal, setShowActionsModal] = useState(false);
 
+  console.log("Post ID:", postId);
+
+
   const {
     data: postData,
     error: postError,
@@ -56,7 +59,8 @@ export default function PostDetailScreen() {
     data: commentsData,
     error: commentsError,
     isLoading: commentsLoading,
-  } = useSWR(postId ? `/social/posts/${postId}/comments` : null, fetcher);
+  } = useSWR(postId ? `/social/posts/:${postId}/comments` : null, fetcher);
+    
 
   useEffect(() => {
     const loadUserId = async () => {
@@ -168,6 +172,13 @@ export default function PostDetailScreen() {
 
   const post = postData.post;
   const comments: Comment[] = commentsData?.comments || [];
+
+console.log("Post ID:", postId);
+console.log("Post Data:", postData);
+console.log("Comments Data:", commentsData);
+console.log("Comments:", comments);
+
+
   const isOwnPost = currentUserId === post.author?.user_id;
 
   return (

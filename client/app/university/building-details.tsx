@@ -68,7 +68,7 @@ const BuildingDetailsScreen: React.FC = () => {
       <View className="flex-row items-start justify-between">
         <View className="flex-1">
           <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-base text-gray-900">
-            {item.name}
+            {item.building_name}
           </Text>
           {item.room_number && (
             <Text style={{ fontFamily: 'Gilroy-Regular' }} className="text-sm text-gray-500 mt-1">
@@ -115,10 +115,10 @@ const BuildingDetailsScreen: React.FC = () => {
         {/* Building Info Card */}
         <View className="bg-white m-4 rounded-xl p-5 shadow-sm border border-gray-100">
           <Text style={{ fontFamily: 'Gilroy-Bold' }} className="text-2xl text-gray-900">
-            {building.name}
+            {building.building_name}
           </Text>
           <Text style={{ fontFamily: 'Gilroy-Medium' }} className="text-base text-gray-500 mt-1">
-            {building.code}
+            {building.building_code}
           </Text>
 
           {building.building_type && (

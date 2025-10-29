@@ -24,9 +24,10 @@ export const styles = StyleSheet.create({
     marginHorizontal: 20,
     borderRadius: 24,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
     marginBottom: 20,
-    borderColor: "#f5f5f5"
+    borderColor: "#f5f5f5",
+    borderWidth: 1,
   },
   searchInput: { marginLeft: 8, flex: 1, fontSize: 14, color: Colors.light.primary, fontFamily:"Gilroy-Regular" },
   announcementContainer: { paddingHorizontal: 20, marginBottom: 26 },
