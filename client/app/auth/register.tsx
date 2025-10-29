@@ -2,7 +2,6 @@
 
 import { Ionicons } from "@expo/vector-icons"
 import { zodResolver } from "@hookform/resolvers/zod"
-
 import Colors from "@/src/constants/Colors"
 import { signupSchema, type SignupSchema } from "@/src/schemas/authSchemas"
 import { signUpWithEmail } from "@/src/services/authServices"
@@ -22,10 +21,8 @@ import {
 } from "react-native"
 import { useRouter } from "expo-router"
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert"
-import { Image } from "expo-image"
-import DropdownAlert
- from "@/src/components/ui/DropdownAlert"
-import logo from "@/assets/images/logo.png"
+import { Image } from "expo-image";
+import DropdownAlert from "@/src/components/ui/DropdownAlert"
 
 interface RegisterScreenProps {
   onRegisterSuccess?: (message: string) => void
@@ -79,14 +76,13 @@ export default function RegisterScreen(props: RegisterScreenProps = {}) {
         if (onRegisterSuccess) {
           onRegisterSuccess(result.data?.message || "Registration successful! Please check your email to verify your account.");
         }
-        success("uniCLIQ", "Registration successful! Please check your email to verify your account.", 4000)
-        setTimeout(()=>{
-           success("uniCLIQ", "Registration successful! Please check your email to verify your account.", 4000)
+        setTimeout(() => {
+            success("uniCLIQ","Registration Successful! Please verify your email.", 4000);
           router.push({
             pathname: "/auth/verify-otp",
             params: { email: data.email }
           });
-        }, 4000)
+        }, 4000);
       } else {
         error("uniCLIQ","Registration Failed", 4000)
         console.log()
@@ -127,6 +123,7 @@ export default function RegisterScreen(props: RegisterScreenProps = {}) {
         message={alert.message}
         onDismiss={hideAlert}
       />
+
 
         {/* Welcome Text */}
         <View style={styles.welcomeContainer}>

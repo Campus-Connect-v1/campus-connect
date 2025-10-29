@@ -2,8 +2,8 @@ import { api } from "./authServices";
 
 export interface Building {
   building_id: string;
-  name: string;
-  code: string;
+  building_name: string;
+  building_code: string;
   building_type: string;
   description?: string;
   address?: string;
@@ -20,7 +20,7 @@ export interface Building {
 export interface Facility {
   facility_id: string;
   building_id: string;
-  name: string;
+  building_name: string;
   facility_type: string;
   room_number?: string;
   floor?: number;

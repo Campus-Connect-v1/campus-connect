@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import React from 'react'
 
 import MessagesScreen from '../messaging'
@@ -14,4 +14,4 @@ const Chat = () => {
 
 export default Chat
 
-const styles = StyleSheet.create({})
+// const styles = StyleSheet.create({})

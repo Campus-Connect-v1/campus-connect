@@ -287,7 +287,6 @@ const MessagesScreen: React.FC = () => {
     const loadConversations = () => {
       try {
         const data = dataService.getConversations()
-        console.log("Loaded conversations:", data)
         setConversations(data)
         setFilteredConversations(data)
       } catch (error) {

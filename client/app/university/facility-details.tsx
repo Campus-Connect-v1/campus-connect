@@ -74,7 +74,7 @@ const FacilityDetailsScreen: React.FC = () => {
         {/* Facility Info Card */}
         <View className="bg-white m-4 rounded-xl p-5 shadow-sm border border-gray-100">
           <Text style={{ fontFamily: 'Gilroy-Bold' }} className="text-2xl text-gray-900">
-            {facility.name}
+            {facility.building_name}
           </Text>
 
           <View className="flex-row items-center mt-3 flex-wrap">
