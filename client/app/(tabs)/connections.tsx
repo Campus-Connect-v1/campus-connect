@@ -7,8 +7,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { shareLocation, useNearbyUsers } from "@/src/services/authServices";
 import { MapMarkerCallout, CustomMapMarker } from "@/src/components/ui/map-marker";
-
-
 // Fetcher for SWR
 
 
