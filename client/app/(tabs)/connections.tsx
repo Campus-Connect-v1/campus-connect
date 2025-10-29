@@ -6,7 +6,13 @@ import MapView, { Marker, Callout } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { shareLocation, useNearbyUsers } from "@/src/services/authServices";
-import { MapMarkerCallout, CustomMapMarker } from "@/src/components/ui/map-marker";
+import { MapMarkerCallout, CustomMapMarker, CustomBuildingMarker, BuildingMarkerCallout } from "@/src/components/ui/map-marker";
+import { useMapBuildings, Building } from "@/src/services/universityServices";
+import { storage } from "@/src/utils/storage";
+import { router } from "expo-router";
+import { DEFAULT_UNIVERSITY_ID } from "@/src/constants/app";
+
+
 // Fetcher for SWR
 
 
@@ -15,11 +21,15 @@ export default function ConnectionsMapScreen() {
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapType, setMapType] = useState<"standard" | "satellite" | "terrain" | "hybrid">("standard");
   const [isSharing, setIsSharing] = useState(false);
+  const [universityId, setUniversityId] = useState<string | null>(null);
   const radius = 500; // meters
   const lastSharedRef = useRef<number | null>(null);
 
- const { nearbyUsers, isLoading, isError: error, refetchNearby: mutate } = useNearbyUsers(userLocation ? radius : 0);
+  const { nearbyUsers, isLoading, isError: error, refetchNearby: mutate } = useNearbyUsers(userLocation ? radius : 0);
+  const { buildings, isLoading: buildingsLoading, isError: buildingsError } = useMapBuildings(universityId);
+  
   console.log("Nearby users data:", nearbyUsers);
+  console.log("Buildings data:", buildings);
 
   // useEffect(() => {
   //   (async () => {
@@ -80,7 +90,16 @@ export default function ConnectionsMapScreen() {
 //   })();
 // }, []);
 
-useEffect(() => {
+// Fetch university ID
+  useEffect(() => {
+    const loadUniversityId = async () => {
+      const userData = await storage.getUserData();
+      setUniversityId(userData?.university_id || DEFAULT_UNIVERSITY_ID);
+    };
+    loadUniversityId();
+  }, []);
+
+  useEffect(() => {
   let hasShared = false;
 
   (async () => {
@@ -199,7 +218,7 @@ useEffect(() => {
 
   return (
     <Marker
-      key={index}
+      key={`user-${index}`}
       coordinate={{ latitude: lat, longitude: lng }}
     >
       {/* Custom marker bubble */}
@@ -215,6 +234,37 @@ useEffect(() => {
     </Marker>
   );
 })}
+
+        {/* Markers for buildings */}
+        {buildings?.filter((building: Building) => building.latitude && building.longitude).map((building: Building) => {
+          console.log(`Building ${building.building_name} coordinates:`, { 
+            lat: building.latitude, 
+            lng: building.longitude 
+          });
+
+          return (
+            <Marker
+              key={`building-${building.building_id}`}
+              coordinate={{ 
+                latitude: building.latitude, 
+                longitude: building.longitude 
+              }}
+            >
+              {/* Custom building marker */}
+              <CustomBuildingMarker building={building} />
+
+              {/* Building callout */}
+              <Callout tooltip>
+                <BuildingMarkerCallout
+                  building={building}
+                  onViewDetails={(buildingId) => {
+                    router.push(`/university/building-details?buildingId=${buildingId}`);
+                  }}
+                />
+              </Callout>
+            </Marker>
+          );
+        })}
 
       </MapView>
 
