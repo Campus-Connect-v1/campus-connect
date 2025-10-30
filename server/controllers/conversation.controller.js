@@ -31,13 +31,14 @@ export const getConversations = async (req, res) => {
       console.error("❌ MySQL user lookup failed:", mysqlError);
     }
 
+    // Remove .lean() to keep Mongoose documents with Map methods
     const conversations = await Conversation.find({
       "participants.userId": userId,
     })
       .sort({ "lastMessage.timestamp": -1, updatedAt: -1 })
       .skip(skip)
-      .limit(limit)
-      .lean();
+      .limit(limit);
+    // REMOVED: .lean()
 
     console.log("💬 Raw conversations found:", conversations.length);
     console.log("📊 Conversation details:", conversations);
@@ -83,15 +84,25 @@ export const getConversations = async (req, res) => {
           console.error("Error fetching MySQL user:", error);
         }
 
+        // FIX: Handle unreadCount properly - it's a Map object
+        const unreadCount =
+          conversation.unreadCount instanceof Map
+            ? conversation.unreadCount.get(userId) || 0
+            : conversation.unreadCount?.[userId] || 0;
+
         return {
-          ...conversation,
+          id: conversation._id.toString(),
+          participants: conversation.participants,
+          lastMessage: conversation.lastMessage,
+          unreadCount: unreadCount,
+          createdAt: conversation.createdAt,
+          updatedAt: conversation.updatedAt,
           otherParticipant: {
-            ...otherParticipant,
+            ...(otherParticipant.toObject?.() || otherParticipant),
             avatar: mysqlUser?.avatar_url,
             isOnline: false,
             lastSeen: mysqlUser?.last_login,
           },
-          unreadCount: conversation.unreadCount?.get(userId) || 0,
         };
       })
     );

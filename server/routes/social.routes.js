@@ -9,6 +9,11 @@ import {
   addComment,
   getPostComments,
   deletePost,
+  getLikedPosts,
+  updatePost,
+  getPostLikes,
+  getUserPosts,
+  deleteComment,
 } from "../controllers/social.controller.js";
 import authenticate from "../middleware/auth.js";
 
@@ -95,5 +100,52 @@ router.post("/posts/:post_id/comments", addComment);
  *     summary: Get post comments
  */
 router.get("/posts/:post_id/comments", getPostComments);
+
+// routes/social.routes.js - Additional routes
+
+/**
+ * @swagger
+ * /social/posts/{post_id}/likes:
+ *   get:
+ *     tags: [Social]
+ *     summary: Get post likes with user details
+ */
+router.get("/posts/:post_id/likes", getPostLikes);
+
+/**
+ * @swagger
+ * /social/posts/user/{user_id}:
+ *   get:
+ *     tags: [Social]
+ *     summary: Get user's posts (omit user_id for current user)
+ */
+router.get("/posts/user/:user_id", getUserPosts);
+
+/**
+ * @swagger
+ * /social/posts/{post_id}:
+ *   put:
+ *     tags: [Social]
+ *     summary: Update a post
+ */
+router.put("/posts/:post_id", updatePost);
+
+/**
+ * @swagger
+ * /social/comments/{comment_id}:
+ *   delete:
+ *     tags: [Social]
+ *     summary: Delete a comment
+ */
+router.delete("/comments/:comment_id", deleteComment);
+
+/**
+ * @swagger
+ * /social/posts/liked:
+ *   get:
+ *     tags: [Social]
+ *     summary: Get user's liked posts
+ */
+router.get("/posts/liked", getLikedPosts);
 
 export default router;
