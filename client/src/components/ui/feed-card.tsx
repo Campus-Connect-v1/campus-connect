@@ -1,7 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Image, Text, TouchableOpacity, View, Alert } from "react-native";
 import PostActionsModal from "./post-actions-modal";
+import { likePost, unlikePost, deletePost } from "@/src/services/authServices";
+import { mutate } from "swr";
+import { router } from "expo-router";
 
 interface PostSettings {
   allowComments: boolean;
@@ -29,17 +32,74 @@ interface FeedCardProps {
   post: Post;
   onComment?: (postId: string) => void;
   onLike?: (postId: string) => void;
+  isOwnPost?: boolean;
+  onPostDeleted?: () => void;
 }
 
-export default function FeedCard({ post, onComment, onLike }: FeedCardProps) {
+export default function FeedCard({ post, onComment, onLike, isOwnPost, onPostDeleted }: FeedCardProps) {
   const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [likeCount, setLikeCount] = useState(post.stats.likes);
   const [showActionsModal, setShowActionsModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleLike = () => {
+  const handleLike = async () => {
+    const previousLiked = isLiked;
+    const previousCount = likeCount;
+
+    // Optimistic update
     setIsLiked(!isLiked);
-    setLikeCount(isLiked ? likeCount - 1 : likeCount + 1); // optimistic update
-    onLike?.(post.id);
+    setLikeCount(isLiked ? likeCount - 1 : likeCount + 1);
+
+    try {
+      if (isLiked) {
+        await unlikePost(post.id);
+      } else {
+        await likePost(post.id);
+      }
+      // Revalidate feed data
+      mutate("/social/posts/feed");
+      onLike?.(post.id);
+    } catch (error) {
+      // Revert on error
+      setIsLiked(previousLiked);
+      setLikeCount(previousCount);
+      Alert.alert("Error", "Failed to update like status");
+    }
+  };
+
+  const handleDelete = async () => {
+    Alert.alert(
+      "Delete Post",
+      "Are you sure you want to delete this post?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              const result = await deletePost(post.id);
+              if (result.success) {
+                mutate("/social/posts/feed");
+                onPostDeleted?.();
+              } else {
+                Alert.alert("Error", "Failed to delete post");
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete post");
+            } finally {
+              setIsDeleting(false);
+              setShowActionsModal(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePostPress = () => {
+    router.push(`/feed/post-detail?postId=${post.id}`);
   };
 
   return (
@@ -67,19 +127,21 @@ export default function FeedCard({ post, onComment, onLike }: FeedCardProps) {
         </TouchableOpacity>
       </View>
 
-      {/* Post content */}
-      {post.content && (
-        <Text className="text-gray-800 mb-3 text-[15px] leading-6 font-[Gilroy-Regular]">
-          {post.content}
-        </Text>
-      )}
+      {/* Post content - tappable to view details */}
+      <TouchableOpacity onPress={handlePostPress} activeOpacity={0.9}>
+        {post.content && (
+          <Text className="text-gray-800 mb-3 text-[15px] leading-6 font-[Gilroy-Regular]">
+            {post.content}
+          </Text>
+        )}
 
-      {/* Post image */}
-      {post.image && (
-        <View className="mb-3 rounded-2xl overflow-hidden shadow-sm">
-          <Image source={{ uri: post.image }} className="w-full h-56" resizeMode="cover" />
-        </View>
-      )}
+        {/* Post image */}
+        {post.image && (
+          <View className="mb-3 rounded-2xl overflow-hidden shadow-sm">
+            <Image source={{ uri: post.image }} className="w-full h-56" resizeMode="cover" />
+          </View>
+        )}
+      </TouchableOpacity>
 
       {/* Actions */}
       <View className="flex-row items-center justify-between mt-2 px-1">
@@ -93,7 +155,7 @@ export default function FeedCard({ post, onComment, onLike }: FeedCardProps) {
 
         {/* Comment button */}
         <TouchableOpacity
-          onPress={() => post.settings.allowComments && onComment?.(post.id)}
+          onPress={handlePostPress}
           className={`flex-row items-center ${!post.settings.allowComments ? "opacity-50" : ""}`}
           disabled={!post.settings.allowComments}
         >
@@ -106,15 +168,12 @@ export default function FeedCard({ post, onComment, onLike }: FeedCardProps) {
       <PostActionsModal
         visible={showActionsModal}
         onClose={() => setShowActionsModal(false)}
-        isOwnPost={true} // adjust logic as needed
+        isOwnPost={isOwnPost}
         onEdit={() => {
           setShowActionsModal(false);
           console.log("Edit Pressed");
         }}
-        onDelete={() => {
-          setShowActionsModal(false);
-          console.log("Delete Pressed");
-        }}
+        onDelete={handleDelete}
         onSavePost={() => {
           setShowActionsModal(false);
           console.log("Saved Post");
