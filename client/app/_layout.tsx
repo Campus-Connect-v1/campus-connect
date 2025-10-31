@@ -9,6 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import '../globals.css';
 import Colors from "@/src/constants/Colors";
 import { Easing } from "react-native-reanimated";
+import { LanguageProvider } from "@/src/contexts/language-context";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -59,7 +60,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView className="bg-white">
       <SafeAreaProvider>
-      <Stack
+      <LanguageProvider>
+        <Stack
   screenOptions={{
     headerShown: false,
     contentStyle: { backgroundColor: '#fff' },
@@ -88,6 +90,7 @@ export default function RootLayout() {
     }}
   />
 </Stack>
+      </LanguageProvider>
 
       </SafeAreaProvider>
     </GestureHandlerRootView>

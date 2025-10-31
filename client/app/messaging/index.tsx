@@ -273,6 +273,7 @@ import { router } from "expo-router"
 import ConversationCard from "@/src/components/messaging/conversation-card"
 import SearchBar from "@/src/components/messaging/search-bar"
 import { dataService } from "@/src/services/data-service"
+import LanguageSwitcher from "@/src/components/messaging/language-switcher"
 
 const MessagesScreen: React.FC = () => {
   const [conversations, setConversations] = useState<any[]>([])
@@ -340,6 +341,7 @@ const MessagesScreen: React.FC = () => {
             <TouchableOpacity className="p-2">
               <Ionicons name="create-outline" size={24} color="#ef4444" />
             </TouchableOpacity>
+           <LanguageSwitcher />
           </View>
           <SearchBar value={searchQuery} onChangeText={setSearchQuery} />
         </View>

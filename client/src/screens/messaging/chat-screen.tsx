@@ -1,4 +1,3 @@
-
 "use client"
 
 import type React from "react"
@@ -19,11 +18,16 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { Ionicons } from "@expo/vector-icons"
 import { router, useLocalSearchParams } from "expo-router"
 import MessageBubble from "@/src/components/messaging/message-bubble"
-import { dataService } from "@/src/services/data-service"
 import CallButton from "@/src/components/messaging/call-button"
+import { dataService } from "@/src/services/data-service"
+import { useLanguage } from "@/src/contexts/language-context"
+import { i18nService } from "@/src/services/i18n-service"
 
 const ChatScreen: React.FC = () => {
   const { id } = useLocalSearchParams()
+  const { language } = useLanguage()
+  const t = (key: keyof ReturnType<typeof i18nService.getTranslations>) => i18nService.t(language, key)
+
   const [conversation, setConversation] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [messageText, setMessageText] = useState("")
@@ -96,14 +100,11 @@ const ChatScreen: React.FC = () => {
                 {conversation?.participant_name}
               </Text>
               <Text style={{ fontFamily: "Gilroy-Regular", fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-                {conversation?.is_online ? "Active now" : "Offline"}
+                {conversation?.is_online ? t("activeNow") : t("offline")}
               </Text>
             </View>
           </View>
-          <TouchableOpacity className="p-2">
-            <Ionicons name="call-outline" size={20} color="#ef4444" />
-          </TouchableOpacity>
-          <CallButton conversationId={conversation.id} isVideoCall={true}/>
+          <CallButton conversationId={id as string} isVideoCall={true} />
         </View>
 
         {/* Messages */}
@@ -137,7 +138,7 @@ const ChatScreen: React.FC = () => {
                   paddingHorizontal: 16,
                   paddingVertical: 10,
                 }}
-                placeholder="Type a message..."
+                placeholder={t("typeMessage")}
                 placeholderTextColor="#cbd5e1"
                 value={messageText}
                 onChangeText={setMessageText}
