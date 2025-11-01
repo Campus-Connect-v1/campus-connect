@@ -22,7 +22,8 @@ import { LinearGradient } from "expo-linear-gradient"
 import { BlurView } from "expo-blur"
 import { useRouter } from "expo-router"
 import ProfileDrawer from "@/src/components/layout/profile-drawer"
-import UserSearchModal from "@/src/components/ui/user-search-modal"
+import SearchModal from "@/src/components/ui/SearchModal"
+import * as Haptics from "expo-haptics"
 import { Ionicons } from "@expo/vector-icons"
 import { styles } from "@/src/styles/home.styles"
 import Colors from "@/src/constants/Colors"
@@ -48,7 +49,7 @@ export default function HomeScreen() {
 
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
-  const [showDropdown, setShowDropdown] = useState(false)
+  const [showSearchModal, setShowSearchModal] = useState(false)
 
   const getSearchUrl = (params: {
     q?: string
@@ -85,7 +86,6 @@ export default function HomeScreen() {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedQuery(query)
-      setShowDropdown(!!query)
     }, 500)
 
     return () => clearTimeout(handler)
@@ -143,11 +143,25 @@ export default function HomeScreen() {
         <View style={styles.header}>
 
 
-            <TouchableOpacity onPress={() => router.push("/notifications")} className="ml-4 flex-row items-center border border-gray-100 px-3 py-2 rounded-full bg-white shadow-sm">
+            <TouchableOpacity 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                router.push("/notifications")
+              }} 
+              className="ml-4 flex-row items-center border border-gray-100 px-3 py-2 rounded-full bg-white shadow-sm"
+              activeOpacity={0.7}
+            >
            <Ionicons name="notifications-outline" size={20} color="#003554" />
           </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setIsDrawerVisible(true)} className="ml-4 flex-row items-center border border-gray-100 px-3 py-2 rounded-full bg-white shadow-sm">
+            <TouchableOpacity 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                setIsDrawerVisible(true)
+              }} 
+              className="ml-4 flex-row items-center border border-gray-100 px-3 py-2 rounded-full bg-white shadow-sm"
+              activeOpacity={0.7}
+            >
             <Ionicons name="menu-outline" size={20} color="#003554" />
             <Text className="font-[Gilroy-Regular] ml-1">Menu</Text>
           </TouchableOpacity>
@@ -166,21 +180,22 @@ export default function HomeScreen() {
         
 
 
-        <View style={styles.searchBar}>
+        <TouchableOpacity 
+          style={styles.searchBar}
+          activeOpacity={0.7}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+            setShowSearchModal(true)
+          }}
+        >
           <Ionicons name="search" color={Colors.light.primary} size={20} />
-
-          <TextInput
-            placeholder="Search people, events, or groups"
-            placeholderTextColor="#999"
-            style={styles.searchInput}
-            value={query}
-            onChangeText={setQuery}
-            onFocus={() => setShowDropdown(!!query)}
-          />
-          <TouchableOpacity onPress={() => console.log("Filter pressed")}>
-            <Ionicons name="filter" size={22} color={Colors.light.primary} style={{ marginLeft: 8 }} />
-          </TouchableOpacity>
-        </View>
+          <Text 
+            style={[styles.searchInput, { color: '#999' }]}
+          >
+            Search people, events, or groups
+          </Text>
+          <Ionicons name="filter" size={22} color={Colors.light.primary} style={{ marginLeft: 8 }} />
+        </TouchableOpacity>
 
         {/* Announcements */}
         <View style={styles.announcementContainer}>
@@ -253,13 +268,16 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      <UserSearchModal
-        visible={showDropdown}
+      <SearchModal
+        visible={showSearchModal}
         onClose={() => {
-          setShowDropdown(false)
+          setShowSearchModal(false)
           setQuery("")
         }}
         users={searchResults?.users || []}
+        isLoading={false}
+        query={query}
+        onQueryChange={setQuery}
       />
     </View>
   )
