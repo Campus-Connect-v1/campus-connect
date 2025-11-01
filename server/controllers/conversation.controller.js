@@ -237,13 +237,17 @@ export const createConversation = async (req, res) => {
     const currentUser = {
       userId: currentUserMysql.user_id.toString(),
       email: currentUserMysql.email,
-      username: currentUserMysql.username,
+      username:
+        `${currentUserMysql.first_name} ${currentUserMysql.last_name}` ||
+        currentUserMysql.first_name,
     };
 
     const participant = {
       userId: participantMysql.user_id.toString(),
       email: participantMysql.email,
-      username: participantMysql.username,
+      username:
+        `${participantMysql.first_name} ${participantMysql.last_name}` ||
+        participantMysql.first_name,
     };
 
     // Find or create conversation
