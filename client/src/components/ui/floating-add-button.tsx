@@ -1,5 +1,3 @@
-"use client"
-
 import { Ionicons } from "@expo/vector-icons"
 import { TouchableOpacity } from "react-native"
 import * as Haptics from "expo-haptics"

@@ -1,7 +1,5 @@
-"use client"
-
 import { Ionicons } from "@expo/vector-icons"
-import React, { useEffect, useRef } from "react"
+import React, { useEffect, useRef, useCallback } from "react"
 import { 
   View, 
   Text, 
@@ -53,6 +51,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
 }) => {
   const router = useRouter()
   const inputRef = useRef<TextInput>(null)
+  const spinValue = useSharedValue(0)
   
   // Animation values
   const translateY = useSharedValue(height)
@@ -86,14 +85,24 @@ const SearchModal: React.FC<SearchModalProps> = ({
     }
   }, [visible])
 
-  const handleClose = () => {
+  // Memoized handlers
+  const handleClearQuery = useCallback(() => {
+    onQueryChange("")
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+  }, [onQueryChange])
+
+  const handleItemPressIn = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+  }, [])
+
+  const handleClose = useCallback(() => {
     // Trigger haptic feedback on close
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     Keyboard.dismiss()
     onClose()
-  }
+  }, [onClose])
 
-  const handleUserPress = (userId: string) => {
+  const handleUserPress = useCallback((userId: string) => {
     // Trigger haptic feedback on selection
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     handleClose()
@@ -103,7 +112,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
         params: { id: userId },
       })
     }, 100)
-  }
+  }, [router, handleClose])
 
   // Animated styles
   const backdropStyle = useAnimatedStyle(() => ({
@@ -114,12 +123,12 @@ const SearchModal: React.FC<SearchModalProps> = ({
     transform: [{ translateY: translateY.value }],
   }))
 
-  const renderUserItem = ({ item }: { item: any }) => (
+  const renderUserItem = useCallback(({ item }: { item: any }) => (
     <TouchableOpacity
       onPress={() => handleUserPress(item.id)}
       className="flex-row items-center py-3 px-4 border-b border-gray-100/50"
       activeOpacity={0.7}
-      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+      onPressIn={handleItemPressIn}
     >
       <View className="w-12 h-12 bg-blue-100 rounded-full items-center justify-center mr-3 overflow-hidden">
         {item.profile_picture_url ? (
@@ -144,7 +153,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
       </View>
       <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
     </TouchableOpacity>
-  )
+  ), [handleUserPress, handleItemPressIn])
 
   if (!visible) return null
 
@@ -221,10 +230,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
                         />
                         {query.length > 0 && (
                           <TouchableOpacity
-                            onPress={() => {
-                              onQueryChange("")
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                            }}
+                            onPress={handleClearQuery}
                             activeOpacity={0.7}
                           >
                             <Ionicons name="close-circle" size={20} color="#9ca3af" />
@@ -236,7 +242,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
                       <TouchableOpacity
                         onPress={handleClose}
                         activeOpacity={0.7}
-                        onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                        onPressIn={handleItemPressIn}
                       >
                         <Text 
                           style={{ fontFamily: 'Gilroy-SemiBold' }} 
@@ -254,7 +260,9 @@ const SearchModal: React.FC<SearchModalProps> = ({
                   {/* Results List */}
                   {isLoading ? (
                     <View className="py-16 items-center">
-                      <View className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      <View className="w-10 h-10 items-center justify-center">
+                        <Ionicons name="hourglass-outline" size={32} color="#3b82f6" />
+                      </View>
                       <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-500 mt-4">
                         Searching...
                       </Text>
