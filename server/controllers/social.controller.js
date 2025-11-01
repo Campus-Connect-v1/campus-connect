@@ -507,6 +507,7 @@ export const getLikedPosts = async (req, res) => {
       parseInt(limit),
       parseInt(offset)
     );
+    console.log(`🎯 Controller - Posts returned from model:`, posts.length);
 
     res.status(200).json({
       message: "Liked posts retrieved successfully",

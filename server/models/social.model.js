@@ -333,9 +333,10 @@ export const getUserPostsModel = async (
   offset = 0
 ) => {
   try {
-    const safeLimit = parseInt(limit) || 50;
+    const safeLimit = parseInt(limit) || 20;
     const safeOffset = parseInt(offset) || 0;
 
+    // Enhanced privacy-aware query
     const query = `
       SELECT 
         p.*,
@@ -344,26 +345,47 @@ export const getUserPostsModel = async (
         EXISTS(
           SELECT 1 FROM post_likes pl2 
           WHERE pl2.post_id = p.post_id AND pl2.user_id = ?
-        ) as has_liked
+        ) as has_liked,
+        -- Privacy check
+        CASE 
+          WHEN ? = ? THEN TRUE  -- Viewing own posts
+          WHEN p.visibility = 'public' THEN TRUE
+          WHEN p.visibility = 'connections' AND EXISTS(
+            SELECT 1 FROM connections c 
+            WHERE (
+              (c.requester_id = ? AND c.receiver_id = ?) OR
+              (c.requester_id = ? AND c.receiver_id = ?)
+            ) AND c.status = 'accepted'
+          ) THEN TRUE
+          ELSE FALSE
+        END as can_view
       FROM posts p
       LEFT JOIN post_likes pl ON p.post_id = pl.post_id
       LEFT JOIN post_comments pc ON p.post_id = pc.post_id AND pc.is_active = 1
       WHERE p.user_id = ? AND p.is_active = 1
         AND (p.expires_at IS NULL OR p.expires_at > NOW())
       GROUP BY p.post_id
+      HAVING can_view = TRUE  -- Only return posts the current user can view
       ORDER BY p.created_at DESC
       LIMIT ${safeLimit} OFFSET ${safeOffset}
     `;
 
     const [rows] = await db.execute(query, [
       currentUserId,
+      currentUserId,
       targetUserId,
-      limit,
-      offset,
+      currentUserId,
+      targetUserId,
+      targetUserId,
+      currentUserId,
+      targetUserId,
     ]);
+
     return rows;
   } catch (error) {
-    throw new Error(`Database error in getUserPosts: ${error.message}`);
+    throw new SocialModelError(
+      `Database error in getUserPosts: ${error.message}`
+    );
   }
 };
 
@@ -430,31 +452,49 @@ export const deleteCommentModel = async (commentId, userId) => {
 // Get user's liked posts
 export const getLikedPostsModel = async (userId, limit = 20, offset = 0) => {
   try {
+    const safeLimit = parseInt(limit) || 20;
+    const safeOffset = parseInt(offset) || 0;
+
     const query = `
       SELECT 
-        p.*,
+        p.post_id,
+        p.user_id,  
+        p.content,
+        p.media_url,  
+        p.media_type, 
+        p.visibility,  
+        p.created_at,  
+        p.expires_at,  
         u.first_name,
         u.last_name,
         u.profile_picture_url,
         u.profile_headline,
-        COUNT(DISTINCT pl.like_id) as like_count,
-        COUNT(DISTINCT pc.comment_id) as comment_count,
+        (
+          SELECT COUNT(*) 
+          FROM post_likes pl_count 
+          WHERE pl_count.post_id = p.post_id
+        ) as like_count,
+        (
+          SELECT COUNT(*) 
+          FROM post_comments pc_count 
+          WHERE pc_count.post_id = p.post_id AND pc_count.is_active = 1
+        ) as comment_count,
         pl.created_at as liked_at
       FROM post_likes pl
-      JOIN posts p ON pl.post_id = p.post_id
-      JOIN users u ON p.user_id = u.user_id
-      LEFT JOIN post_likes pl2 ON p.post_id = pl2.post_id
-      LEFT JOIN post_comments pc ON p.post_id = pc.post_id AND pc.is_active = 1
-      WHERE pl.user_id = ? AND p.is_active = 1
+      INNER JOIN posts p ON pl.post_id = p.post_id
+      INNER JOIN users u ON p.user_id = u.user_id
+      WHERE pl.user_id = ?  
+        AND p.is_active = 1
         AND (p.expires_at IS NULL OR p.expires_at > NOW())
-      GROUP BY p.post_id
       ORDER BY pl.created_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT ${safeLimit} OFFSET ${safeOffset}
     `;
 
-    const [rows] = await db.execute(query, [userId, limit, offset]);
+    // FIXED: Only pass userId as parameter, LIMIT/OFFSET are template literals
+    const [rows] = await db.execute(query, [userId]);
     return rows;
   } catch (error) {
+    console.error("Database error in getLikedPostsModel:", error);
     throw new Error(`Database error in getLikedPosts: ${error.message}`);
   }
 };

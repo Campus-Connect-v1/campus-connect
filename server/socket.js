@@ -21,7 +21,7 @@ export default function socketServer(httpServer) {
     const userId = socket.user?.id;
     if (userId) {
       onlineUsers.set(userId, socket.id);
-      console.log(`✅ User connected: ${userId} (${socket.id})`);
+      // console.log(`✅ User connected: ${userId} (${socket.id})`);
     }
 
     socket.on("send_message", async ({ receiverId, content }) => {
@@ -169,7 +169,7 @@ export default function socketServer(httpServer) {
 
     socket.on("disconnect", () => {
       if (userId) onlineUsers.delete(userId);
-      console.log(`❌ User disconnected: ${userId}`);
+      // console.log(`❌ User disconnected: ${userId}`);
     });
   });
 }

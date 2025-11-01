@@ -146,6 +146,23 @@ router.delete("/comments/:comment_id", deleteComment);
  *     tags: [Social]
  *     summary: Get user's liked posts
  */
-router.get("/posts/liked", getLikedPosts);
+router.get(
+  "/posts/user-likes/liked",
+  (req, res, next) => {
+    console.log("🎯 /social/posts/user/liked route hit successfully!");
+    console.log("👤 Authenticated user:", req.user);
+    next();
+  },
+  getLikedPosts
+);
 
+// Add this to your social.routes.js
+router.get("/test", (req, res) => {
+  console.log("✅ Social routes test endpoint hit");
+  res.json({
+    message: "Social routes working!",
+    user: req.user,
+    timestamp: new Date().toISOString(),
+  });
+});
 export default router;
