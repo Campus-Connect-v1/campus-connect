@@ -1,4 +1,3 @@
-"use client"
 
 import Colors from "@/src/constants/Colors"
 import { loginSchema, type LoginSchema } from "@/src/schemas/authSchemas"

@@ -1,4 +1,3 @@
-"use client";
 
 import Colors from "@/src/constants/Colors";
 import { z } from "zod";

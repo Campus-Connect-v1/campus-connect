@@ -261,9 +261,6 @@
 
 // export default MessagesScreen
 
-
-"use client"
-
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { Animated, View, Text, StatusBar, TouchableOpacity, ActivityIndicator, FlatList } from "react-native"
