@@ -5,7 +5,6 @@ import PostActionsModal from "./post-actions-modal";
 import { likePost, unlikePost, deletePost } from "@/src/services/authServices";
 import { mutate } from "swr";
 import { router } from "expo-router";
-import * as Haptics from "expo-haptics";
 
 interface PostSettings {
   allowComments: boolean;
@@ -46,13 +45,6 @@ export default function FeedCard({ post, onComment, onLike, isOwnPost, onPostDel
   const handleLike = async () => {
     const previousLiked = isLiked;
     const previousCount = likeCount;
-
-    // Trigger haptic feedback
-    if (!isLiked) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
 
     // Optimistic update
     setIsLiked(!isLiked);
@@ -107,7 +99,6 @@ export default function FeedCard({ post, onComment, onLike, isOwnPost, onPostDel
   };
 
   const handlePostPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push(`/feed/post-detail?postId=${post.id}`);
   };
 
@@ -131,14 +122,7 @@ export default function FeedCard({ post, onComment, onLike, isOwnPost, onPostDel
         </View>
 
         {/* Three-dots menu */}
-        <TouchableOpacity 
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setShowActionsModal(true);
-          }} 
-          className="p-2"
-          activeOpacity={0.7}
-        >
+        <TouchableOpacity onPress={() => setShowActionsModal(true)} className="p-2">
           <Ionicons name="ellipsis-horizontal" size={20} color="#6b7280" />
         </TouchableOpacity>
       </View>
@@ -162,7 +146,7 @@ export default function FeedCard({ post, onComment, onLike, isOwnPost, onPostDel
       {/* Actions */}
       <View className="flex-row items-center justify-between mt-2 px-1">
         {/* Like button */}
-        <TouchableOpacity onPress={handleLike} className="flex-row items-center" activeOpacity={0.7}>
+        <TouchableOpacity onPress={handleLike} className="flex-row items-center">
           <Ionicons name={isLiked ? "heart" : "heart-outline"} size={20} color={isLiked ? "#ef4444" : "#6b7280"} />
           <Text className={`ml-2 text-sm ${isLiked ? "text-red-500" : "text-gray-500"}`}>
             {likeCount}
@@ -174,7 +158,6 @@ export default function FeedCard({ post, onComment, onLike, isOwnPost, onPostDel
           onPress={handlePostPress}
           className={`flex-row items-center ${!post.settings.allowComments ? "opacity-50" : ""}`}
           disabled={!post.settings.allowComments}
-          activeOpacity={0.7}
         >
           <Ionicons name="chatbubble-outline" size={20} color="#6b7280" />
           <Text className="ml-2 text-sm text-gray-500">{post.stats.comments}</Text>
