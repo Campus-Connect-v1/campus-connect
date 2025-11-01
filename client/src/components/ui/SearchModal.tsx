@@ -17,7 +17,6 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
 } from "react-native-reanimated"
 import { BlurView } from "expo-blur"
 import * as Haptics from "expo-haptics"
@@ -51,7 +50,6 @@ const SearchModal: React.FC<SearchModalProps> = ({
 }) => {
   const router = useRouter()
   const inputRef = useRef<TextInput>(null)
-  const spinValue = useSharedValue(0)
   
   // Animation values
   const translateY = useSharedValue(height)
