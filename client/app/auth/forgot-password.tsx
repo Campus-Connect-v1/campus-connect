@@ -13,7 +13,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
- Alert } from "react-native";
+ } from "react-native";
 import { forgotSchema, ForgotSchema } from "@/src/schemas/authSchemas";
 import DropdownAlert from "@/src/components/ui/DropdownAlert";
 import { forgotPassword } from "@/src/services/authServices";

@@ -1,7 +1,6 @@
 "use client";
 
 import Colors from "@/src/constants/Colors";
-import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, Controller } from "react-hook-form";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -20,18 +19,7 @@ import Ionicons from "@expo/vector-icons/build/Ionicons";
 import { resetPassword } from "@/src/services/authServices";
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
 import DropdownAlert from "@/src/components/ui/DropdownAlert";
-
-const resetSchema = z
-  .object({
-    token: z.string().min(1, "Token/OTP is required"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
-type ResetSchema = z.infer<typeof resetSchema>;
+import { resetPasswordSchema, ResetPasswordSchema } from "@/src/schemas/authSchemas";
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
@@ -40,14 +28,14 @@ export default function ResetPasswordScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const { alert, hideAlert, success, error } = useDropdownAlert();
 
-  const { control, handleSubmit, formState: { errors } } = useForm<ResetSchema>({
-    resolver: zodResolver(resetSchema),
+  const { control, handleSubmit, formState: { errors } } = useForm<ResetPasswordSchema>({
+    resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
       token: (params.token as string) || "",
     },
   });
 
-  const onSubmit = async (data: ResetSchema) => {
+  const onSubmit = async (data: ResetPasswordSchema) => {
     setIsLoading(true);
     try {
       // confirmPassword is only for client-side validation, not sent to API
@@ -56,6 +44,7 @@ export default function ResetPasswordScreen() {
         token: data.token,
         confirmPassword: data.confirmPassword,
       });
+      console.log(result);
       if (result.success) {
         success("Success", "Password reset successful", 3000);
         setTimeout(() => {
@@ -68,7 +57,7 @@ export default function ResetPasswordScreen() {
             : result.error?.message || "Failed to reset password";
         error("Failed", errMsg, 3000);
       }
-    } catch (err) {
+    } catch {
       error("Error", "An unexpected error occurred", 3000);
     } finally {
       setIsLoading(false);
@@ -95,25 +84,6 @@ export default function ResetPasswordScreen() {
           <Text style={styles.subtitle}>
             Enter the OTP/token sent to your email and create a new password.
           </Text>
-
-          <Controller
-            control={control}
-            name="token"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                style={[styles.input, errors.token && styles.inputError]}
-                placeholder="OTP/Token"
-                placeholderTextColor={Colors.light.textSecondary}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                value={value}
-                autoCapitalize="none"
-              />
-            )}
-          />
-          {errors.token && (
-            <Text style={styles.errorText}>{errors.token.message}</Text>
-          )}
 
           <Controller
             control={control}
