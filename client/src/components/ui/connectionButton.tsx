@@ -3,6 +3,7 @@ import { TouchableOpacity, Text, View, ActivityIndicator } from "react-native"
 import { sendConnectionRequest, cancelConnectionRequest } from "@/src/services/authServices"
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert"
 import { Ionicons } from "@expo/vector-icons"
+import * as Haptics from "expo-haptics"
 
 interface ConnectionButtonProps {
   userId: string
@@ -33,10 +34,12 @@ const ConnectionButton: React.FC<ConnectionButtonProps> = ({
 
   const handleConnectionRequest = async () => {
     if (isRequesting) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setIsRequesting(true)
     try {
       const result = await sendConnectionRequest(userId)
       if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
         updateStatus("pending")
         success("uniCLIQ", "Connection request sent", 3000)
       } else {
@@ -51,6 +54,7 @@ const ConnectionButton: React.FC<ConnectionButtonProps> = ({
 
   const handleCancelRequest = async () => {
     if (isRequesting) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     setIsRequesting(true)
     try {
       const result = await cancelConnectionRequest(userId)
@@ -100,6 +104,7 @@ const ConnectionButton: React.FC<ConnectionButtonProps> = ({
       <TouchableOpacity
         onPress={config.onPress}
         disabled={isRequesting || connectionStatus === "connected"}
+        activeOpacity={0.7}
         style={{
           paddingVertical: 10,
           paddingHorizontal: 20,

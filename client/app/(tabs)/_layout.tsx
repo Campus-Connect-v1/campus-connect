@@ -4,16 +4,23 @@ import { router, Tabs } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Image, TouchableOpacity, View, Text } from 'react-native';
 import Colors from '@/src/constants/Colors';
+import * as Haptics from 'expo-haptics';
 
 
 const TabIcon = ({ focused, icon, title }: any) => {
   const indicatorAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(indicatorAnim, {
+    if (focused) {
+      // Trigger haptic feedback when tab becomes focused
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
+    Animated.spring(indicatorAnim, {
       toValue: focused ? 1 : 0,
-      duration: 300,
       useNativeDriver: false, // Using layout props (opacity, scaleX)
+      tension: 80,
+      friction: 8,
     }).start();
   }, [focused, indicatorAnim]);
 
@@ -60,6 +67,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
 
 const TabsLayout = () => {
   const handleProfilePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/(tabs)/profile');
   };
   return (
@@ -105,7 +113,7 @@ const TabsLayout = () => {
             color: '#fff',
           },
     headerRight: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="mr-4">
+      <TouchableOpacity onPress={handleProfilePress} className="mr-4" activeOpacity={0.7}>
         <Image
           source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
           className="w-10 h-10 rounded-full"
@@ -148,7 +156,7 @@ const TabsLayout = () => {
             <TabIcon focused={focused} icon={icons.chat} title='CHAT' />
           ),
            headerLeft: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
+      <TouchableOpacity onPress={handleProfilePress} className="ml-4" activeOpacity={0.7}>
         <Image
           source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
           className="w-10 h-10 rounded-full"
@@ -170,7 +178,7 @@ const TabsLayout = () => {
             <TabIcon focused={focused} icon={icons.person} title='CONNECTIONS' />
           ),
            headerLeft: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
+      <TouchableOpacity onPress={handleProfilePress} className="ml-4" activeOpacity={0.7}>
         <Image
           source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
           className="w-10 h-10 rounded-full"
@@ -192,7 +200,7 @@ const TabsLayout = () => {
             <TabIcon focused={focused} icon={icons.user} title='SEARCH' />
           ),
            headerLeft: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
+      <TouchableOpacity onPress={handleProfilePress} className="ml-4" activeOpacity={0.7}>
         <Image
           source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
           className="w-10 h-10 rounded-full"

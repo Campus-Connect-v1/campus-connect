@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import useSWR from 'swr';
 import { fetcher } from '@/src/utils/fetcher';
 
@@ -48,12 +49,16 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 
   React.useEffect(() => {
     if (isVisible) {
-      // Slide in animation
+      // Trigger haptic feedback on open
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      // Slide in animation with spring for natural feel
       Animated.parallel([
-        Animated.timing(slideAnim, {
+        Animated.spring(slideAnim, {
           toValue: 0,
-          duration: 300,
           useNativeDriver: true,
+          tension: 65,
+          friction: 9,
         }),
         Animated.timing(overlayOpacity, {
           toValue: 0.5,
@@ -64,10 +69,11 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     } else {
       // Slide out animation
       Animated.parallel([
-        Animated.timing(slideAnim, {
+        Animated.spring(slideAnim, {
           toValue: -300,
-          duration: 250,
           useNativeDriver: true,
+          tension: 80,
+          friction: 10,
         }),
         Animated.timing(overlayOpacity, {
           toValue: 0,
@@ -84,6 +90,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       title: 'Profile',
       icon: 'person-outline',
       onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         router.push('/(tabs)/profile');
          onClose();
       },
@@ -93,6 +100,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       title: 'Events',
       icon: 'calendar-outline',
       onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         router.push('/events/events-screen')
         onClose();
       },
@@ -102,6 +110,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       title: 'University',
       icon: 'school-outline',
       onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         router.push('/university/university-screen');
         onClose();
       },
@@ -111,6 +120,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       title: 'Contributions',
       icon: 'extension-puzzle-outline',
       onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onNavigate('Contributions');
         onClose();
       },
@@ -120,6 +130,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       title: 'Settings',
       icon: 'settings-outline',
       onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         // router.push('/(tabs)/settings');
         onClose();
       },
@@ -127,11 +138,13 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   ];
 
   const handleLogout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onClose();
     onLogout();
   };
 
   const handleOverlayPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onClose();
   };
 
@@ -168,7 +181,14 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
         <View className="pt-16 pb-8 px-4">
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center flex-1">
-              <TouchableOpacity onPress={() => router.push("/(tabs)/profile")} className="w-12 h-12 rounded-full overflow-hidden mr-3">
+              <TouchableOpacity 
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/(tabs)/profile");
+                }} 
+                className="w-12 h-12 rounded-full overflow-hidden mr-3"
+                activeOpacity={0.7}
+              >
                 <Image
                   source={{ uri: profile?.profile_picture_url }}
                   className="w-full h-full"
@@ -194,6 +214,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
               key={item.id}
               className="flex-row items-center px-6 py-4 active:bg-blue-800"
               onPress={item.onPress}
+              activeOpacity={0.7}
             >
               <Ionicons
                 name={item.icon}
@@ -214,6 +235,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
             className="rounded-full py-4 items-center"
             style={{backgroundColor: Colors.light.border}}
             onPress={handleLogout}
+            activeOpacity={0.7}
           >
             <Text style={{fontFamily: "Gilroy-Medium"}} className="text-black text-lg font-semibold">
               Log out
