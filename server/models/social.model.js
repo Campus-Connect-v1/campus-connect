@@ -244,8 +244,15 @@ export const addCommentModel = async (commentData) => {
 };
 
 // Get comments for a post
+// models/social.model.js - Fix getPostCommentsModel
+// models/social.model.js - Fixed version
 export const getPostCommentsModel = async (postId, limit = 50, offset = 0) => {
   try {
+    // Convert to integers and ensure they're safe
+    const safeLimit = parseInt(limit) || 50;
+    const safeOffset = parseInt(offset) || 0;
+
+    // Use template literals for LIMIT/OFFSET since they can't be parameterized
     const query = `
       SELECT 
         pc.*,
@@ -256,12 +263,13 @@ export const getPostCommentsModel = async (postId, limit = 50, offset = 0) => {
       JOIN users u ON pc.user_id = u.user_id
       WHERE pc.post_id = ? AND pc.is_active = 1
       ORDER BY pc.created_at ASC
-      LIMIT ? OFFSET ?
+      LIMIT ${safeLimit} OFFSET ${safeOffset}
     `;
 
-    const [rows] = await db.execute(query, [postId, limit, offset]);
+    const [rows] = await db.execute(query, [postId]);
     return rows;
   } catch (error) {
+    console.error("Database error in getPostComments:", error);
     throw new Error(`Database error in getPostComments: ${error.message}`);
   }
 };
@@ -284,5 +292,209 @@ export const deletePostModel = async (postId, userId) => {
     return { success: true };
   } catch (error) {
     throw new Error(`Database error in deletePost: ${error.message}`);
+  }
+};
+
+// Get post likes with user details
+export const getPostLikesModel = async (postId, limit = 50, offset = 0) => {
+  try {
+    const safeLimit = parseInt(limit) || 50;
+    const safeOffset = parseInt(offset) || 0;
+
+    // Use template literals for LIMIT/OFFSET in all funcs to avoid mysqld_stmt_execute err.
+    const query = `
+      SELECT 
+        pl.like_id,
+        pl.created_at,
+        u.user_id,
+        u.first_name,
+        u.last_name,
+        u.profile_picture_url,
+        u.profile_headline
+      FROM post_likes pl
+      JOIN users u ON pl.user_id = u.user_id
+      WHERE pl.post_id = ?
+      ORDER BY pl.created_at DESC
+      LIMIT ${safeLimit} OFFSET ${safeOffset}
+    `;
+
+    const [rows] = await db.execute(query, [postId]);
+    return rows;
+  } catch (error) {
+    throw new Error(`Database error in getPostLikes: ${error.message}`);
+  }
+};
+
+// Get user's posts
+export const getUserPostsModel = async (
+  targetUserId,
+  currentUserId,
+  limit = 20,
+  offset = 0
+) => {
+  try {
+    const safeLimit = parseInt(limit) || 20;
+    const safeOffset = parseInt(offset) || 0;
+
+    // Enhanced privacy-aware query
+    const query = `
+      SELECT 
+        p.*,
+        COUNT(DISTINCT pl.like_id) as like_count,
+        COUNT(DISTINCT pc.comment_id) as comment_count,
+        EXISTS(
+          SELECT 1 FROM post_likes pl2 
+          WHERE pl2.post_id = p.post_id AND pl2.user_id = ?
+        ) as has_liked,
+        -- Privacy check
+        CASE 
+          WHEN ? = ? THEN TRUE  -- Viewing own posts
+          WHEN p.visibility = 'public' THEN TRUE
+          WHEN p.visibility = 'connections' AND EXISTS(
+            SELECT 1 FROM connections c 
+            WHERE (
+              (c.requester_id = ? AND c.receiver_id = ?) OR
+              (c.requester_id = ? AND c.receiver_id = ?)
+            ) AND c.status = 'accepted'
+          ) THEN TRUE
+          ELSE FALSE
+        END as can_view
+      FROM posts p
+      LEFT JOIN post_likes pl ON p.post_id = pl.post_id
+      LEFT JOIN post_comments pc ON p.post_id = pc.post_id AND pc.is_active = 1
+      WHERE p.user_id = ? AND p.is_active = 1
+        AND (p.expires_at IS NULL OR p.expires_at > NOW())
+      GROUP BY p.post_id
+      HAVING can_view = TRUE  -- Only return posts the current user can view
+      ORDER BY p.created_at DESC
+      LIMIT ${safeLimit} OFFSET ${safeOffset}
+    `;
+
+    const [rows] = await db.execute(query, [
+      currentUserId,
+      currentUserId,
+      targetUserId,
+      currentUserId,
+      targetUserId,
+      targetUserId,
+      currentUserId,
+      targetUserId,
+    ]);
+
+    return rows;
+  } catch (error) {
+    throw new SocialModelError(
+      `Database error in getUserPosts: ${error.message}`
+    );
+  }
+};
+
+// Update post
+export const updatePostModel = async (postId, userId, updateData) => {
+  try {
+    const { content, media_url, media_type, visibility, expires_at } =
+      updateData;
+
+    const query = `
+      UPDATE posts 
+      SET content = ?, media_url = ?, media_type = ?, visibility = ?, 
+          expires_at = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE post_id = ? AND user_id = ? AND is_active = 1
+    `;
+
+    const [result] = await db.execute(query, [
+      content,
+      media_url,
+      media_type,
+      visibility,
+      expires_at,
+      postId,
+      userId,
+    ]);
+
+    if (result.affectedRows === 0) {
+      throw new Error("Post not found or access denied");
+    }
+
+    // Return updated post
+    const [updatedPost] = await db.execute(
+      "SELECT * FROM posts WHERE post_id = ?",
+      [postId]
+    );
+
+    return updatedPost[0];
+  } catch (error) {
+    throw new Error(`Database error in updatePost: ${error.message}`);
+  }
+};
+
+// Delete comment (soft delete)
+export const deleteCommentModel = async (commentId, userId) => {
+  try {
+    const query = `
+      UPDATE post_comments 
+      SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE comment_id = ? AND user_id = ?
+    `;
+
+    const [result] = await db.execute(query, [commentId, userId]);
+
+    if (result.affectedRows === 0) {
+      throw new Error("Comment not found or access denied");
+    }
+
+    return { success: true };
+  } catch (error) {
+    throw new Error(`Database error in deleteComment: ${error.message}`);
+  }
+};
+
+// Get user's liked posts
+export const getLikedPostsModel = async (userId, limit = 20, offset = 0) => {
+  try {
+    const safeLimit = parseInt(limit) || 20;
+    const safeOffset = parseInt(offset) || 0;
+
+    const query = `
+      SELECT 
+        p.post_id,
+        p.user_id,  
+        p.content,
+        p.media_url,  
+        p.media_type, 
+        p.visibility,  
+        p.created_at,  
+        p.expires_at,  
+        u.first_name,
+        u.last_name,
+        u.profile_picture_url,
+        u.profile_headline,
+        (
+          SELECT COUNT(*) 
+          FROM post_likes pl_count 
+          WHERE pl_count.post_id = p.post_id
+        ) as like_count,
+        (
+          SELECT COUNT(*) 
+          FROM post_comments pc_count 
+          WHERE pc_count.post_id = p.post_id AND pc_count.is_active = 1
+        ) as comment_count,
+        pl.created_at as liked_at
+      FROM post_likes pl
+      INNER JOIN posts p ON pl.post_id = p.post_id
+      INNER JOIN users u ON p.user_id = u.user_id
+      WHERE pl.user_id = ?  
+        AND p.is_active = 1
+        AND (p.expires_at IS NULL OR p.expires_at > NOW())
+      ORDER BY pl.created_at DESC
+      LIMIT ${safeLimit} OFFSET ${safeOffset}
+    `;
+
+    // FIXED: Only pass userId as parameter, LIMIT/OFFSET are template literals
+    const [rows] = await db.execute(query, [userId]);
+    return rows;
+  } catch (error) {
+    console.error("Database error in getLikedPostsModel:", error);
+    throw new Error(`Database error in getLikedPosts: ${error.message}`);
   }
 };

@@ -646,4 +646,37 @@ router.post("/debug/set-test-location", async (req, res) => {
   }
 });
 
+// Add to debug locationRoutes.js temporarily
+router.get("/debug/my-location-data", async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get ALL location data for this user (no time filter)
+    const allLocations = await UserLocation.find({
+      user_id: userId,
+    }).sort({ last_updated: -1 });
+
+    // Get the most recent location
+    const currentLocation = await UserLocation.findOne({
+      user_id: userId,
+      is_active: true,
+    });
+
+    res.json({
+      user_id: userId,
+      total_locations: allLocations.length,
+      current_location: currentLocation,
+      all_locations: allLocations.map((loc) => ({
+        coordinates: loc.location?.coordinates,
+        last_updated: loc.last_updated,
+        is_active: loc.is_active,
+        accuracy: loc.accuracy,
+      })),
+      query_time: new Date(),
+    });
+  } catch (error) {
+    console.error("Debug location data error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 export default router;
