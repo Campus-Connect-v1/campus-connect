@@ -98,6 +98,15 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       },
     },
     {
+      id: 'study-groups',
+      title: 'Study Groups',
+      icon: 'people-outline',
+      onPress: () => {
+        router.push('/study-groups/study-groups-screen');
+        onClose();
+      },
+    },
+    {
       id: 'university',
       title: 'University',
       icon: 'school-outline',
