@@ -187,6 +187,14 @@ export default function ConnectionsMapScreen() {
       >
         <Text style={{ color: "#fff",  fontFamily: "Gilroy-Medium" }}>{mapType}</Text>
       </TouchableOpacity>
+
+      {/* Geofencing Settings button */}
+      <TouchableOpacity
+        style={styles.settingsBtn}
+        onPress={() => router.push("/geofencing/settings")}
+      >
+        <Ionicons name="settings-outline" size={24} color="#000" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -216,6 +224,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
 
+  },
+  settingsBtn: {
+    position: "absolute",
+    top: 80,
+    left: 24,
+    backgroundColor: "#fff",
+    borderRadius: 50,
+    padding: 10,
+    elevation: 6,
   },
   calloutName: {
     fontWeight: "700",
