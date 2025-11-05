@@ -8,6 +8,10 @@ import {
   addCommentModel,
   getPostCommentsModel,
   deletePostModel,
+  getPostLikesModel,
+  getLikedPostsModel,
+  getUserPostsModel,
+  deleteCommentModel,
 } from "../models/social.model.js";
 
 // Create a new post
@@ -266,10 +270,13 @@ export const addComment = async (req, res) => {
 };
 
 // Get post comments
+// controllers/social.controller.js - Fix getPostComments
 export const getPostComments = async (req, res) => {
   try {
     const { post_id } = req.params;
     const { limit = 50, offset = 0 } = req.query;
+
+    console.log("getPostComments params:", { post_id, limit, offset });
 
     const comments = await getPostCommentsModel(
       post_id,
@@ -324,6 +331,213 @@ export const deletePost = async (req, res) => {
 
     res.status(500).json({
       message: "Failed to delete post",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Get post likes with user details
+export const getPostLikes = async (req, res) => {
+  try {
+    const { post_id } = req.params;
+    const { limit = 50, offset = 0 } = req.query;
+
+    const likes = await getPostLikesModel(
+      post_id,
+      parseInt(limit),
+      parseInt(offset)
+    );
+
+    res.status(200).json({
+      message: "Likes retrieved successfully",
+      count: likes.length,
+      likes: likes.map((like) => ({
+        like_id: like.like_id,
+        created_at: like.created_at,
+        user: {
+          user_id: like.user_id,
+          first_name: like.first_name,
+          last_name: like.last_name,
+          profile_picture_url: like.profile_picture_url,
+          profile_headline: like.profile_headline,
+        },
+      })),
+    });
+  } catch (error) {
+    console.error("Get likes error:", error);
+    res.status(500).json({
+      message: "Failed to retrieve likes",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Get user's posts
+export const getUserPosts = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { user_id } = req.params;
+    const { limit = 20, offset = 0 } = req.query;
+
+    // Users can only view their own posts or posts from their connections
+    const targetUserId = user_id || userId;
+
+    const posts = await getUserPostsModel(
+      targetUserId,
+      userId,
+      parseInt(limit),
+      parseInt(offset)
+    );
+
+    res.status(200).json({
+      message: "User posts retrieved successfully",
+      count: posts.length,
+      posts: posts.map((post) => ({
+        post_id: post.post_id,
+        content: post.content,
+        media_url: post.media_url,
+        media_type: post.media_type,
+        visibility: post.visibility,
+        created_at: post.created_at,
+        expires_at: post.expires_at,
+        stats: {
+          like_count: parseInt(post.like_count),
+          comment_count: parseInt(post.comment_count),
+        },
+        user_actions: {
+          has_liked: Boolean(post.has_liked),
+        },
+      })),
+    });
+  } catch (error) {
+    console.error("Get user posts error:", error);
+    res.status(500).json({
+      message: "Failed to retrieve user posts",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Update post
+export const updatePost = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { post_id } = req.params;
+    const { content, media_url, media_type, visibility, expires_at } = req.body;
+
+    if (!content && !media_url) {
+      return res.status(400).json({
+        message: "Either content or media_url is required",
+      });
+    }
+
+    const updateData = {
+      content,
+      media_url,
+      media_type,
+      visibility,
+      expires_at,
+    };
+
+    const post = await updatePostModel(post_id, userId, updateData);
+
+    res.status(200).json({
+      message: "Post updated successfully",
+      post: {
+        post_id: post.post_id,
+        content: post.content,
+        media_url: post.media_url,
+        media_type: post.media_type,
+        visibility: post.visibility,
+        expires_at: post.expires_at,
+        updated_at: post.updated_at,
+      },
+    });
+  } catch (error) {
+    console.error("Update post error:", error);
+
+    if (error.message.includes("not found")) {
+      return res.status(404).json({
+        message: "Post not found or access denied",
+      });
+    }
+
+    res.status(500).json({
+      message: "Failed to update post",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Delete comment
+export const deleteComment = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { comment_id } = req.params;
+
+    await deleteCommentModel(comment_id, userId);
+
+    res.status(200).json({
+      message: "Comment deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete comment error:", error);
+
+    if (error.message.includes("not found")) {
+      return res.status(404).json({
+        message: "Comment not found or access denied",
+      });
+    }
+
+    res.status(500).json({
+      message: "Failed to delete comment",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Get user's liked posts
+export const getLikedPosts = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 20, offset = 0 } = req.query;
+
+    const posts = await getLikedPostsModel(
+      userId,
+      parseInt(limit),
+      parseInt(offset)
+    );
+    console.log(`🎯 Controller - Posts returned from model:`, posts.length);
+
+    res.status(200).json({
+      message: "Liked posts retrieved successfully",
+      count: posts.length,
+      posts: posts.map((post) => ({
+        post_id: post.post_id,
+        content: post.content,
+        media_url: post.media_url,
+        media_type: post.media_type,
+        visibility: post.visibility,
+        created_at: post.created_at,
+        expires_at: post.expires_at,
+        author: {
+          user_id: post.user_id,
+          first_name: post.first_name,
+          last_name: post.last_name,
+          profile_picture_url: post.profile_picture_url,
+          profile_headline: post.profile_headline,
+        },
+        stats: {
+          like_count: parseInt(post.like_count),
+          comment_count: parseInt(post.comment_count),
+        },
+        liked_at: post.liked_at,
+      })),
+    });
+  } catch (error) {
+    console.error("Get liked posts error:", error);
+    res.status(500).json({
+      message: "Failed to retrieve liked posts",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
