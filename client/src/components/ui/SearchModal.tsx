@@ -12,12 +12,6 @@ import {
   Platform,
   Dimensions,
 } from "react-native"
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated"
 import { BlurView } from "expo-blur"
 import * as Haptics from "expo-haptics"
 import { Image } from "expo-image"
@@ -50,36 +44,17 @@ const SearchModal: React.FC<SearchModalProps> = ({
 }) => {
   const router = useRouter()
   const inputRef = useRef<TextInput>(null)
-  
-  // Animation values
-  const translateY = useSharedValue(height)
-  const opacity = useSharedValue(0)
 
-  // Handle modal open/close with animations
+  // Handle modal open with haptics
   useEffect(() => {
     if (visible) {
       // Trigger light haptic feedback when opening
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       
-      // Animate modal in
-      opacity.value = withTiming(1, { duration: 250 })
-      translateY.value = withSpring(0, {
-        damping: 20,
-        stiffness: 90,
-        mass: 0.5,
-      })
-      
       // Auto-focus keyboard after a short delay
       setTimeout(() => {
         inputRef.current?.focus()
       }, 300)
-    } else {
-      // Animate modal out
-      opacity.value = withTiming(0, { duration: 200 })
-      translateY.value = withSpring(height, {
-        damping: 20,
-        stiffness: 100,
-      })
     }
   }, [visible])
 
@@ -111,15 +86,6 @@ const SearchModal: React.FC<SearchModalProps> = ({
       })
     }, 100)
   }, [router, handleClose])
-
-  // Animated styles
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }))
-
-  const modalStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }))
 
   const renderUserItem = useCallback(({ item }: { item: any }) => (
     <TouchableOpacity
@@ -159,7 +125,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
     <Modal
       visible={visible}
       transparent
-      animationType="none"
+      animationType="slide"
       onRequestClose={handleClose}
       statusBarTranslucent
     >
@@ -167,8 +133,8 @@ const SearchModal: React.FC<SearchModalProps> = ({
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        {/* Animated frosted glass backdrop */}
-        <Animated.View style={[{ flex: 1 }, backdropStyle]}>
+        {/* Frosted glass backdrop */}
+        <View style={{ flex: 1 }}>
           <BlurView 
             intensity={50} 
             tint="dark"
@@ -181,21 +147,18 @@ const SearchModal: React.FC<SearchModalProps> = ({
             >
               {/* Modal content - Prevent touches from closing modal */}
               <TouchableOpacity activeOpacity={1}>
-                <Animated.View 
-                  style={[
-                    {
-                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                      borderTopLeftRadius: 32,
-                      borderTopRightRadius: 32,
-                      maxHeight: height * 0.85,
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: -4 },
-                      shadowOpacity: 0.15,
-                      shadowRadius: 12,
-                      elevation: 10,
-                    },
-                    modalStyle
-                  ]}
+                <View 
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                    borderTopLeftRadius: 32,
+                    borderTopRightRadius: 32,
+                    maxHeight: height * 0.85,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: -4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 12,
+                    elevation: 10,
+                  }}
                 >
                   {/* Handle Bar */}
                   <View className="items-center pt-3 pb-2">
@@ -303,11 +266,11 @@ const SearchModal: React.FC<SearchModalProps> = ({
                       </Text>
                     </View>
                   )}
-                </Animated.View>
+                </View>
               </TouchableOpacity>
             </TouchableOpacity>
           </BlurView>
-        </Animated.View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   )
