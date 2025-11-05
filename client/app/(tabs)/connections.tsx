@@ -1,7 +1,7 @@
 
 
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, ActivityIndicator, Alert, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, Alert, StyleSheet, TouchableOpacity } from "react-native";
 import MapView, { Marker, Callout } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -10,87 +10,23 @@ import { MapMarkerCallout, CustomMapMarker, CustomBuildingMarker, BuildingMarker
 import { useMapBuildings, Building } from "@/src/services/universityServices";
 import { storage } from "@/src/utils/storage";
 import { router } from "expo-router";
-import { DEFAULT_UNIVERSITY_ID } from "@/src/constants/app";
-
-
-// Fetcher for SWR
+import Loader from "@/src/components/ui/loader";
 
 
 export default function ConnectionsMapScreen() {
   const mapRef = useRef<MapView>(null);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapType, setMapType] = useState<"standard" | "satellite" | "terrain" | "hybrid">("standard");
-  const [isSharing, setIsSharing] = useState(false);
+  const [ setIsSharing] = useState(false);
   const [universityId, setUniversityId] = useState<string | null>(null);
   const radius = 500; // meters
   const lastSharedRef = useRef<number | null>(null);
 
-  const { nearbyUsers, isLoading, isError: error, refetchNearby: mutate } = useNearbyUsers(userLocation ? radius : 0);
-  const { buildings, isLoading: buildingsLoading, isError: buildingsError } = useMapBuildings(universityId);
-  
-  console.log("Nearby users data:", nearbyUsers);
-  console.log("Buildings data:", buildings);
+  const { nearbyUsers, isError: error, refetchNearby: mutate } = useNearbyUsers(userLocation ? radius : 0);
+  const { buildings } = useMapBuildings(universityId);
 
-  // useEffect(() => {
-  //   (async () => {
-  //     const { status } = await Location.requestForegroundPermissionsAsync();
-  //     if (status !== "granted") {
-  //       Alert.alert("Permission denied", "We need location access to find connections near you.");
-  //       return;
-  //     }
+  console.log("Nearby users:", nearbyUsers);
 
-  //     const location = await Location.getCurrentPositionAsync({});
-  //     const { latitude, longitude, accuracy } = location.coords;
-  //     setUserLocation({ latitude, longitude });
-
-  //     try {
-  //       setIsSharing(true);
-  //       await shareLocation();
-  //       console.log("✅ Location shared successfully");
-  //       mutate(); // trigger re-fetch of nearby users
-  //     } catch (err) {
-  //       console.error("❌ Error sharing location:", err);
-  //     } finally {
-  //       setIsSharing(false);
-  //     }
-  //   })();
-  // }, []);
-
-//   useEffect(() => {
-//   let didShare = false;
-
-//   (async () => {
-//     if (didShare) return;
-//     didShare = true;
-
-//     const { status } = await Location.requestForegroundPermissionsAsync();
-//     if (status !== "granted") {
-//       Alert.alert("Permission denied", "We need location access to find connections near you.");
-//       return;
-//     }
-
-//     const location = await Location.getCurrentPositionAsync({});
-//     const { latitude, longitude } = location.coords;
-//     setUserLocation({ latitude, longitude });
-
-//     try {
-//       setIsSharing(true);
-//       await shareLocation();
-//       console.log("✅ Location shared successfully");
-//       mutate(); // re-fetch nearby users
-//     } catch (err: any) {
-//       if (err.response?.status === 429) {
-//         console.warn("🚦 Rate limited: too many location updates, will retry later.");
-//       } else {
-//         console.error("❌ Error sharing location:", err.message);
-//       }
-//     } finally {
-//       setIsSharing(false);
-//     }
-//   })();
-// }, []);
-
-// Fetch university ID
   useEffect(() => {
     const loadUniversityId = async () => {
       const userData = await storage.getUserData();
@@ -137,22 +73,11 @@ export default function ConnectionsMapScreen() {
   })();
 }, []);
 
-
-
   if (!userLocation) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007aff" />
-        <Text>Getting your location...</Text>
-      </View>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007aff" />
-        <Text>Finding nearby connections...</Text>
+        <Loader/>
+        <Text className="font-[Gilroy-Medium] text-md">Getting your location...</Text>
       </View>
     );
   }
@@ -160,7 +85,7 @@ export default function ConnectionsMapScreen() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text>Something went wrong fetching nearby users 😕</Text>
+        <Text className="font-[Gilroy-Medium] text-md">Something went wrong fetching nearby users 😕</Text>
       </View>
     );
   }
@@ -180,41 +105,9 @@ export default function ConnectionsMapScreen() {
         showsUserLocation
       >
         {/* Markers for nearby users */}
-        {/* {nearbyUsers?.map((user: any, index: number) => (
-          <Marker
-            key={index}
-            coordinate={{
-              latitude: user.latitude || '5.607736227139973',
-              longitude: user.longitude || '-0.06446675791529029',
-            }}
-            title={user.display_name}
-            description={user.status_message || "Available nearby"}
-          >
-            <Ionicons name="person-circle" size={32} color="#007aff" />
-            <Callout>
-              <View style={{ width: 200 }}>
-                <Text style={styles.calloutName}>{user.display_name}</Text>
-                <Text style={styles.calloutDesc}>
-                  {user.bio || "Same community"}
-                </Text>
-                <TouchableOpacity
-                  style={styles.connectBtn}
-                  onPress={() => Alert.alert("Connect", `Send request to ${user.name}?`)}
-                >
-                  <Text style={styles.connectText}>Connect</Text>
-                </TouchableOpacity>
-              </View>
-            </Callout>
-          </Marker>
-        ))} */}
         {nearbyUsers?.map((user: any, index: number) => {
-  const lat = user.latitude;
-  const lng = user.longitude;
-
-  console.log(`User ${user.display_name} coordinates:`, { lat, lng });
-  // const lat = user.latitude || 5.607736227139973;
-  // const lng = user.longitude || -0.06446675791529029;
-  
+          const lat = user.latitude;
+          const lng = user.longitude;
 
   return (
     <Marker
@@ -280,7 +173,7 @@ export default function ConnectionsMapScreen() {
           })
         }
       >
-        <Ionicons name="locate-outline" size={24} color="#000" />
+        <Ionicons name="locate" size={24} color="#003554" />
       </TouchableOpacity>
 
       {/* Map type switch */}
@@ -292,7 +185,7 @@ export default function ConnectionsMapScreen() {
           setMapType(next);
         }}
       >
-        <Text style={{ color: "#fff" }}>{mapType}</Text>
+        <Text style={{ color: "#fff",  fontFamily: "Gilroy-Medium" }}>{mapType}</Text>
       </TouchableOpacity>
 
       {/* Geofencing Settings button */}
@@ -315,7 +208,7 @@ const styles = StyleSheet.create({
   },
   recenterBtn: {
     position: "absolute",
-    bottom: 120,
+    bottom: 40,
     right: 24,
     backgroundColor: "#fff",
     borderRadius: 50,
@@ -326,10 +219,11 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 80,
     right: 24,
-    backgroundColor: "#007aff",
+    backgroundColor: "#003554",
     borderRadius: 20,
-    paddingVertical: 6,
+    paddingVertical: 10,
     paddingHorizontal: 14,
+
   },
   settingsBtn: {
     position: "absolute",
@@ -349,6 +243,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#555",
     marginBottom: 8,
+     fontFamily: "Gilroy-Medium",
   },
   connectBtn: {
     backgroundColor: "#007aff",
@@ -359,5 +254,6 @@ const styles = StyleSheet.create({
   connectText: {
     color: "#fff",
     fontWeight: "600",
+     fontFamily: "Gilroy-Medium",
   },
 });

@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import DropdownAlert from "@/src/components/ui/DropdownAlert";
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
+import { sendConnectionRequest, cancelConnectionRequest } from "@/src/services/authServices";
 
 
 const { width } = Dimensions.get("window");
@@ -92,7 +93,7 @@ const UserProfileScreen: React.FC = () => {
       const supported = await Linking.canOpenURL(url);
       if (supported) await Linking.openURL(url);
       else toast("uniCLIQ", "Can't open this link", 2500);
-    } catch (e) {
+    } catch {
       toast("uniCLIQ", "Failed to open link", 2500);
     }
   };
@@ -112,7 +113,7 @@ const UserProfileScreen: React.FC = () => {
     setIsRequesting(true);
     try {
       // call your service here; demonstration only:
-      // const result = await sendConnectionRequest(user.user_id)
+      const result = await sendConnectionRequest(user.user_id)
       success("uniCLIQ", "Connection request sent", 2000);
       setConnectionStatus("pending");
     } finally {
@@ -122,7 +123,7 @@ const UserProfileScreen: React.FC = () => {
   const handleCancelRequest = async () => {
     setIsRequesting(true);
     try {
-      // const result = await cancelConnectionRequest(user.user_id)
+      const result = await cancelConnectionRequest(user.user_id)
       setConnectionStatus("none");
     } finally {
       setIsRequesting(false);

@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, ImageBackground } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { BlurView } from "expo-blur"
 import { router } from "expo-router"
-
 import FeedScreen from "../feed/feed-screen"
 import FloatingAddButton from "@/src/components/ui/floating-add-button"
 
@@ -42,8 +41,6 @@ const styles = StyleSheet.create({
 
   },
   contentContainer: {
-  
-
   }
 })
 

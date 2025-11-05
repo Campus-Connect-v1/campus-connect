@@ -15,8 +15,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import useSWR from 'swr';
 import { fetcher } from '@/src/utils/fetcher';
 import { studyGroupApi, GroupMember, StudyGroup } from '@/src/services/studyGroupServices';
+import { useDropdownAlert } from '@/src/hooks/useDropdownAlert';
+import DropdownAlert from '@/src/components/ui/DropdownAlert';
+import Loader from '@/src/components/ui/loader';
+
 
 const GroupDetailScreen: React.FC = () => {
+  const { alert, hideAlert, success, error } = useDropdownAlert();
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const [isJoining, setIsJoining] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -56,11 +61,11 @@ const GroupDetailScreen: React.FC = () => {
             setIsJoining(false);
 
             if (result.success) {
-              Alert.alert('Success', 'You have joined the study group!');
+              success('Success', 'You have joined the study group!', 4000);
               mutateGroup();
               mutateMembers();
             } else {
-              Alert.alert('Error', result.error?.message || 'Failed to join study group');
+              error('Error', result.error?.message || 'Failed to join study group', 4000);
             }
           },
         },
@@ -85,10 +90,14 @@ const GroupDetailScreen: React.FC = () => {
             setIsLeaving(false);
 
             if (result.success) {
-              Alert.alert('Success', 'You have left the study group');
+              setTimeout(() => {
+                success('Success', 'You have left the study group.', 2000);
+              }, 2000);
               router.back();
             } else {
-              Alert.alert('Error', result.error?.message || 'Failed to leave study group');
+              setTimeout(() => {
+                error('Error', result.error?.message || 'Failed to leave study group', 4000);
+              }, 2000);
             }
           },
         },
@@ -99,7 +108,7 @@ const GroupDetailScreen: React.FC = () => {
   if (groupLoading) {
     return (
       <SafeAreaView className="flex-1 bg-white items-center justify-center">
-        <ActivityIndicator size="large" color="#3b82f6" />
+        <Loader />
         <Text style={{ fontFamily: 'Gilroy-Regular' }} className="mt-4 text-gray-500">
           Loading group details...
         </Text>
@@ -176,6 +185,13 @@ const GroupDetailScreen: React.FC = () => {
       </View>
 
       <ScrollView className="flex-1">
+           <DropdownAlert
+                      visible={alert.visible}
+                      type={alert.type}
+                      title={alert.title}
+                      message={alert.message}
+                      onDismiss={hideAlert}
+                    />
         {/* Group Info Card */}
         <View className="bg-white m-4 rounded-2xl shadow-sm border border-gray-100 p-4">
           <View className="flex-row items-start justify-between mb-3">

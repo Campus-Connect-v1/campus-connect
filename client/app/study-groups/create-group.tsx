@@ -3,7 +3,6 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import useSWR from 'swr';
 import { fetcher } from '@/src/utils/fetcher';
 import { studyGroupApi } from '@/src/services/studyGroupServices';
+import { useDropdownAlert } from '@/src/hooks/useDropdownAlert';
+import DropdownAlert from '@/src/components/ui/DropdownAlert';
 
 interface FormData {
   group_name: string;
@@ -28,6 +29,7 @@ interface FormData {
 }
 
 const CreateGroupScreen: React.FC = () => {
+   const { alert, hideAlert, success, error } = useDropdownAlert();
   const [formData, setFormData] = useState<FormData>({
     group_name: '',
     description: '',
@@ -43,18 +45,18 @@ const CreateGroupScreen: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!formData.group_name.trim()) {
-      Alert.alert('Error', 'Please enter a group name');
+      error('Error', 'Please enter a group name', 4000);
       return;
     }
 
     if (!userProfile?.university_id) {
-      Alert.alert('Error', 'University information not found');
+      error("Error",'University information not found', 4000);
       return;
     }
 
     const maxMembers = parseInt(formData.max_members);
     if (isNaN(maxMembers) || maxMembers < 2) {
-      Alert.alert('Error', 'Max members must be at least 2');
+      error('Error', 'Max members must be at least 2', 4000);
       return;
     }
 
@@ -73,18 +75,12 @@ const CreateGroupScreen: React.FC = () => {
     setIsSubmitting(false);
 
     if (result.success) {
-      Alert.alert(
-        'Success',
-        'Study group created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
-      );
+      setTimeout(() => {
+        success('Success', 'Study group created successfully!', 2000);
+      }, 2000);
+      router.back();
     } else {
-      Alert.alert('Error', result.error?.message || 'Failed to create study group');
+      error('Error', result.error?.message || 'Failed to create study group', 4000);
     }
   };
 
@@ -107,6 +103,13 @@ const CreateGroupScreen: React.FC = () => {
         className="flex-1"
       >
         <ScrollView className="flex-1 px-4 py-6">
+             <DropdownAlert
+              visible={alert.visible}
+              type={alert.type}
+              title={alert.title}
+              message={alert.message}
+              onDismiss={hideAlert}
+            />
           {/* Group Name */}
           <View className="mb-4">
             <Text style={{ fontFamily: 'Gilroy-SemiBold' }} className="text-gray-900 mb-2">

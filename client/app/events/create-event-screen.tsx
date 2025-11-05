@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    SafeAreaView,
     ScrollView,
     StatusBar,
     Text,
@@ -10,6 +9,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface CreateEventScreenProps {
   navigation?: any;
@@ -19,9 +19,9 @@ const CreateEventScreen: React.FC<CreateEventScreenProps> = ({ navigation }) => 
   const [eventName, setEventName] = useState('');
   const [eventTitle, setEventTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [meetingPlatform, setMeetingPlatform] = useState('');
+  // const [date, setDate] = useState('');
+  // const [time, setTime] = useState('');
+  // const [meetingPlatform, setMeetingPlatform] = useState('');
 
   return (
     <SafeAreaView className="flex-1 bg-white">
