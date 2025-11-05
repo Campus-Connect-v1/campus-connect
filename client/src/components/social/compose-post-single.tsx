@@ -12,8 +12,11 @@ import {
   TouchableOpacity,
   View,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import PrivacySettingsModal from '../ui/privacy-settings-modal';
+import { createPost } from '@/src/services/authServices';
+import { mutate } from 'swr';
 
 interface ComposePostSingleProps {
   navigation?: any;
@@ -23,11 +26,13 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
   const [caption, setCaption] = useState('');
   const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
   
   // Privacy settings
   const [hideViewCount, setHideViewCount] = useState(false);
   const [hideLikeCount, setHideLikeCount] = useState(false);
   const [turnOffComments, setTurnOffComments] = useState(false);
+  const [visibility, setVisibility] = useState<'public' | 'connections' | 'private'>('connections');
 
   const handleSelectFromLibrary = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -72,18 +77,48 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
     setSelectedMedia(null);
   };
 
-  const handleShare = () => {
-    // TODO: Implement actual post creation
-    console.log('Sharing post:', {
-      caption,
-      media: selectedMedia,
-      privacy: {
-        hideViewCount,
-        hideLikeCount,
-        turnOffComments,
-      },
-    });
-    router.back();
+  const handleShare = async () => {
+    if (!caption && !selectedMedia) {
+      Alert.alert('Error', 'Please add content or media to your post');
+      return;
+    }
+
+    setIsPosting(true);
+    try {
+      // Prepare only the required fields for the backend
+      const postData: {
+        content: string;
+        media_url?: string;
+        media_type?: "text" | "image" | "video";
+        visibility: "public" | "connections" | "private";
+        expires_at?: string;
+      } = {
+        content: caption,
+        visibility: visibility,
+      };
+
+      // Add media info if available
+      if (selectedMedia) {
+        postData.media_url = selectedMedia;
+        postData.media_type = 'image'; // Determine type based on selection
+      }
+
+      // Create the post
+      const result = await createPost(postData);
+
+      if (result.success) {
+        Alert.alert('Success', 'Post created successfully');
+        // Refresh the feed
+        mutate('/social/posts/feed');
+        router.back();
+      } else {
+        Alert.alert('Error', result.error?.message || 'Failed to create post');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to create post');
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   return (
@@ -100,14 +135,18 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
         </Text>
         <TouchableOpacity 
           onPress={handleShare}
-          disabled={!caption && !selectedMedia}
+          disabled={(!caption && !selectedMedia) || isPosting}
         >
-          <Text 
-            style={{fontFamily: 'Gilroy-SemiBold'}} 
-            className={`text-base font-semibold ${caption || selectedMedia ? 'text-blue-600' : 'text-gray-400'}`}
-          >
-            Share
-          </Text>
+          {isPosting ? (
+            <ActivityIndicator size="small" color="#3b82f6" />
+          ) : (
+            <Text 
+              style={{fontFamily: 'Gilroy-SemiBold'}} 
+              className={`text-base font-semibold ${caption || selectedMedia ? 'text-blue-600' : 'text-gray-400'}`}
+            >
+              Share
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
 

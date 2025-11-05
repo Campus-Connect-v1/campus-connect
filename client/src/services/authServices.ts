@@ -229,6 +229,22 @@ export async function getPostById(postId: string) {
   }
 }
 
+// POST /api/social/posts - Create a new post
+export async function createPost(data: {
+  content: string;
+  media_url?: string;
+  media_type?: "text" | "image" | "video";
+  visibility?: "public" | "connections" | "private";
+  expires_at?: string;
+}) {
+  try {
+    const response = await api.post(`/social/posts`, data);
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data || error.message };
+  }
+}
+
 // DELETE /api/social/posts/:post_id
 export async function deletePost(postId: string) {
   try {
