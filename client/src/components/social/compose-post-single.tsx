@@ -100,7 +100,13 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
       // Add media info if available
       if (selectedMedia) {
         postData.media_url = selectedMedia;
-        postData.media_type = 'image'; // Determine type based on selection
+        // Determine media type based on file extension
+        const extension = selectedMedia.toLowerCase().split('.').pop();
+        if (extension && ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(extension)) {
+          postData.media_type = 'video';
+        } else {
+          postData.media_type = 'image';
+        }
       }
 
       // Create the post

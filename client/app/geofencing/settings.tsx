@@ -68,7 +68,20 @@ const GeofencingSettingsScreen: React.FC<GeofencingSettingsScreenProps> = ({ nav
         // Parse visible_fields if it's a string
         let visibleFields = loadedSettings.visible_fields;
         if (typeof visibleFields === 'string') {
-          visibleFields = JSON.parse(visibleFields);
+          try {
+            visibleFields = JSON.parse(visibleFields);
+          } catch (parseError) {
+            console.error('Error parsing visible_fields:', parseError);
+            // Use default values if parsing fails
+            visibleFields = {
+              name: true,
+              photo: true,
+              bio: true,
+              program: true,
+              courses: false,
+              contact: false,
+            };
+          }
         }
         
         setSettings({
