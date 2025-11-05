@@ -36,7 +36,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 const UserProfileScreen: React.FC = () => {
   const { alert, hideAlert, success, error: toast } = useDropdownAlert();
   const { data, error, isLoading, mutate } = useSWR<any>("/user/profile", fetcher);
-  const { data: studyGroupsData } = useSWR<any>("/study-group/user", fetcher);
+  const { data: studyGroupsData } = useSWR<{ data: StudyGroup[] }>("/study-group/user", fetcher);
 
   const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
 

@@ -38,7 +38,7 @@ const CreateGroupScreen: React.FC = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: profileData } = useSWR<any>('/user/profile', fetcher);
+  const { data: profileData } = useSWR<{ user: { university_id: string } }>('/user/profile', fetcher);
   const userProfile = profileData?.user;
 
   const handleSubmit = async () => {

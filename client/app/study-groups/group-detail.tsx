@@ -21,17 +21,17 @@ const GroupDetailScreen: React.FC = () => {
   const [isJoining, setIsJoining] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
-  const { data: groupData, error: groupError, isLoading: groupLoading, mutate: mutateGroup } = useSWR<any>(
+  const { data: groupData, error: groupError, isLoading: groupLoading, mutate: mutateGroup } = useSWR<{ data: StudyGroup }>(
     groupId ? `/study-group/${groupId}` : null,
     fetcher
   );
 
-  const { data: membersData, isLoading: membersLoading, mutate: mutateMembers } = useSWR<any>(
+  const { data: membersData, isLoading: membersLoading, mutate: mutateMembers } = useSWR<{ data: GroupMember[], count: number }>(
     groupId ? `/study-group/${groupId}/members` : null,
     fetcher
   );
 
-  const { data: myGroupsData } = useSWR<any>('/study-group/user', fetcher);
+  const { data: myGroupsData } = useSWR<{ data: StudyGroup[] }>('/study-group/user', fetcher);
 
   const group: StudyGroup | undefined = groupData?.data;
   const members: GroupMember[] = membersData?.data || [];

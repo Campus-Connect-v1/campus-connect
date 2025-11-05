@@ -26,13 +26,13 @@ const StudyGroupsScreen: React.FC<StudyGroupsScreenProps> = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   // Fetch all study groups
-  const { data: allGroupsData, error: allGroupsError, isLoading: allGroupsLoading, mutate: mutateAllGroups } = useSWR<any>(
+  const { data: allGroupsData, error: allGroupsError, isLoading: allGroupsLoading, mutate: mutateAllGroups } = useSWR<{ data: StudyGroup[], count: number }>(
     activeTab === 'all' ? '/study-group?limit=100' : null,
     fetcher
   );
 
   // Fetch user's study groups
-  const { data: myGroupsData, error: myGroupsError, isLoading: myGroupsLoading, mutate: mutateMyGroups } = useSWR<any>(
+  const { data: myGroupsData, error: myGroupsError, isLoading: myGroupsLoading, mutate: mutateMyGroups } = useSWR<{ data: StudyGroup[], count: number }>(
     activeTab === 'my-groups' ? '/study-group/user' : null,
     fetcher
   );
