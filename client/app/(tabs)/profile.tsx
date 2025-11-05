@@ -24,6 +24,7 @@ import DropdownAlert from "@/src/components/ui/DropdownAlert";
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
 import EditProfileModal from "@/src/components/ui/EditProfileModal";
 import { userApi } from "@/src/services/api";
+import { StudyGroup } from "@/src/services/studyGroupServices";
 
 
 const { width } = Dimensions.get("window");
@@ -35,6 +36,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 const UserProfileScreen: React.FC = () => {
   const { alert, hideAlert, success, error: toast } = useDropdownAlert();
   const { data, error, isLoading, mutate } = useSWR<any>("/user/profile", fetcher);
+  const { data: studyGroupsData } = useSWR<{ data: StudyGroup[] }>("/study-group/user", fetcher);
 
   const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
 
@@ -315,6 +317,96 @@ const UserProfileScreen: React.FC = () => {
                 <InfoPill label="Phone" value={user.phone_number || "Not available"} />
               </View>
             </View>
+          </View>
+
+          {/* Study Groups Section */}
+          <View style={{ marginTop: 20 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <Text style={{ fontFamily: "Gilroy-SemiBold", color: "#0f172a" }}>Study Groups</Text>
+              <TouchableOpacity onPress={() => router.push('/study-groups/study-groups-screen')}>
+                <Text style={{ fontFamily: "Gilroy-Medium", color: "#3b82f6", fontSize: 14 }}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {studyGroupsData?.data && studyGroupsData.data.length > 0 ? (
+              <View>
+                {studyGroupsData.data.slice(0, 3).map((group: StudyGroup) => (
+                  <TouchableOpacity
+                    key={group.group_id}
+                    onPress={() => router.push(`/study-groups/group-detail?groupId=${group.group_id}`)}
+                    style={{
+                      backgroundColor: "#f8fafc",
+                      borderRadius: 12,
+                      padding: 12,
+                      marginBottom: 8,
+                      borderWidth: 1,
+                      borderColor: "#e2e8f0",
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: "Gilroy-SemiBold", color: "#0f172a", fontSize: 15 }}>
+                          {group.group_name}
+                        </Text>
+                        {group.course_code && (
+                          <Text style={{ fontFamily: "Gilroy-Regular", color: "#64748b", fontSize: 13, marginTop: 2 }}>
+                            {group.course_code}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={{ 
+                        backgroundColor: group.group_type === 'public' ? '#dcfce7' : group.group_type === 'private' ? '#fed7aa' : '#e9d5ff',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 8,
+                      }}>
+                        <Text style={{ 
+                          fontFamily: "Gilroy-Medium", 
+                          fontSize: 11,
+                          color: group.group_type === 'public' ? '#15803d' : group.group_type === 'private' ? '#c2410c' : '#7c3aed'
+                        }}>
+                          {group.group_type}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
+                      <Ionicons name="people-outline" size={14} color="#64748b" />
+                      <Text style={{ fontFamily: "Gilroy-Regular", color: "#64748b", fontSize: 12, marginLeft: 4 }}>
+                        {group.member_count || 0}/{group.max_members} members
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <View style={{ 
+                backgroundColor: "#f8fafc", 
+                borderRadius: 12, 
+                padding: 20, 
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "#e2e8f0",
+              }}>
+                <Ionicons name="people-outline" size={32} color="#cbd5e1" />
+                <Text style={{ fontFamily: "Gilroy-Regular", color: "#64748b", marginTop: 8, textAlign: "center" }}>
+                  No study groups yet
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => router.push('/study-groups/study-groups-screen')}
+                  style={{
+                    backgroundColor: "#3b82f6",
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    marginTop: 12,
+                  }}
+                >
+                  <Text style={{ fontFamily: "Gilroy-Medium", color: "#fff", fontSize: 13 }}>
+                    Join a Group
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </Animated.View>
       </ScrollView>
