@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { View, FlatList, ActivityIndicator, Text } from "react-native";
+import { FlatList, ActivityIndicator, Text } from "react-native";
 import useSWR from "swr";
 import { fetcher } from "@/src/utils/fetcher";
 import FeedCard from "../../src/components/ui/feed-card";
-import FloatingAddButton from "@/src/components/ui/floating-add-button";
 import { storage } from "@/src/utils/storage";
 
 export default function FeedScreen() {

@@ -56,7 +56,7 @@ const StudyGroupsScreen: React.FC<StudyGroupsScreenProps> = () => {
   const renderGroupCard = ({ item }: { item: StudyGroup }) => (
     <TouchableOpacity
       onPress={() => router.push(`/study-groups/group-detail?groupId=${item.group_id}`)}
-      className="bg-white rounded-2xl p-4 mb-3 mx-4 shadow-sm border border-gray-100"
+      className="bg-white rounded-2xl p-4 mb-3 mx-4 shadow-sm border border-gray-50"
     >
       <View className="flex-row items-start justify-between mb-2">
         <View className="flex-1">
@@ -130,11 +130,11 @@ const StudyGroupsScreen: React.FC<StudyGroupsScreenProps> = () => {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" />
       
       {/* Header */}
-      <View className="bg-white px-4 py-3 border-b border-gray-100">
+      <View className=" px-4 py-3 border-b border-gray-100">
         <View className="flex-row items-center mb-3">
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#000" />

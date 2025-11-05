@@ -83,9 +83,7 @@ export default function LoginScreen(props: LoginScreenProps = {}) {
           error("uniCLIQ", "Failed to save login", 4000)
         }
       } else {
-        console.log("Login failed:", result.error)
-        const errorMessage = result.error?.message || result.error || "Please try again"
-        
+        console.log("Login failed:", result.error)    
         // Special handling for email verification
         if (result.error?.message === "Email not verified") {
           Alert.alert(

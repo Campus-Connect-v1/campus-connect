@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native"
-import { Image } from "expo-image"
 import useSWR from "swr"
 import { fetcher } from "@/src/utils/fetcher"
 import { SafeAreaView } from "react-native-safe-area-context"
@@ -40,11 +39,11 @@ export default function HomeScreen() {
   const [index, setIndex] = useState(0)
   const scrollX = useRef(new Animated.Value(0)).current
   const [isDrawerVisible, setIsDrawerVisible] = useState(false)
-  const [selectedProgram, setSelectedProgram] = useState<string | undefined>()
-  const [selectedUniversityId, setSelectedUniversityId] = useState<string | undefined>()
-  const [selectedYear, setSelectedYear] = useState<string | undefined>()
-  const [selectedInterest, setSelectedInterest] = useState<string | undefined>()
-  const [selectedCourse, setSelectedCourse] = useState<string | undefined>()
+  const [selectedProgram] = useState<string | undefined>()
+  const [selectedUniversityId] = useState<string | undefined>()
+  const [selectedYear] = useState<string | undefined>()
+  const [selectedInterest] = useState<string | undefined>()
+  const [selectedCourse] = useState<string | undefined>()
 
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
@@ -66,7 +65,7 @@ export default function HomeScreen() {
     return `/user/search?${query.toString()}`
   }
 
-  const { data: searchResults, error: searchError } = useSWR<{ users: any[] }>(
+  const { data: searchResults } = useSWR<{ users: any[] }>(
     debouncedQuery || selectedProgram || selectedUniversityId
       ? getSearchUrl({
           q: debouncedQuery,
@@ -112,13 +111,6 @@ export default function HomeScreen() {
 
   const { title, subtitle } = announcements[index]
 
-  // const user = {
-  //   name: "Joshua User",
-  //   username: "@joshuser",
-  //   avatar:
-  //     "https://plus.unsplash.com/premium_photo-1738854510296-116ebc8870e7?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=436",
-  // }
-
   const handleNavigate = (screen: string) => {
     console.log(`Navigate to ${screen}`)
   }
@@ -141,8 +133,6 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Header + Search */}
         <View style={styles.header}>
-
-
             <TouchableOpacity onPress={() => router.push("/notifications")} className="ml-4 flex-row items-center border border-gray-100 px-3 py-2 rounded-full bg-white shadow-sm">
            <Ionicons name="notifications-outline" size={20} color="#003554" />
           </TouchableOpacity>
@@ -154,13 +144,6 @@ export default function HomeScreen() {
 
         </View>
         <View style={styles.greetingContainer}>
-           <TouchableOpacity onPress={() => router.push("/(tabs)/profile")} className="w-12 h-12 rounded-full overflow-hidden mr-3">
-                        <Image
-                          source={{ uri: user_data?.user?.profile_picture_url }}
-                          className="w-full h-full"
-                          contentFit="contain"
-                        />
-                      </TouchableOpacity>
           <Text style={styles.greeting}>Hi, {user_data?.user?.first_name} {user_data?.user?.last_name} 👋</Text>
         </View>
         
