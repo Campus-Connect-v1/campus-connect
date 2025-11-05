@@ -26,7 +26,7 @@ const GroupDetailScreen: React.FC = () => {
     fetcher
   );
 
-  const { data: membersData, error: membersError, isLoading: membersLoading, mutate: mutateMembers } = useSWR<any>(
+  const { data: membersData, isLoading: membersLoading, mutate: mutateMembers } = useSWR<any>(
     groupId ? `/study-group/${groupId}/members` : null,
     fetcher
   );

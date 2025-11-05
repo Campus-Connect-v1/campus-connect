@@ -343,7 +343,7 @@ const UserProfileScreen: React.FC = () => {
                       borderColor: "#e2e8f0",
                     }}
                   >
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "start" }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: "Gilroy-SemiBold", color: "#0f172a", fontSize: 15 }}>
                           {group.group_name}
