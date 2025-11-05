@@ -32,7 +32,7 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
   const [hideViewCount, setHideViewCount] = useState(false);
   const [hideLikeCount, setHideLikeCount] = useState(false);
   const [turnOffComments, setTurnOffComments] = useState(false);
-  const [visibility, setVisibility] = useState<'public' | 'connections' | 'private'>('connections');
+  const [visibility] = useState<'public' | 'connections' | 'private'>('connections');
 
   const handleSelectFromLibrary = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
