@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Image,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   Text,
@@ -14,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import PrivacySettingsModal from '../ui/privacy-settings-modal';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface ComposePostSingleProps {
   navigation?: any;

@@ -19,7 +19,7 @@ import Svg, { Path } from "react-native-svg";
 import useSWR from "swr";
 import { fetcher } from "@/src/utils/fetcher";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import DropdownAlert from "@/src/components/ui/DropdownAlert";
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
 import EditProfileModal from "@/src/components/ui/EditProfileModal";
@@ -96,7 +96,7 @@ const UserProfileScreen: React.FC = () => {
       const supported = await Linking.canOpenURL(url);
       if (supported) await Linking.openURL(url);
       else toast("uniCLIQ", "Can't open this link", 2500);
-    } catch (e) {
+    } catch {
       toast("uniCLIQ", "Failed to open link", 2500);
     }
   };

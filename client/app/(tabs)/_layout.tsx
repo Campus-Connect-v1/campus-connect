@@ -5,7 +5,6 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Image, TouchableOpacity, View, Text } from 'react-native';
 import Colors from '@/src/constants/Colors';
 
-
 const TabIcon = ({ focused, icon, title }: any) => {
   const indicatorAnim = useRef(new Animated.Value(0)).current;
 
@@ -13,7 +12,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
     Animated.timing(indicatorAnim, {
       toValue: focused ? 1 : 0,
       duration: 300,
-      useNativeDriver: false, // Using layout props (opacity, scaleX)
+      useNativeDriver: false, 
     }).start();
   }, [focused, indicatorAnim]);
 
@@ -29,7 +28,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
       {
         translateY: indicatorAnim.interpolate({
           inputRange: [0, 1],
-          outputRange: [10, 0], // slides up smoothly
+          outputRange: [10, 0], 
         }),
       },
     ],
@@ -56,7 +55,6 @@ const TabIcon = ({ focused, icon, title }: any) => {
     </View>
   );
 };
-
 
 const TabsLayout = () => {
   const handleProfilePress = () => {
