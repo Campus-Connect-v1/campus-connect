@@ -2,12 +2,27 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
-import { getSocket, disconnectSocket, sendMessageViaSocket, getCurrentSocket } from "../services/socket";
+import {
+  getSocket,
+  disconnectSocket,
+  sendMessageViaSocket,
+  getCurrentSocket,
+  sendTypingIndicator,
+  initiateCall as initiateCallService,
+  acceptCall as acceptCallService,
+  rejectCall as rejectCallService,
+  endCall as endCallService,
+} from "../services/socket";
 
 type SocketContextValue = {
   socket: Socket | null;
   isConnected: boolean;
   sendMessage: (receiverId: string, content: string) => void;
+  sendTyping: (receiverId: string, isTyping: boolean) => void;
+  initiateCall: (receiverId: string, isVideoCall: boolean) => void;
+  acceptCall: (callId: string) => void;
+  rejectCall: (callId: string) => void;
+  endCall: (callId: string) => void;
 };
 
 const SocketContext = createContext<SocketContextValue | undefined>(undefined);
@@ -59,9 +74,43 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     sendMessageViaSocket(receiverId, content);
   }, []);
 
+  const sendTyping = useCallback((receiverId: string, isTyping: boolean) => {
+    if (!receiverId) return;
+    sendTypingIndicator(receiverId, isTyping);
+  }, []);
+
+  const initiateCall = useCallback((receiverId: string, isVideoCall: boolean) => {
+    if (!receiverId) return;
+    initiateCallService(receiverId, isVideoCall);
+  }, []);
+
+  const acceptCall = useCallback((callId: string) => {
+    if (!callId) return;
+    acceptCallService(callId);
+  }, []);
+
+  const rejectCall = useCallback((callId: string) => {
+    if (!callId) return;
+    rejectCallService(callId);
+  }, []);
+
+  const endCall = useCallback((callId: string) => {
+    if (!callId) return;
+    endCallService(callId);
+  }, []);
+
   const value = useMemo<SocketContextValue>(
-    () => ({ socket, isConnected, sendMessage }),
-    [socket, isConnected, sendMessage]
+    () => ({
+      socket,
+      isConnected,
+      sendMessage,
+      sendTyping,
+      initiateCall,
+      acceptCall,
+      rejectCall,
+      endCall,
+    }),
+    [socket, isConnected, sendMessage, sendTyping, initiateCall, acceptCall, rejectCall, endCall]
   );
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;

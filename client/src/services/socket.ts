@@ -51,4 +51,29 @@ export async function sendMessageViaSocket(receiverId: string, content: string):
   socket.emit("send_message", { receiverId, content });
 }
 
+export async function sendTypingIndicator(receiverId: string, isTyping: boolean): Promise<void> {
+  const socket = await getSocket();
+  socket.emit("typing", { receiverId, isTyping });
+}
+
+export async function initiateCall(receiverId: string, isVideoCall: boolean): Promise<void> {
+  const socket = await getSocket();
+  socket.emit("call_request", { receiverId, isVideoCall });
+}
+
+export async function acceptCall(callId: string): Promise<void> {
+  const socket = await getSocket();
+  socket.emit("call_accepted", { callId });
+}
+
+export async function rejectCall(callId: string): Promise<void> {
+  const socket = await getSocket();
+  socket.emit("call_rejected", { callId });
+}
+
+export async function endCall(callId: string): Promise<void> {
+  const socket = await getSocket();
+  socket.emit("call_ended", { callId });
+}
+
 

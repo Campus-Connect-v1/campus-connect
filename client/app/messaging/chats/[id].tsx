@@ -25,12 +25,15 @@ import { useSocket } from "@/src/contexts/socket-context"
 
 const ChatScreen: React.FC = () => {
   const { id } = useLocalSearchParams()
-  const { socket, isConnected, sendMessage } = useSocket()
+  const { socket, isConnected, sendMessage, sendTyping } = useSocket()
   const [conversation, setConversation] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [messageText, setMessageText] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isTyping, setIsTyping] = useState(false)
+  const [otherUserTyping, setOtherUserTyping] = useState(false)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const scrollViewRef = useRef<FlatList>(null)
 
   // entrance animation
@@ -83,13 +86,25 @@ const ChatScreen: React.FC = () => {
         },
       ])
     }
+    const onTyping = (data: { senderId: string; isTyping: boolean }) => {
+      if (data.senderId !== conversation?.participant_id) return
+      setOtherUserTyping(data.isTyping)
+    }
+    const onCallRequest = (data: { callId: string; callerId: string; callerName: string; isVideoCall: boolean }) => {
+      // Handle incoming call - navigate to call screen
+      router.push(`/messaging/video-call/${id}?isVideoCall=${data.isVideoCall}&callId=${data.callId}`)
+    }
     socket.on("receive_message", onReceive)
     socket.on("message_sent", onSent)
+    socket.on("typing", onTyping)
+    socket.on("call_request", onCallRequest)
     return () => {
       socket.off("receive_message", onReceive)
       socket.off("message_sent", onSent)
+      socket.off("typing", onTyping)
+      socket.off("call_request", onCallRequest)
     }
-  }, [socket])
+  }, [socket, conversation])
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start()
@@ -99,13 +114,46 @@ const ChatScreen: React.FC = () => {
     scrollViewRef.current?.scrollToEnd({ animated: true })
   }, [messages])
 
+  // Handle typing indicator
+  const handleTextChange = (text: string) => {
+    setMessageText(text)
+    const receiverId = conversation?.participant_email || conversation?.participant_id
+    if (!receiverId) return
+
+    // Send typing indicator
+    if (text.length > 0 && !isTyping) {
+      setIsTyping(true)
+      sendTyping(receiverId, true)
+    }
+
+    // Clear typing indicator after 2 seconds of no typing
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      if (isTyping) {
+        setIsTyping(false)
+        sendTyping(receiverId, false)
+      }
+    }, 2000)
+  }
+
   const handleSendMessage = () => {
     if (!messageText.trim()) return
+
+    // Stop typing indicator
+    const receiverId = conversation?.participant_email || conversation?.participant_id
+    if (receiverId && isTyping) {
+      setIsTyping(false)
+      sendTyping(receiverId, false)
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+    }
 
     setIsSending(true)
     try {
       // Best-effort receiver identification: replace with actual user email/id from API
-      const receiverId = conversation?.participant_email || conversation?.participant_name
       if (receiverId) {
         sendMessage(receiverId, messageText)
       }
@@ -142,14 +190,20 @@ const ChatScreen: React.FC = () => {
                 {conversation?.participant_name}
               </Text>
               <Text style={{ fontFamily: "Gilroy-Regular", fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-                {conversation?.is_online ? "Active now" : "Offline"}
+                {otherUserTyping ? "Typing..." : conversation?.is_online ? "Active now" : "Offline"}
               </Text>
             </View>
           </View>
-          <TouchableOpacity className="p-2">
-            <Ionicons name="call-outline" size={20} color="#ef4444" />
-          </TouchableOpacity>
-          <CallButton conversationId={conversation.id} isVideoCall={true}/>
+          <CallButton
+            conversationId={conversation?.id || id as string}
+            receiverId={conversation?.participant_email || conversation?.participant_id}
+            isVideoCall={false}
+          />
+          <CallButton
+            conversationId={conversation?.id || id as string}
+            receiverId={conversation?.participant_email || conversation?.participant_id}
+            isVideoCall={true}
+          />
         </View>
 
         {/* Messages */}
@@ -188,7 +242,7 @@ const ChatScreen: React.FC = () => {
                 placeholder="Type a message..."
                 placeholderTextColor="#cbd5e1"
                 value={messageText}
-                onChangeText={setMessageText}
+                onChangeText={handleTextChange}
                 multiline
                 maxLength={500}
               />
