@@ -10,6 +10,7 @@ import '../globals.css';
 import Colors from "@/src/constants/Colors";
 import { Easing } from "react-native-reanimated";
 import { LanguageProvider } from "@/src/contexts/language-context";
+import { SocketProvider } from "@/src/contexts/socket-context";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -61,6 +62,7 @@ export default function RootLayout() {
     <GestureHandlerRootView className="bg-white">
       <SafeAreaProvider>
       <LanguageProvider>
+      <SocketProvider>
         <Stack
   screenOptions={{
     headerShown: false,
@@ -90,6 +92,7 @@ export default function RootLayout() {
     }}
   />
 </Stack>
+      </SocketProvider>
       </LanguageProvider>
 
       </SafeAreaProvider>

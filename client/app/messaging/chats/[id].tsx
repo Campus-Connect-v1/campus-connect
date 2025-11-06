@@ -21,9 +21,11 @@ import { router, useLocalSearchParams } from "expo-router"
 import MessageBubble from "@/src/components/messaging/message-bubble"
 import { dataService } from "@/src/services/data-service"
 import CallButton from "@/src/components/messaging/call-button"
+import { useSocket } from "@/src/contexts/socket-context"
 
 const ChatScreen: React.FC = () => {
   const { id } = useLocalSearchParams()
+  const { socket, isConnected, sendMessage } = useSocket()
   const [conversation, setConversation] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [messageText, setMessageText] = useState("")
@@ -50,6 +52,45 @@ const ChatScreen: React.FC = () => {
     loadChat()
   }, [id])
 
+  // Subscribe to realtime messages
+  useEffect(() => {
+    if (!socket) return
+    const onReceive = (msg: any) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: msg._id || `msg-${Date.now()}`,
+          sender_id: msg.senderId?._id || "unknown",
+          sender_name: msg.senderId?.username || msg.senderId?.email || "Unknown",
+          sender_avatar: undefined,
+          content: msg.content,
+          timestamp: new Date(msg.createdAt || Date.now()),
+          is_current_user: false,
+        },
+      ])
+    }
+    const onSent = (msg: any) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: msg._id || `msg-${Date.now()}`,
+          sender_id: msg.senderId?._id || "current-user",
+          sender_name: "You",
+          sender_avatar: undefined,
+          content: msg.content,
+          timestamp: new Date(msg.createdAt || Date.now()),
+          is_current_user: true,
+        },
+      ])
+    }
+    socket.on("receive_message", onReceive)
+    socket.on("message_sent", onSent)
+    return () => {
+      socket.off("receive_message", onReceive)
+      socket.off("message_sent", onSent)
+    }
+  }, [socket])
+
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start()
   }, [])
@@ -63,8 +104,13 @@ const ChatScreen: React.FC = () => {
 
     setIsSending(true)
     try {
-      const newMessage = dataService.addMessage(id as string, messageText)
-      setMessages([...messages, newMessage])
+      // Best-effort receiver identification: replace with actual user email/id from API
+      const receiverId = conversation?.participant_email || conversation?.participant_name
+      if (receiverId) {
+        sendMessage(receiverId, messageText)
+      }
+      const optimistic = dataService.addMessage(id as string, messageText)
+      setMessages([...messages, optimistic])
       setMessageText("")
     } catch (error) {
       console.error("Failed to send message:", error)
@@ -126,6 +172,8 @@ const ChatScreen: React.FC = () => {
         >
           <View className="px-4 py-3 border-t border-gray-100 bg-white">
             <View className="flex-row items-center gap-2">
+              {/** connection indicator */}
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isConnected ? "#22c55e" : "#ef4444" }} />
               <TextInput
                 style={{
                   flex: 1,
