@@ -23,9 +23,6 @@ export default function FeedScreen() {
   // Corrected: grab data.posts instead of data directly
   const feed: any[] = Array.isArray(data?.posts) ? data.posts : [];
 
-
-  // console.log("Feed data:", feed);
-
   return (
     <FlatList
       data={feed}

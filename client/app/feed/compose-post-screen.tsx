@@ -19,7 +19,6 @@ interface ComposePostScreenProps {
 const ComposePostScreen: React.FC<ComposePostScreenProps> = ({ navigation }) => {
   const [caption, setCaption] = useState('');
 
-
   const handleShare = () => {
     router.push('/home/post-settings-screen');
   };

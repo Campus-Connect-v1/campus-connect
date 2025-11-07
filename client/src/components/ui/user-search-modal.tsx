@@ -8,7 +8,6 @@ import {
   TouchableOpacity, 
   Modal, 
   FlatList, 
-  StyleSheet, 
   Animated,
   TouchableWithoutFeedback 
 } from "react-native"
@@ -18,13 +17,13 @@ import { useRouter } from "expo-router"
 interface UserSearchModalProps {
   visible: boolean
   onClose: () => void
-  users: Array<{
+  users: {
     id: string
     first_name: string
     last_name: string
     profile_picture_url?: string
     program?: string
-  }>
+  }[]
   isLoading?: boolean
 }
 

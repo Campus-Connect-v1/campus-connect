@@ -2,17 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   StatusBar,
   Switch,
   Text,
   TouchableOpacity,
   View,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '@/src/services/authServices';
+import { useDropdownAlert } from '@/src/hooks/useDropdownAlert';
+import DropdownAlert from '@/src/components/ui/DropdownAlert';
 
 interface PrivacySettings {
   profile_visibility: 'public' | 'geofenced' | 'private' | 'friends_only';
@@ -38,6 +39,7 @@ const GeofencingSettingsScreen: React.FC<GeofencingSettingsScreenProps> = ({ nav
   const [saving, setSaving] = useState(false);
   const [locationSharingEnabled, setLocationSharingEnabled] = useState(true);
   const [incognitoMode, setIncognitoMode] = useState(false);
+  const { alert, hideAlert, success, error } = useDropdownAlert()
   const [settings, setSettings] = useState<PrivacySettings>({
     profile_visibility: 'geofenced',
     visibility_radius: 100,
@@ -100,8 +102,7 @@ const GeofencingSettingsScreen: React.FC<GeofencingSettingsScreenProps> = ({ nav
         });
       }
     } catch (error: any) {
-      console.error('Error loading settings:', error);
-      Alert.alert('Error', 'Failed to load privacy settings');
+      error('Error', 'Failed to load privacy settings', 3000);
     } finally {
       setLoading(false);
     }
@@ -111,10 +112,10 @@ const GeofencingSettingsScreen: React.FC<GeofencingSettingsScreenProps> = ({ nav
     try {
       setSaving(true);
       await api.put('/geofencing/privacy', settings);
-      Alert.alert('Success', 'Privacy settings updated successfully');
+      success('Success', 'Privacy settings updated successfully', 3000);
     } catch (error: any) {
       console.error('Error saving settings:', error);
-      Alert.alert('Error', 'Failed to save privacy settings');
+      error('Error', 'Failed to save privacy settings', 3000);
     } finally {
       setSaving(false);
     }
@@ -126,11 +127,11 @@ const GeofencingSettingsScreen: React.FC<GeofencingSettingsScreenProps> = ({ nav
       setLocationSharingEnabled(enabled);
       
       if (response.data.message) {
-        Alert.alert('Success', response.data.message);
+        success('Success', response.data.message, 3000);
       }
     } catch (error: any) {
       console.error('Error toggling location sharing:', error);
-      Alert.alert('Error', 'Failed to update location sharing');
+      error('Error', 'Failed to update location sharing', 3000);
       // Revert the toggle
       setLocationSharingEnabled(!enabled);
     }
@@ -147,11 +148,11 @@ const GeofencingSettingsScreen: React.FC<GeofencingSettingsScreenProps> = ({ nav
       }
       
       if (response.data.message) {
-        Alert.alert('Success', response.data.message);
+        error('Success', response.data.message, 3000);
       }
     } catch (error: any) {
       console.error('Error toggling incognito mode:', error);
-      Alert.alert('Error', 'Failed to update incognito mode');
+      error('Error', 'Failed to update incognito mode');
       // Revert the toggle
       setIncognitoMode(!enabled);
     }
@@ -205,6 +206,13 @@ const GeofencingSettingsScreen: React.FC<GeofencingSettingsScreenProps> = ({ nav
       </View>
 
       <ScrollView className="flex-1 px-4 py-6">
+         <DropdownAlert
+              visible={alert.visible}
+              type={alert.type}
+              title={alert.title}
+              message={alert.message}
+              onDismiss={hideAlert}
+            />
         {/* Location Sharing Toggle */}
         <View className="mb-8">
           <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-lg font-semibold text-black mb-4">

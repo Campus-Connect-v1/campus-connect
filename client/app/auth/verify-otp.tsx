@@ -39,11 +39,9 @@ export default function VerifyOtpScreen() {
   });
 
   const onSubmit = async (data: VerifyOtpSchema) => {
-    console.log("Form submitted with data:", data);
     setIsLoading(true);
     
     try {
-      // Validate email and OTP format first
       if (!email) {
         error("Error", "Email address is required for verification.", 4000);
         router.push("/auth/verify-email");
@@ -55,19 +53,15 @@ export default function VerifyOtpScreen() {
         return;
       }
       
-      console.log("Attempting to verify OTP:", { otp: data.otp, email });
       const result = await verifyOtp({ ...data, email });
-      console.log("Verify OTP result:", result);
       
       if (result.success) {
         success("Success", "Email verified successfully! You can now log in.", 4000);
         router.push("/auth/login");
       } else {
-        console.log("OTP verification failed:", result.error);
         error("Failed", result.error || "Invalid OTP. Please try again.", 4000);
       }
     } catch (error: any) {
-      console.error("Verify OTP error:", error);
       error("Error", error.message || "An unexpected error occurred", 4000);
     } finally {
       setIsLoading(false);

@@ -17,7 +17,6 @@ import {
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import * as ImagePicker from "expo-image-picker"
-import { userApi } from "@/src/services/api"
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert"
 import DropdownAlert from "./DropdownAlert"
 import { updateProfile } from "@/src/services/authServices"
@@ -74,7 +73,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, profile, o
       success("Profile Updated", "Your profile has been updated successfully.", 3000)
       onSave(formData)
       onClose()
-    } catch (err) {
+    } catch {
       error("Update Failed", "Failed to update profile. Please try again.", 3000)
     } finally {
       setIsSaving(false)

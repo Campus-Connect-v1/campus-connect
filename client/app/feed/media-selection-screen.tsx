@@ -3,7 +3,6 @@ import * as MediaLibrary from 'expo-media-library';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   Dimensions,
   ScrollView,
   StatusBar,
@@ -13,8 +12,11 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DropdownAlert from '@/src/components/ui/DropdownAlert';
+import { useDropdownAlert } from '@/src/hooks/useDropdownAlert';
 
 const MediaSelectionScreen = () => {
+  const { alert, hideAlert, error } = useDropdownAlert()
   const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
   const [mediaItems, setMediaItems] = useState<MediaLibrary.Asset[]>([]);
   const screenWidth = Dimensions.get('window').width;
@@ -25,7 +27,7 @@ const MediaSelectionScreen = () => {
     (async () => {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Please allow access to media library.');
+        error('Permission Denied', 'Please allow access to media library.', 3000);
         return;
       }
 
@@ -44,9 +46,8 @@ const MediaSelectionScreen = () => {
     try {
       const info = await MediaLibrary.getAssetInfoAsync(asset);
       setSelectedMedia(info.localUri || asset.uri);
-    } catch (e) {
-      console.error('Failed to get asset info', e);
-      Alert.alert('Error', 'Cannot load this media.');
+    } catch {
+      error('Error', 'Cannot load this media.', 3000);
     }
   };
 
@@ -82,6 +83,13 @@ const handleNext = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
       <StatusBar barStyle="dark-content" />
+       <DropdownAlert
+          visible={alert.visible}
+          type={alert.type}
+          title={alert.title}
+          message={alert.message}
+          onDismiss={hideAlert}
+        />
 
       {/* Header */}
       <View

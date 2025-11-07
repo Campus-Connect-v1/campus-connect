@@ -16,7 +16,6 @@ import { fetcher } from '@/src/utils/fetcher';
 import { storage } from '@/src/utils/storage';
 import { Building, Facility } from '@/src/services/universityServices';
 import { ApiResponse } from '@/src/types/api';
-import { DEFAULT_UNIVERSITY_ID } from '@/src/constants/app';
 
 interface UniversityScreenProps {
   navigation?: any;
@@ -30,7 +29,7 @@ const UniversityScreen: React.FC<UniversityScreenProps> = ({ navigation }) => {
   useEffect(() => {
     const loadUniversityId = async () => {
       const userData = await storage.getUserData();
-      setUniversityId(userData?.university_id || DEFAULT_UNIVERSITY_ID);
+      setUniversityId(userData?.university_id || "uni_1");
     };
     loadUniversityId();
   }, []);

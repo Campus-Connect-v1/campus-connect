@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    SafeAreaView,
     ScrollView,
     StatusBar,
     Switch,
@@ -10,6 +9,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface PostSettingsScreenProps {
   navigation?: any;
@@ -23,14 +23,6 @@ const PostSettingsScreen: React.FC<PostSettingsScreenProps> = ({ navigation }) =
   const [shareToTwitter, setShareToTwitter] = useState(false);
 
   const handlePost = () => {
-    console.log('Posting with settings:', {
-      hideViewCount,
-      hideLikeCount,
-      turnOffComments,
-      shareToFacebook,
-      shareToTwitter,
-    });
-    // Handle post creation
     router.back();
   };
 

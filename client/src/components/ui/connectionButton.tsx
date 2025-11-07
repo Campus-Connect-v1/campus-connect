@@ -42,7 +42,7 @@ const ConnectionButton: React.FC<ConnectionButtonProps> = ({
       } else {
         toast("uniCLIQ", result.error?.message || "Failed to send request", 3000)
       }
-    } catch (err) {
+    } catch {
       toast("uniCLIQ", "An error occurred. Please try again.", 3000)
     } finally {
       setIsRequesting(false)
@@ -60,7 +60,7 @@ const ConnectionButton: React.FC<ConnectionButtonProps> = ({
       } else {
         toast("uniCLIQ", result.error?.message || "Failed to cancel request", 3000)
       }
-    } catch (err) {
+    } catch {
       toast("uniCLIQ", "An error occurred. Please try again.", 3000)
     } finally {
       setIsRequesting(false)

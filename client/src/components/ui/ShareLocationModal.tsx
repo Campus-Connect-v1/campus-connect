@@ -23,9 +23,8 @@ export default function ShareLocationModal({ visible, onClose }: {
     try {
       const res = await shareLocation();
       setMessage("Location shared successfully ✅");
-      console.log("Response:", res);
       setTimeout(onClose, 1500);
-    } catch (err: any) {
+    } catch {
       setMessage("Failed to share location ❌");
     } finally {
       setLoading(false);
