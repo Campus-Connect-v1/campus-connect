@@ -18,10 +18,11 @@ import {
 import { verifyEmailSchema, VerifyEmailSchema } from "@/src/schemas/authSchemas";
 import { resendOtp } from "@/src/services/authServices";
 import { useState } from "react";
-
-
+import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
+import DropdownAlert from "@/src/components/ui/DropdownAlert";
 
 export default function VerifyEmailScreen() {
+  const { alert, hideAlert, success, error } = useDropdownAlert()
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   
@@ -41,17 +42,16 @@ export default function VerifyEmailScreen() {
     try {
       const result = await resendOtp(data);
       if (result.success) {
-        Alert.alert("Success", "Verification code sent! Please check your email.");
+        success("Success", "Verification code sent! Please check your email.", 3000);
         router.push({
           pathname: "/auth/verify-otp",
           params: { email: data.email }
         });
       } else {
-        Alert.alert("Failed", result.error || "Please try again");
+        error("Failed", result.error || "Please try again", 3000);
       }
     } catch (error: any) {
-      console.error("Resend OTP error:", error);
-      Alert.alert("Error", error.message || "An unexpected error occurred");
+      error("Error", error.message || "An unexpected error occurred", 3000);
     } finally {
       setIsLoading(false);
     }
@@ -62,6 +62,13 @@ export default function VerifyEmailScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
+      <DropdownAlert
+              visible={alert.visible}
+              type={alert.type}
+              title={alert.title}
+              message={alert.message}
+              onDismiss={hideAlert}
+            />
       <View style={styles.inner}>
         <Text style={styles.title}>Verify Your Email</Text>
         <Text style={styles.subtitle}>
@@ -112,11 +119,13 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: Colors.light.text,
     marginBottom: 8,
+    fontFamily: "Gilroy-SemiBold",
   },
   subtitle: {
     fontSize: 15,
     color: Colors.light.textSecondary,
     marginBottom: 32,
+    fontFamily: "Gilroy-Regular",
   },
   input: {
     borderWidth: 1,
@@ -127,9 +136,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: Colors.light.inputBackground,
     marginBottom: 12,
+    fontFamily: "Gilroy-Medium",
   },
   inputError: { borderColor: Colors.light.error },
-  errorText: { color: Colors.light.error, marginBottom: 12 },
+  errorText: { color: Colors.light.error, marginBottom: 12, fontFamily: "Gilroy-Regular" },
   button: {
     backgroundColor: Colors.light.primary,
     borderRadius: 12,
@@ -138,6 +148,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 16,
   },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "bold" },
+  buttonText: { color: "white", fontSize: 16, fontWeight: "bold", fontFamily: "Gilroy-SemiBold" },
   buttonDisabled: { opacity: 0.7 },
 });

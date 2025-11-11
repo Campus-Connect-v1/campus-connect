@@ -87,6 +87,10 @@ const TabsLayout = () => {
           borderColor: 'rgba(255, 255, 255, 0.1)',
           backgroundColor: '#ffffff',
           borderTopWidth: 0,
+          // borderTopLeftRadius: 24,
+          // borderTopRightRadius: 24,
+          // position: 'absolute',
+          // elevation: 5,
         },
        sceneStyle: {
           backgroundColor: '#ffffff',

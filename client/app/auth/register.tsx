@@ -9,7 +9,6 @@ import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -85,11 +84,8 @@ export default function RegisterScreen(props: RegisterScreenProps = {}) {
         }, 4000);
       } else {
         error("uniCLIQ","Registration Failed", 4000)
-        console.log()
       }
     } catch (error: any) {
-      console.error("Signup error:", error);
-      Alert.alert("Error", error.message || "An unexpected error occurred");
       error("Error", error.message || "An unexpected error occurred", 4000)
     } finally {
       setIsLoading(false);
@@ -128,9 +124,9 @@ export default function RegisterScreen(props: RegisterScreenProps = {}) {
         {/* Welcome Text */}
         <View style={styles.welcomeContainer}>
         <Image
-  source={require("@/assets/images/logo.png")}
-  style={{ width: 240, height: 180, resizeMode: "contain", marginBottom: 0 }}
-/>
+          source={require("@/assets/images/logo.png")}
+          style={{ width: 240, height: 180, resizeMode: "contain", marginBottom: 0 }}
+        />
           <Text style={styles.welcomeSubtitle}>Sign up to uniCLIQ</Text>
         </View>
 

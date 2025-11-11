@@ -24,6 +24,8 @@ import {
 } from "@/src/services/authServices";
 import { storage } from "@/src/utils/storage";
 import PostActionsModal from "@/src/components/ui/post-actions-modal";
+import DropdownAlert from "@/src/components/ui/DropdownAlert";
+import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
 
 interface Comment {
   comment_id: string;
@@ -36,8 +38,8 @@ interface Comment {
     profile_picture_url?: string;
   };
 }
-
 export default function PostDetailScreen() {
+  const { alert, hideAlert, error } = useDropdownAlert()
   const { postId } = useLocalSearchParams<{ postId: string }>();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
@@ -45,9 +47,6 @@ export default function PostDetailScreen() {
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [showActionsModal, setShowActionsModal] = useState(false);
-
-  console.log("Post ID:", postId);
-
 
   const {
     data: postData,
@@ -98,7 +97,7 @@ export default function PostDetailScreen() {
       // Revert on error
       setIsLiked(previousLiked);
       setLikeCount(previousCount);
-      Alert.alert("Error", "Failed to update like status");
+      error("Error", "Failed to update like status", 3000);
     }
   };
 
@@ -115,10 +114,10 @@ export default function PostDetailScreen() {
         mutate(`/social/posts/${postId}`);
         mutate("/social/posts/feed");
       } else {
-        Alert.alert("Error", "Failed to add comment");
+        error("Error", "Failed to add comment", 3000);
       }
-    } catch (error) {
-      Alert.alert("Error", "Failed to add comment");
+    } catch {
+      error("Error", "Failed to add comment", 3000);
     } finally {
       setIsSubmitting(false);
     }
@@ -139,10 +138,10 @@ export default function PostDetailScreen() {
               mutate("/social/posts/feed");
               router.back();
             } else {
-              Alert.alert("Error", "Failed to delete post");
+              error("Error", "Failed to delete post", 3000);
             }
-          } catch (error) {
-            Alert.alert("Error", "Failed to delete post");
+          } catch {
+            error("Error", "Failed to delete post", 3000);
           }
         },
       },
@@ -180,6 +179,13 @@ export default function PostDetailScreen() {
         className="flex-1"
         keyboardVerticalOffset={0}
       >
+         <DropdownAlert
+              visible={alert.visible}
+              type={alert.type}
+              title={alert.title}
+              message={alert.message}
+              onDismiss={hideAlert}
+            />
         {/* Header */}
         <View className="flex-row items-center px-4 py-3 border-b border-gray-200">
           <TouchableOpacity onPress={() => router.back()} className="mr-3">
@@ -354,20 +360,16 @@ export default function PostDetailScreen() {
           isOwnPost={isOwnPost}
           onEdit={() => {
             setShowActionsModal(false);
-            console.log("Edit Pressed");
           }}
           onDelete={handleDelete}
           onSavePost={() => {
             setShowActionsModal(false);
-            console.log("Saved Post");
           }}
           onHidePost={() => {
             setShowActionsModal(false);
-            console.log("Hide Post");
           }}
           onReport={() => {
             setShowActionsModal(false);
-            console.log("Report Pressed");
           }}
         />
       </KeyboardAvoidingView>

@@ -17,7 +17,7 @@ export default function ConnectionsMapScreen() {
   const mapRef = useRef<MapView>(null);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapType, setMapType] = useState<"standard" | "satellite" | "terrain" | "hybrid">("standard");
-  const [ setIsSharing] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const [universityId, setUniversityId] = useState<string | null>(null);
   const radius = 500; // meters
   const lastSharedRef = useRef<number | null>(null);
@@ -30,7 +30,7 @@ export default function ConnectionsMapScreen() {
   useEffect(() => {
     const loadUniversityId = async () => {
       const userData = await storage.getUserData();
-      setUniversityId(userData?.university_id || DEFAULT_UNIVERSITY_ID);
+      setUniversityId(userData?.university_id || "uni_1");
     };
     loadUniversityId();
   }, []);

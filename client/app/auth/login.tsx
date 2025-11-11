@@ -35,7 +35,6 @@ export default function LoginScreen(props: LoginScreenProps = {}) {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [isGoogleLoading] = useState(false)
-  // const scrollX = React.useRef(new Animated.Value(0)).current
   const { alert, hideAlert, success, error } = useDropdownAlert()
   const router = useRouter()
 
@@ -57,19 +56,12 @@ export default function LoginScreen(props: LoginScreenProps = {}) {
   const onSubmit = async (data: LoginSchema) => {
     setIsLoading(true)
     try {
-      console.log("Attempting login with:", { email: data.email })
       const result = await signInWithEmail(data)
-      console.log("Login result:", result)
-      
       if (result.success) {
         try {
-          // Store token and user data
-          console.log("Storing token and user data...")
           await storage.setToken(result.data.token)
           await storage.setUserData(result.data.user)
-          console.log("Token and user data stored successfully")
           
-          // Call success callback with token and user data (if provided)
           if (onLoginSuccess) {
             onLoginSuccess(result.data.token, result.data.user)
           }
@@ -78,13 +70,10 @@ export default function LoginScreen(props: LoginScreenProps = {}) {
           setTimeout(() => {
             router.replace("/(tabs)/home")
           }, 2000)
-        } catch (storageError) {
-          console.error("Storage error:", storageError)
+        } catch {
           error("uniCLIQ", "Failed to save login", 4000)
         }
       } else {
-        console.log("Login failed:", result.error)    
-        // Special handling for email verification
         if (result.error?.message === "Email not verified") {
           Alert.alert(
             "Email Not Verified", 
@@ -102,7 +91,6 @@ export default function LoginScreen(props: LoginScreenProps = {}) {
         }
       }
     } catch (error: any) {
-      console.error("Login error:", error)
       error("uniCLIQ", "Login Failed", 4000)
     } finally {
       setIsLoading(false)
