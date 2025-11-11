@@ -1,11 +1,12 @@
 
 import { icons } from '@/src/constants/icons';
 import { router, Tabs } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, TouchableOpacity, View, Text } from 'react-native';
 import Colors from '@/src/constants/Colors';
+import { dataService } from '@/src/services/data-service';
 
-const TabIcon = ({ focused, icon, title }: any) => {
+const TabIcon = ({ focused, icon, title, badgeCount }: any) => {
   const indicatorAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -36,11 +37,39 @@ const TabIcon = ({ focused, icon, title }: any) => {
 
   return (
     <View className="size-full justify-center items-center mt-4 bg-white" >
-      <Image
-        source={icon}
-        tintColor={focused ? Colors.light.primary : '#000'}
-        className="size-6 mb-1"
-      />
+      <View style={{ position: 'relative' }}>
+        <Image
+          source={icon}
+          tintColor={focused ? Colors.light.primary : '#000'}
+          className="size-6 mb-1"
+        />
+        {badgeCount > 0 && (
+          <View
+            style={{
+              position: 'absolute',
+              top: -4,
+              right: -8,
+              backgroundColor: '#ef4444',
+              borderRadius: 10,
+              minWidth: 18,
+              height: 18,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 4,
+            }}
+          >
+            <Text
+              style={{
+                color: 'white',
+                fontSize: 10,
+                fontFamily: 'Gilroy-SemiBold',
+              }}
+            >
+              {badgeCount > 99 ? '99+' : badgeCount}
+            </Text>
+          </View>
+        )}
+      </View>
       <Animated.View
         style={[
           {
@@ -60,6 +89,23 @@ const TabsLayout = () => {
   const handleProfilePress = () => {
     router.push('/(tabs)/profile');
   };
+  
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    // Load unread count
+    const loadUnreadCount = () => {
+      const count = dataService.getUnreadCount();
+      setUnreadCount(count);
+    };
+
+    loadUnreadCount();
+
+    // Poll for updates every 30 seconds
+    const interval = setInterval(loadUnreadCount, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
   return (
     <>
 
@@ -147,7 +193,7 @@ const TabsLayout = () => {
             color: '#fff',
           },
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.chat} title='CHAT' />
+            <TabIcon focused={focused} icon={icons.chat} title='CHAT' badgeCount={unreadCount} />
           ),
            headerLeft: () => (
       <TouchableOpacity onPress={handleProfilePress} className="ml-4">
