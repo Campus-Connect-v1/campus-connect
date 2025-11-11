@@ -55,4 +55,21 @@ export const dataService = {
     }
     return newMessage
   },
+
+  // Get total unread message count across all conversations
+  getUnreadCount() {
+    return mockConversations.reduce((total, conv) => total + conv.unreadCount, 0)
+  },
+
+  // Get connected users (mock data - replace with actual API call)
+  getConnectedUsers() {
+    // Return all participants from conversations as mock connected users
+    return mockConversations.map((conv) => ({
+      user_id: conv.participants[0].id,
+      first_name: conv.participants[0].first_name,
+      last_name: conv.participants[0].last_name,
+      profile_picture_url: conv.participants[0].profile_picture_url,
+      profile_headline: conv.participants[0].profile_headline,
+    }))
+  },
 }
