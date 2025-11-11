@@ -233,7 +233,7 @@ const Notifications = () => {
             No notifications yet
           </Text>
           <Text style={{ fontFamily: "Gilroy-Regular" }} className="text-sm text-gray-500 mt-2 text-center">
-            When you get notifications, they'll show up here
+            When you get notifications, they&apos;ll show up here
           </Text>
         </View>
       )}
