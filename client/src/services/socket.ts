@@ -5,7 +5,7 @@ let socketInstance: Socket | null = null;
 
 function deriveApiBaseUrl(): string {
   // Derive from axios base if possible; fallback to localhost
-  const axiosBase = "http://172.20.10.14:8000/api"; // keep in sync with authServices.ts
+  const axiosBase = "http://172.20.10.4:8000/api"; // keep in sync with authServices.ts
   try {
     const url = new URL(axiosBase);
     const maybeApiBase = `${url.protocol}//${url.host}`;
