@@ -4,13 +4,13 @@ import { Ionicons } from "@expo/vector-icons"
 import { zodResolver } from "@hookform/resolvers/zod"
 
 import Colors from "@/src/constants/Colors"
-import { signupSchema, type SignupSchema } from "@/src/schemas/authSchemas"
-import { signUpWithEmail } from "@/src/services/authServices"
-import { useToast } from "@/src/components/ui/Toast"
+import { loginSchema, signupSchema, type SignupSchema } from "@/src/schemas/authSchemas"
+import { signInWithEmail, signUpWithEmail } from "@/src/services/authServices"
 import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -33,7 +33,6 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const router = useRouter()
-  const { showToast } = useToast()
 
   const {
     control,
@@ -54,13 +53,12 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
     try {
       const result = await signUpWithEmail(data)
       if (result.success) {
-        showToast("success", "Registration successful! Please verify your email.", "Welcome!")
         onRegisterSuccess()
       } else {
-        showToast("error", result.error || "Please try again", "Registration Failed")
+        Alert.alert("Registration Failed", result.error || "Please try again")
       }
-    } catch {
-      showToast("error", "An unexpected error occurred", "Error")
+    } catch (error) {
+      Alert.alert("Error", "An unexpected error occurred")
     } finally {
       setIsLoading(false)
     }
@@ -232,7 +230,7 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
-            <Text style={styles.signupText}>Already have an account? </Text>
+            <Text style={styles.signupText}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => router.push("/auth/login")}>
               <Text style={styles.signupLink}>Sign in</Text>
             </TouchableOpacity>
