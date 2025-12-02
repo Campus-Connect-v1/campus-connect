@@ -26,6 +26,7 @@ import { storage } from "@/src/utils/storage";
 import PostActionsModal from "@/src/components/ui/post-actions-modal";
 import DropdownAlert from "@/src/components/ui/DropdownAlert";
 import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
+import Loader from "@/src/components/ui/loader";
 
 interface Comment {
   comment_id: string;
@@ -151,7 +152,7 @@ export default function PostDetailScreen() {
   if (postLoading) {
     return (
       <SafeAreaView className="flex-1 bg-white items-center justify-center">
-        <ActivityIndicator size="large" color="#000" />
+        <Loader />
       </SafeAreaView>
     );
   }

@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Image, Text, TouchableOpacity, View, Alert } from "react-native";
 import PostActionsModal from "./post-actions-modal";
+import DropdownAlert from "./DropdownAlert";
 import { likePost, unlikePost, deletePost } from "@/src/services/authServices";
 import { mutate } from "swr";
 import { router } from "expo-router";
+import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
 
 interface PostSettings {
   allowComments: boolean;
@@ -40,9 +42,11 @@ export default function FeedCard({ post, onComment, onLike, isOwnPost, onPostDel
   const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [likeCount, setLikeCount] = useState(post.stats.likes);
   const [showActionsModal, setShowActionsModal] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Use custom dropdown alert for consistent toasting
+  const { alert, hideAlert, error, success } = useDropdownAlert();
 
-  const handleLike = async () => {
+  const handleLike = useCallback(async () => {
     const previousLiked = isLiked;
     const previousCount = likeCount;
 
@@ -59,15 +63,17 @@ export default function FeedCard({ post, onComment, onLike, isOwnPost, onPostDel
       // Revalidate feed data
       mutate("/social/posts/feed");
       onLike?.(post.id);
-    } catch (error) {
+    } catch {
       // Revert on error
       setIsLiked(previousLiked);
       setLikeCount(previousCount);
-      Alert.alert("Error", "Failed to update like status");
+      error("Error", "Failed to update like status");
     }
-  };
+  }, [isLiked, likeCount, post.id, onLike, error]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
+    // Keep Alert.alert for confirmation dialogs as it's the native approach
+    // and allows for Cancel/Delete buttons
     Alert.alert(
       "Delete Post",
       "Are you sure you want to delete this post?",
@@ -77,33 +83,41 @@ export default function FeedCard({ post, onComment, onLike, isOwnPost, onPostDel
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            setIsDeleting(true);
             try {
               const result = await deletePost(post.id);
               if (result.success) {
                 mutate("/social/posts/feed");
+                success("Success", "Post deleted successfully");
                 onPostDeleted?.();
               } else {
-                Alert.alert("Error", "Failed to delete post");
+                error("Error", "Failed to delete post");
               }
-            } catch (error) {
-              Alert.alert("Error", "Failed to delete post");
+            } catch {
+              error("Error", "Failed to delete post");
             } finally {
-              setIsDeleting(false);
               setShowActionsModal(false);
             }
           },
         },
       ]
     );
-  };
+  }, [post.id, onPostDeleted, error, success]);
 
-  const handlePostPress = () => {
+  const handlePostPress = useCallback(() => {
     router.push(`/feed/post-detail?postId=${post.id}`);
-  };
+  }, [post.id]);
 
   return (
     <View className="bg-white px-4 py-4 rounded-2xl mb-4 shadow-md border border-gray-100">
+      {/* Custom DropdownAlert for error messages */}
+      <DropdownAlert
+        visible={alert.visible}
+        type={alert.type}
+        title={alert.title}
+        message={alert.message}
+        onDismiss={hideAlert}
+      />
+      
       {/* Header */}
       <View className="flex-row items-center mb-3">
         <View className="w-14 h-14 rounded-full overflow-hidden bg-gray-300 mr-3 items-center justify-center">

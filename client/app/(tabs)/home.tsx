@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   TextInput,
   ImageBackground,
-  ActivityIndicator,
   StatusBar,
 } from "react-native"
 import useSWR from "swr"
@@ -22,6 +21,7 @@ import { BlurView } from "expo-blur"
 import { useRouter } from "expo-router"
 import ProfileDrawer from "@/src/components/layout/profile-drawer"
 import UserSearchModal from "@/src/components/ui/user-search-modal"
+import Loader from "@/src/components/ui/loader"
 import { Ionicons } from "@expo/vector-icons"
 import { styles } from "@/src/styles/home.styles"
 import Colors from "@/src/constants/Colors"
@@ -103,8 +103,7 @@ export default function HomeScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#000" />
-        <Text className="mt-4 text-gray-500">Loading stats...</Text>
+        <Loader />
       </SafeAreaView>
     )
   }
