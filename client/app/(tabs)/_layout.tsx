@@ -3,10 +3,16 @@ import { icons } from '@/src/constants/icons';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Tabs } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, TouchableOpacity, View } from 'react-native';
 import '../globals.css';
 
-const TabIcon = ({ focused, icon, title }: any) => {
+interface TabIconProps {
+  focused: boolean;
+  icon: any;
+  title: string;
+}
+
+const TabIcon = ({ focused, icon }: TabIconProps) => {
   const indicatorAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -15,7 +21,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
       duration: 300,
       useNativeDriver: false, // Using layout props (opacity, scaleX)
     }).start();
-  }, [focused]);
+  }, [focused, indicatorAnim]);
 
   const indicatorStyle = {
     opacity: indicatorAnim,
@@ -58,7 +64,7 @@ const TabIcon = ({ focused, icon, title }: any) => {
 };
 
 
-const _Layout = () => {
+function TabsLayout() {
     const [isDrawerVisible, setIsDrawerVisible] = useState(false);
 
      const user = {
