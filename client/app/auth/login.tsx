@@ -2,7 +2,7 @@
 
 import Colors from "@/src/constants/Colors"
 import { loginSchema, type LoginSchema } from "@/src/schemas/authSchemas"
-import { useToast } from "@/src/components/ui/Toast"
+import { signInWithEmail } from "@/src/services/authServices"
 import { Ionicons } from "@expo/vector-icons"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "expo-router"
@@ -10,6 +10,7 @@ import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -30,7 +31,6 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
   const [showPassword, setShowPassword] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const router = useRouter()
-  const { showToast } = useToast()
 
   const {
     control,
@@ -45,17 +45,23 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
   })
 
   const onSubmit = async (data: LoginSchema) => {
-    setIsLoading(true)
-    try {
-      // TODO: Implement actual login with signInWithEmail
-      // For now, navigate to home directly
-      router.push('/home');
-    } catch {
-      showToast("error", "An unexpected error occurred", "Error")
-    } finally {
-      setIsLoading(false)
-    }
+    router.push('/home');
   }
+  // const onSubmit = async (data: LoginSchema) => {
+  //   setIsLoading(true)
+  //   try {
+  //     const result = await signInWithEmail(data)
+  //     if (result.success) {
+  //       onLoginSuccess()
+  //     } else {
+  //       Alert.alert("Login Failed", result.error || "Please try again")
+  //     }
+  //   } catch (error) {
+  //     Alert.alert("Error", "An unexpected error occurred")
+  //   } finally {
+  //     setIsLoading(false)
+  //   }
+  // }
 
   // const handleGoogleSignIn = async () => {
   //   setIsGoogleLoading(true)
@@ -174,7 +180,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
-            <Text style={styles.signupText}>Do not have an account? </Text>
+            <Text style={styles.signupText}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => router.push("/auth/register")}>
               <Text style={styles.signupLink}>Sign Up</Text>
             </TouchableOpacity>
