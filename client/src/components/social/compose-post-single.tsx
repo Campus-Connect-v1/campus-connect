@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Image,
   ScrollView,
@@ -10,16 +10,25 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import PrivacySettingsModal from '../ui/privacy-settings-modal';
+import DropdownAlert from '../ui/DropdownAlert';
 import { createPost } from '@/src/services/authServices';
 import { mutate } from 'swr';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { storage } from '@/src/utils/storage';
+import { useDropdownAlert } from '@/src/hooks/useDropdownAlert';
 
 interface ComposePostSingleProps {
   navigation?: any;
+}
+
+interface UserData {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  profile_picture_url?: string;
 }
 
 const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => {
@@ -27,6 +36,10 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
   const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  
+  // Use custom dropdown alert hook for consistent toasting
+  const { alert, hideAlert, success, error, warning } = useDropdownAlert();
   
   // Privacy settings
   const [hideViewCount, setHideViewCount] = useState(false);
@@ -34,11 +47,22 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
   const [turnOffComments, setTurnOffComments] = useState(false);
   const [visibility] = useState<'public' | 'connections' | 'private'>('connections');
 
+  // Load authenticated user data
+  useEffect(() => {
+    const loadUserData = async () => {
+      const data = await storage.getUserData();
+      if (data) {
+        setUserData(data);
+      }
+    };
+    loadUserData();
+  }, []);
+
   const handleSelectFromLibrary = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Please allow access to your photo library.');
+      warning('Permission Denied', 'Please allow access to your photo library.');
       return;
     }
 
@@ -58,7 +82,7 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Please allow access to your camera.');
+      warning('Permission Denied', 'Please allow access to your camera.');
       return;
     }
 
@@ -79,7 +103,7 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
 
   const handleShare = async () => {
     if (!caption && !selectedMedia) {
-      Alert.alert('Error', 'Please add content or media to your post');
+      error('Error', 'Please add content or media to your post');
       return;
     }
 
@@ -113,23 +137,42 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
       const result = await createPost(postData);
 
       if (result.success) {
-        Alert.alert('Success', 'Post created successfully');
+        success('Success', 'Post created successfully');
         // Refresh the feed
         mutate('/social/posts/feed');
-        router.back();
+        setTimeout(() => {
+          router.back();
+        }, 1500);
       } else {
-        Alert.alert('Error', result.error?.message || 'Failed to create post');
+        error('Error', result.error?.message || 'Failed to create post');
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create post');
+    } catch (err: any) {
+      error('Error', err.message || 'Failed to create post');
     } finally {
       setIsPosting(false);
     }
   };
 
+  // Get display name for current user
+  const displayName = userData 
+    ? `${userData.first_name} ${userData.last_name}`.trim() 
+    : 'Loading...';
+  
+  // Get profile picture URL or use placeholder
+  const profilePicture = userData?.profile_picture_url;
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" />
+      
+      {/* Custom DropdownAlert for consistent toasting */}
+      <DropdownAlert
+        visible={alert.visible}
+        type={alert.type}
+        title={alert.title}
+        message={alert.message}
+        onDismiss={hideAlert}
+      />
       
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200">
@@ -160,13 +203,24 @@ const ComposePostSingle: React.FC<ComposePostSingleProps> = ({ navigation }) => 
         {/* User Info & Caption */}
         <View className="p-4 border-b border-gray-100">
           <View className="flex-row">
-            <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face' }}
-              className="w-10 h-10 rounded-full mr-3"
-            />
+            {/* User avatar - use authenticated user's photo or initial */}
+            <View className="w-10 h-10 rounded-full mr-3 overflow-hidden bg-blue-100 items-center justify-center">
+              {profilePicture ? (
+                <Image
+                  source={{ uri: profilePicture }}
+                  className="w-full h-full"
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-blue-600 text-lg">
+                  {userData?.first_name?.charAt(0).toUpperCase() || '?'}
+                </Text>
+              )}
+            </View>
             <View className="flex-1">
+              {/* Display authenticated user's name */}
               <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-black text-sm font-semibold mb-2">
-                Joshua User
+                {displayName}
               </Text>
               <TextInput
                 value={caption}

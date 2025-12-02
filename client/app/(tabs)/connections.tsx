@@ -1,7 +1,7 @@
 
 
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, Alert, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import MapView, { Marker, Callout } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -11,16 +11,20 @@ import { useMapBuildings, Building } from "@/src/services/universityServices";
 import { storage } from "@/src/utils/storage";
 import { router } from "expo-router";
 import Loader from "@/src/components/ui/loader";
+import DropdownAlert from "@/src/components/ui/DropdownAlert";
+import { useDropdownAlert } from "@/src/hooks/useDropdownAlert";
 
 
 export default function ConnectionsMapScreen() {
   const mapRef = useRef<MapView>(null);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapType, setMapType] = useState<"standard" | "satellite" | "terrain" | "hybrid">("standard");
-  const [isSharing, setIsSharing] = useState(false);
   const [universityId, setUniversityId] = useState<string | null>(null);
   const radius = 500; // meters
   const lastSharedRef = useRef<number | null>(null);
+
+  // Use custom dropdown alert for consistent toasting
+  const { alert, hideAlert, warning, info } = useDropdownAlert();
 
   const { nearbyUsers, isError: error, refetchNearby: mutate } = useNearbyUsers(userLocation ? radius : 0);
   const { buildings } = useMapBuildings(universityId);
@@ -44,7 +48,7 @@ export default function ConnectionsMapScreen() {
 
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission denied", "We need location access to find connections near you.");
+      warning("Permission denied", "We need location access to find connections near you.");
       return;
     }
 
@@ -55,7 +59,6 @@ export default function ConnectionsMapScreen() {
     try {
       // Avoid hammering backend
       if (!lastSharedRef.current || Date.now() - lastSharedRef.current > 60_000) {
-        setIsSharing(true);
         await shareLocation();
         lastSharedRef.current = Date.now();
         console.log("✅ Location shared successfully");
@@ -67,8 +70,6 @@ export default function ConnectionsMapScreen() {
       } else {
         console.error("❌ Error sharing location:", err.message);
       }
-    } finally {
-      setIsSharing(false);
     }
   })();
 }, []);
@@ -78,6 +79,14 @@ export default function ConnectionsMapScreen() {
       <View style={styles.center}>
         <Loader/>
         <Text className="font-[Gilroy-Medium] text-md">Getting your location...</Text>
+        {/* Show alert if there's a permission issue */}
+        <DropdownAlert
+          visible={alert.visible}
+          type={alert.type}
+          title={alert.title}
+          message={alert.message}
+          onDismiss={hideAlert}
+        />
       </View>
     );
   }
@@ -92,6 +101,15 @@ export default function ConnectionsMapScreen() {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* DropdownAlert for map screen notifications */}
+      <DropdownAlert
+        visible={alert.visible}
+        type={alert.type}
+        title={alert.title}
+        message={alert.message}
+        onDismiss={hideAlert}
+      />
+      
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -121,7 +139,7 @@ export default function ConnectionsMapScreen() {
       <Callout tooltip>
         <MapMarkerCallout
           user={user}
-          onConnect={(id) => Alert.alert("Connect", `Send request to ${user.display_name}?`)}
+          onConnect={() => info("Connect", `Send request to ${user.display_name}?`)}
         />
       </Callout>
     </Marker>

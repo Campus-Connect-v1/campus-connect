@@ -3,11 +3,11 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import '../globals.css';
-import Colors from "@/src/constants/Colors";
+import Loader from "@/src/components/ui/loader";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -21,19 +21,15 @@ export default function RootLayout() {
   });
 
   const [loading, setLoading] = useState(true);
-  const [initialRoute, setInitialRoute] = useState<string>("onboarding");
 
   useEffect(() => {
     const init = async () => {
       const seen = await AsyncStorage.getItem("hasSeenOnboarding");
       const loggedIn = false; 
 
-      if (seen) {
-        setInitialRoute("onboarding");
-      } else if (loggedIn) {
-        setInitialRoute("/(tabs)/home");
-      } else {
-        setInitialRoute("auth/login");
+      // Just complete initialization - routing is handled by expo-router
+      if (seen || loggedIn) {
+        // Initial route logic is handled by expo-router based on file structure
       }
 
       setLoading(false);
@@ -49,8 +45,8 @@ export default function RootLayout() {
 
   if (!fontsLoaded || loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color={Colors.light.primary} />
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" }}>
+        <Loader />
       </View>
     );
   }
