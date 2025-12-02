@@ -170,14 +170,20 @@ export function usePosts(): UsePostsReturn {
 
 /**
  * Helper function to transform raw post data to FeedCard format
+ * Note: The username is derived from first_name if no username field exists on the author.
+ * This is a display-only value for UI purposes, not used for unique identification.
  */
 export function transformPostToFeedCard(post: Post, currentUserId: string | null) {
+  // Generate display username from first name (lowercase) as fallback
+  // The actual unique identifier is post.author.user_id, not the username
+  const displayUsername = post.author?.first_name?.toLowerCase() ?? "user";
+  
   return {
     post: {
       id: post.post_id,
       user: {
         fullName: `${post.author?.first_name ?? ""} ${post.author?.last_name ?? ""}`.trim(),
-        username: post.author?.first_name?.toLowerCase() ?? "",
+        username: displayUsername,
         avatar: post.author?.profile_picture_url ?? "",
       },
       content: post.content,

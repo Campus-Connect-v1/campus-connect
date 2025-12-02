@@ -78,8 +78,8 @@ export default function SearchScreen({
     }
   }, [onResultPress]);
 
-  // Get icon for result type
-  const getTypeIcon = (type: SearchResult["type"]) => {
+  // Get icon for result type - returns valid Ionicons names
+  const getTypeIcon = (type: SearchResult["type"]): "person" | "calendar" | "people" | "search" => {
     switch (type) {
       case "user":
         return "person";
@@ -174,7 +174,7 @@ export default function SearchScreen({
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Ionicons
-                name={getTypeIcon(item.type) as any}
+                name={getTypeIcon(item.type)}
                 size={24}
                 color="#3b82f6"
               />

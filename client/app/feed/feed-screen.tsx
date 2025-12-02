@@ -14,6 +14,9 @@ import PostSkeleton from "../../src/components/ui/post-skeleton";
 import { storage } from "@/src/utils/storage";
 import { usePosts, transformPostToFeedCard, Post } from "@/src/hooks/usePosts";
 
+// Threshold for triggering load more (30% from bottom)
+const END_REACHED_THRESHOLD = 0.3;
+
 /**
  * FeedScreen Component
  * 
@@ -140,7 +143,7 @@ export default function FeedScreen() {
       }
       // Infinite scroll
       onEndReached={handleEndReached}
-      onEndReachedThreshold={0.3}
+      onEndReachedThreshold={END_REACHED_THRESHOLD}
       // Footer loading indicator
       ListFooterComponent={renderFooter}
       // Empty state
