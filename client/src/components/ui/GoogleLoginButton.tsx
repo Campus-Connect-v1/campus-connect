@@ -1,9 +1,19 @@
+/**
+ * GoogleLoginButton Component
+ * 
+ * A button for signing in with Google OAuth.
+ * Uses Expo's auth-session for Google authentication.
+ */
+
 import { signInWithGoogle } from "@/src/services/authServices";
+import { useToast } from "@/src/components/ui/Toast";
 import * as Google from "expo-auth-session/providers/google";
 import { useEffect } from "react";
-import { Alert, Button } from "react-native";
+import { Button } from "react-native";
 
 export default function GoogleLoginButton() {
+  const { showToast } = useToast();
+  
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: "YOUR_EXPO_CLIENT_ID.apps.googleusercontent.com",
     iosClientId: "YOUR_IOS_CLIENT_ID.apps.googleusercontent.com",
@@ -17,14 +27,14 @@ export default function GoogleLoginButton() {
       if (authentication?.accessToken) {
         signInWithGoogle(authentication.accessToken).then((res) => {
           if (res.success) {
-            Alert.alert("Success", "Google login verified 🎉");
+            showToast("success", "Google login verified 🎉", "Success");
           } else {
-            Alert.alert("Error", res.error || "Google login failed");
+            showToast("error", res.error || "Google login failed", "Error");
           }
         });
       }
     }
-  }, [response]);
+  }, [response, showToast]);
 
   return (
     <Button

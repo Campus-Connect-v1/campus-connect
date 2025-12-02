@@ -3,9 +3,11 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ToastProvider } from "@/src/components/ui/Toast";
+import Loader from "@/src/components/ui/Loader";
 import './globals.css';
 
 SplashScreen.preventAutoHideAsync();
@@ -48,7 +50,7 @@ export default function RootLayout() {
   if (!fontsLoaded || loading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#6200ee" />
+        <Loader size={100} text="Loading CampusConnect..." />
       </View>
     );
   }
@@ -56,15 +58,17 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <Stack
-          screenOptions={{ headerShown: false }}
-          initialRouteName={initialRoute}
-        >
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="/(tabs)/home" />
-          <Stack.Screen name="auth/login" />
-          <Stack.Screen name="auth/register" />
-        </Stack>
+        <ToastProvider>
+          <Stack
+            screenOptions={{ headerShown: false }}
+            initialRouteName={initialRoute}
+          >
+            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="/(tabs)/home" />
+            <Stack.Screen name="auth/login" />
+            <Stack.Screen name="auth/register" />
+          </Stack>
+        </ToastProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
