@@ -167,6 +167,28 @@ export default function socketServer(httpServer) {
       }
     });
 
+    // NEW: Typing indicator
+    socket.on("typing", ({ conversationId, receiverId }) => {
+      const receiverSocketId = onlineUsers.get(receiverId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("user_typing", {
+          conversationId,
+          userId: socket.user.id,
+          username: socket.user.username,
+        });
+      }
+    });
+
+    socket.on("stop_typing", ({ conversationId, receiverId }) => {
+      const receiverSocketId = onlineUsers.get(receiverId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("user_stop_typing", {
+          conversationId,
+          userId: socket.user.id,
+        });
+      }
+    });
+
     socket.on("disconnect", () => {
       if (userId) onlineUsers.delete(userId);
       // console.log(`❌ User disconnected: ${userId}`);

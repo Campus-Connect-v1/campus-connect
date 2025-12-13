@@ -272,6 +272,7 @@ import { Ionicons } from "@expo/vector-icons"
 import { router } from "expo-router"
 import ConversationCard from "@/src/components/messaging/conversation-card"
 import SearchBar from "@/src/components/messaging/search-bar"
+import NewMessageModal from "@/src/components/messaging/new-message-modal"
 import { dataService } from "@/src/services/data-service"
 
 const MessagesScreen: React.FC = () => {
@@ -279,6 +280,8 @@ const MessagesScreen: React.FC = () => {
   const [filteredConversations, setFilteredConversations] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [showNewMessageModal, setShowNewMessageModal] = useState(false)
+  const [connectedUsers, setConnectedUsers] = useState<any[]>([])
 
   // entrance animation
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -289,6 +292,10 @@ const MessagesScreen: React.FC = () => {
         const data = dataService.getConversations()
         setConversations(data)
         setFilteredConversations(data)
+        
+        // Load connected users for new message modal
+        const users = dataService.getConnectedUsers()
+        setConnectedUsers(users)
       } catch (error) {
         console.error("Failed to load conversations:", error)
       } finally {
@@ -319,6 +326,13 @@ const MessagesScreen: React.FC = () => {
     router.push(`/messaging/chats/${conversationId}`)
   }
 
+  const handleSelectUser = (userId: string) => {
+    // Navigate to chat with selected user
+    // For now, we'll use the user ID as the conversation ID
+    // In a real app, you would check if a conversation exists or create one
+    router.push(`/messaging/chats/${userId}`)
+  }
+
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-white">
@@ -336,7 +350,7 @@ const MessagesScreen: React.FC = () => {
         <View className="px-4 py-4 border-b border-gray-100">
           <View className="flex-row items-center justify-between mb-4">
             <Text style={{ fontFamily: "Gilroy-SemiBold", fontSize: 28, color: "#0f172a" }}>Messages</Text>
-            <TouchableOpacity className="p-2">
+            <TouchableOpacity className="p-2" onPress={() => setShowNewMessageModal(true)}>
               <Ionicons name="create-outline" size={24} color="#ef4444" />
             </TouchableOpacity>
           </View>
@@ -366,6 +380,15 @@ const MessagesScreen: React.FC = () => {
             />
           )}
         </Animated.View>
+
+        {/* New Message Modal */}
+        <NewMessageModal
+          visible={showNewMessageModal}
+          onClose={() => setShowNewMessageModal(false)}
+          onSelectUser={handleSelectUser}
+          connections={connectedUsers}
+          isLoading={false}
+        />
       </SafeAreaView>
     </>
   )
