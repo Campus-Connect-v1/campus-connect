@@ -6,8 +6,11 @@ import useSWR from "swr";
 
 
 
+// Use environment variable if available, fallback to localhost for development
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://172.20.10.4:8000/api";
+
 const api = axios.create({
-  baseURL: "http://172.20.10.4:8000/api", 
+  baseURL: BASE_URL, 
   headers: {
     "Content-Type": "application/json",
   },
