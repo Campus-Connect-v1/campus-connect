@@ -4,8 +4,10 @@ import { Ionicons } from "@expo/vector-icons"
 import { zodResolver } from "@hookform/resolvers/zod"
 
 import Colors from "@/src/constants/Colors"
-import { loginSchema, signupSchema, type SignupSchema } from "@/src/schemas/authSchemas"
-import { signInWithEmail, signUpWithEmail } from "@/src/services/authServices"
+import { Font } from "@/src/theme/typography"
+import { signupSchema, type SignupSchema } from "@/src/schemas/authSchemas"
+import { register as registerUser } from "@/src/services/authServices"
+import { resolveUniversityIdFromEmail } from "@/src/services/university"
 import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import {
@@ -31,7 +33,7 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isGoogleLoading] = useState(false)
   const router = useRouter()
 
   const {
@@ -41,7 +43,8 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
   } = useForm<SignupSchema>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      fullName: "",
+      first_name: "",
+      last_name: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -51,13 +54,30 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
   const onSubmit = async (data: SignupSchema) => {
     setIsLoading(true)
     try {
-      const result = await signUpWithEmail(data)
-      if (result.success) {
-        onRegisterSuccess()
-      } else {
-        Alert.alert("Registration Failed", result.error || "Please try again")
+      // The server keys accounts to a university; resolve it from the .edu domain.
+      const universityId = await resolveUniversityIdFromEmail(data.email)
+      if (!universityId) {
+        Alert.alert(
+          "University not recognized",
+          "We couldn't match your email to a supported university. Please use your school email.",
+        )
+        return
       }
-    } catch (error) {
+
+      const result = await registerUser({
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        password: data.password,
+        university_id: universityId,
+      })
+
+      if (result.success) {
+        router.replace({ pathname: "/auth/verify-otp", params: { email: data.email } })
+      } else {
+        Alert.alert("Registration Failed", result.error.message || "Please try again")
+      }
+    } catch {
       Alert.alert("Error", "An unexpected error occurred")
     } finally {
       setIsLoading(false)
@@ -93,26 +113,48 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
 
         {/* Register Form */}
         <View style={styles.formContainer}>
-          {/* Full Name Input */}
+          {/* First Name Input */}
           <View style={styles.inputContainer}>
             <Controller
               control={control}
-              name="fullName"
+              name="first_name"
               render={({ field: { onChange, onBlur, value } }) => (
                 <TextInput
-                  style={[styles.input, errors.fullName && styles.inputError]}
-                  placeholder="Full Name"
+                  style={[styles.input, errors.first_name && styles.inputError]}
+                  placeholder="First Name"
                   placeholderTextColor={Colors.light.textSecondary}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
                   keyboardType="default"
-                  autoCapitalize="none"
+                  autoCapitalize="words"
                   autoCorrect={false}
                 />
               )}
             />
-            {errors.fullName && <Text style={styles.errorText}>{errors.fullName.message}</Text>}
+            {errors.first_name && <Text style={styles.errorText}>{errors.first_name.message}</Text>}
+          </View>
+
+          {/* Last Name Input */}
+          <View style={styles.inputContainer}>
+            <Controller
+              control={control}
+              name="last_name"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  style={[styles.input, errors.last_name && styles.inputError]}
+                  placeholder="Last Name"
+                  placeholderTextColor={Colors.light.textSecondary}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  keyboardType="default"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+              )}
+            />
+            {errors.last_name && <Text style={styles.errorText}>{errors.last_name.message}</Text>}
           </View>
 
           {/* Email Input */}
@@ -202,7 +244,7 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
             onPress={handleSubmit(onSubmit)}
             disabled={isLoading}
           >
-            {isLoading ? <ActivityIndicator color="white" /> : <Text style={styles.loginButtonText}>Sign In</Text>}
+            {isLoading ? <ActivityIndicator color="white" /> : <Text style={styles.loginButtonText}>Sign Up</Text>}
           </TouchableOpacity>
 
           {/* Divider */}
@@ -230,7 +272,7 @@ export default function RegisterScreen({ onRegisterSuccess, onNavigateToHome }: 
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
+            <Text style={styles.signupText}>{"Don't have an account? "}</Text>
             <TouchableOpacity onPress={() => router.push("/auth/login")}>
               <Text style={styles.signupLink}>Sign in</Text>
             </TouchableOpacity>
@@ -266,17 +308,16 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   welcomeTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
+    fontSize: 34,
     color: Colors.light.text,
     marginBottom: 8,
-    fontFamily: "Chillis",
+    fontFamily: Font.displayBold,
   },
   welcomeSubtitle: {
     fontSize: 16,
     color: Colors.light.textSecondary,
     textAlign: "center",
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   formContainer: {
     flex: 1,
@@ -292,7 +333,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     backgroundColor: Colors.light.inputBackground,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   inputError: {
     borderColor: Colors.light.error,
@@ -309,7 +350,7 @@ const styles = StyleSheet.create({
     paddingRight: 50,
     fontSize: 16,
     backgroundColor: Colors.light.inputBackground,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   eyeIcon: {
     position: "absolute",
@@ -320,7 +361,7 @@ const styles = StyleSheet.create({
     color: Colors.light.error,
     fontSize: 14,
     marginTop: 4,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   forgotPasswordContainer: {
     alignItems: "flex-end",
@@ -329,7 +370,7 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: Colors.light.primary,
     fontSize: 14,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   loginButton: {
     height: 56,
@@ -346,7 +387,7 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "bold",
-    fontFamily: "Gilroy-SemiBold",
+    fontFamily: "Barlow_600SemiBold",
   },
   dividerContainer: {
     flexDirection: "row",
@@ -362,7 +403,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     color: Colors.light.textSecondary,
     fontSize: 14,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   googleButton: {
     height: 56,
@@ -383,7 +424,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginLeft: 12,
-    fontFamily: "Gilroy-SemiBold",
+    fontFamily: "Barlow_600SemiBold",
   },
   signupContainer: {
     flexDirection: "row",
@@ -393,12 +434,12 @@ const styles = StyleSheet.create({
   signupText: {
     color: Colors.light.textSecondary,
     fontSize: 14,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   signupLink: {
     color: Colors.light.primary,
     fontSize: 14,
     fontWeight: "bold",
-    fontFamily: "Gilroy-SemiBold",
+    fontFamily: "Barlow_600SemiBold",
   },
 })

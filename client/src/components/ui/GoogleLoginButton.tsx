@@ -1,36 +1,44 @@
-import { signInWithGoogle } from "@/src/services/authServices";
+import { env } from "@/src/config/env";
+import { useAuthStore } from "@/src/store/authStore";
 import * as Google from "expo-auth-session/providers/google";
-import { useEffect } from "react";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { Alert, Button } from "react-native";
 
 export default function GoogleLoginButton() {
+  const router = useRouter();
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
+  const [submitting, setSubmitting] = useState(false);
+
   const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: "YOUR_EXPO_CLIENT_ID.apps.googleusercontent.com",
-    iosClientId: "YOUR_IOS_CLIENT_ID.apps.googleusercontent.com",
-    androidClientId: "YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com",
-    webClientId: "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
+    webClientId: env.googleWebClientId,
   });
 
   useEffect(() => {
-    if (response?.type === "success") {
-      const { authentication } = response;
-      if (authentication?.accessToken) {
-        signInWithGoogle(authentication.accessToken).then((res) => {
-          if (res.success) {
-            Alert.alert("Success", "Google login verified 🎉");
-          } else {
-            Alert.alert("Error", res.error || "Google login failed");
-          }
-        });
-      }
+    if (response?.type !== "success") return;
+    // The server verifies a Google **ID token**, not the access token.
+    const idToken = response.authentication?.idToken;
+    if (!idToken) {
+      Alert.alert("Google Sign-In", "No ID token returned. Check your client config.");
+      return;
     }
-  }, [response]);
+    setSubmitting(true);
+    loginWithGoogle(idToken)
+      .then((res) => {
+        if (res.success) {
+          router.replace("/(tabs)/home");
+        } else {
+          Alert.alert("Google Sign-In Failed", res.error.message || "Please try again");
+        }
+      })
+      .finally(() => setSubmitting(false));
+  }, [response, loginWithGoogle, router]);
 
   return (
     <Button
       title="Sign in with Google"
       onPress={() => promptAsync()}
-      disabled={!request}
+      disabled={!request || submitting}
     />
   );
 }

@@ -338,3 +338,35 @@ export const getConversationByParticipant = async (req, res) => {
     });
   }
 };
+
+// Get message history between the current user and a participant.
+export const getMessagesWithParticipant = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { participantId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+
+    // Most recent `limit` messages, returned oldest-first for the chat view.
+    const recent = await Message.find({
+      $or: [
+        { senderId: userId, receiverId: participantId },
+        { senderId: participantId, receiverId: userId },
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json({
+      success: true,
+      count: recent.length,
+      messages: recent.reverse(),
+    });
+  } catch (error) {
+    console.error("Get messages error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching messages",
+    });
+  }
+};

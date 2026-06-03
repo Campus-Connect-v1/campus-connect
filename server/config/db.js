@@ -40,22 +40,24 @@ export const db = mysql.createPool({
   // connectTimeout: 10000,
 });
 
-(async () => {
+export const verifyMySqlConnection = async () => {
   try {
     const connection = await db.getConnection();
+    await connection.ping();
     console.log(
       COLORS[process.env.SUCCESS],
       "Successfully connected to the database"
     );
     connection.release();
+    return true;
   } catch (err) {
     console.error(
-      COLORS[process.env.SUCCESS],
+      COLORS[process.env.ERROR],
       "Database connection failed:",
       err
     );
     process.exit(1);
   }
-})();
+};
 
 export default db;

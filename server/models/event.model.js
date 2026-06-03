@@ -43,7 +43,6 @@ export class Event {
     query += ` ORDER BY e.start_time ASC LIMIT ${parseInt(
       limit
     )} OFFSET ${parseInt(offset)}`;
-    params.push(parseInt(limit), parseInt(offset));
 
     try {
       const [events] = await db.execute(query, params);

@@ -1,3 +1,6 @@
+import Colors from '@/src/constants/Colors';
+import { useAuthStore } from '@/src/store/authStore';
+import { Font, displayTracking } from '@/src/theme/typography';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
@@ -6,20 +9,16 @@ import {
   Image,
   Modal,
   StatusBar,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
-// import { fetcher } from '@/services/fetcher';
 
 interface ProfileDrawerProps {
   isVisible: boolean;
   onClose: () => void;
-  user: {
-    name: string;
-    username: string;
-    avatar: string;
-  };
+  user: { name: string; username: string; avatar: string };
   onNavigate: (screen: string) => void;
   onLogout: () => void;
 }
@@ -28,192 +27,174 @@ interface MenuItem {
   id: string;
   title: string;
   icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
+  route?: string;
 }
 
-const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
-  isVisible,
-  onClose,
-  user,
-  onNavigate,
-  onLogout,
-}) => {
-  const slideAnim = React.useRef(new Animated.Value(-300)).current;
-  const overlayOpacity = React.useRef(new Animated.Value(0)).current;
-    // const { data, error, isLoading } = useSWR('/api/v1/status/profile', fetcher);
+const MENU: MenuItem[] = [
+  { id: 'profile', title: 'Profile', icon: 'person-outline', route: '/(tabs)/profile' },
+  { id: 'classmates', title: 'Classmates', icon: 'people-outline', route: '/connections' },
+  { id: 'nearby', title: 'Nearby', icon: 'navigate-outline', route: '/nearby' },
+  { id: 'campus', title: 'Campus Map', icon: 'map-outline', route: '/campus' },
+  { id: 'events', title: 'Events', icon: 'calendar-outline', route: '/(tabs)/events' },
+  { id: 'groups', title: 'Study Groups', icon: 'book-outline', route: '/(tabs)/study-groups' },
+  { id: 'settings', title: 'Settings', icon: 'settings-outline', route: '/settings' },
+];
 
-      // const profile = data?.data;
+const CREAM = '#FBF5E9';
+
+function initials(name?: string) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
+}
+
+const ProfileDrawer: React.FC<ProfileDrawerProps> = ({ isVisible, onClose, user }) => {
+  const slideAnim = React.useRef(new Animated.Value(-320)).current;
+  const overlayOpacity = React.useRef(new Animated.Value(0)).current;
+
+  const storeUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
+  const name = storeUser?.name ?? user?.name ?? 'Student';
+  const email = storeUser?.email ?? user?.username ?? '';
+  const avatar = user?.avatar;
 
   React.useEffect(() => {
-    if (isVisible) {
-      // Slide in animation
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayOpacity, {
-          toValue: 0.5,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      // Slide out animation
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: -300,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: isVisible ? 0 : -320,
+        duration: isVisible ? 300 : 240,
+        useNativeDriver: true,
+      }),
+      Animated.timing(overlayOpacity, {
+        toValue: isVisible ? 0.45 : 0,
+        duration: isVisible ? 300 : 240,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, [isVisible, slideAnim, overlayOpacity]);
 
-  const menuItems: MenuItem[] = [
-    {
-      id: 'profile',
-      title: 'Profile',
-      icon: 'person-outline',
-      onPress: () => {
-        router.push('/(tabs)/profile');
-      },
-    },
-    {
-      id: 'events',
-      title: 'Events',
-      icon: 'calendar-outline',
-      onPress: () => {
-        // router.push('/screens/events/events-screen')
-        onClose();
-      },
-    },
-    {
-      id: 'contributions',
-      title: 'Contributions',
-      icon: 'extension-puzzle-outline',
-      onPress: () => {
-        onNavigate('Contributions');
-        onClose();
-      },
-    },
-    {
-      id: 'settings',
-      title: 'Settings',
-      icon: 'settings-outline',
-      onPress: () => {
-        // router.push('/(tabs)/settings');
-        onClose();
-      },
-    },
-  ];
-
-  const handleLogout = () => {
+  const go = (item: MenuItem) => {
     onClose();
-    onLogout();
+    if (item.route) router.push(item.route as never);
   };
 
-  const handleOverlayPress = () => {
+  const handleLogout = async () => {
     onClose();
+    await logout();
+    router.replace('/auth/login');
   };
 
   return (
-    <Modal
-      visible={isVisible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
-      <StatusBar backgroundColor="rgba(0,0,0,0.5)" barStyle="light-content" />
-      
-      {/* Overlay */}
-      <Animated.View
-        className="flex-1 bg-black"
-        style={{ opacity: overlayOpacity }}
-      >
-        <TouchableOpacity
-          className="flex-1"
-          activeOpacity={1}
-          onPress={handleOverlayPress}
-        />
+    <Modal visible={isVisible} transparent animationType="none" onRequestClose={onClose}>
+      <StatusBar backgroundColor="rgba(0,0,0,0.45)" barStyle="light-content" />
+
+      <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
       </Animated.View>
 
-      {/* Drawer */}
-      <Animated.View
-        className="absolute top-0 left-0 h-full w-72 bg-[#002D69]"
-        style={{
-          transform: [{ translateX: slideAnim }],
-        }}
-      >
-        {/* User Profile Section */}
-        <View className="pt-16 pb-8 px-6">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <TouchableOpacity onPress={() => router.push("/(tabs)/profile")} className="w-12 h-12 rounded-full overflow-hidden mr-3">
-                <Image
-                  source={{ uri: user.avatar }}
-                  className="w-full h-full"
-                  resizeMode="cover"
-                />
-              </TouchableOpacity>
-              <View className="flex-1">
-                <Text style={{fontFamily: "Gilroy-Medium"}}  className="text-white text-lg font-semibold">
-                  {/* {profile?.fullName } */}
-                </Text>
-                <Text style={{fontFamily: "Gilroy-Regular"}} className="text-blue-200 text-lg">
-                  {/* @{profile?.userName} */}
-                </Text>
-              </View>
+      <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
+        {/* Brand */}
+        <Text style={styles.brand}>CAMPUS{'\n'}CONNECT</Text>
+        <View style={styles.accentRule} />
+
+        {/* User */}
+        <View style={styles.userRow}>
+          {avatar ? (
+            <Image source={{ uri: avatar }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.avatarText}>{initials(name)}</Text>
             </View>
-            
-            {/* Add/Plus Icon */}
-            <TouchableOpacity className="w-8 h-8 rounded-full border border-white items-center justify-center">
-              <Ionicons name="add" size={20} color="white" />
-            </TouchableOpacity>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name} numberOfLines={1}>{name}</Text>
+            {!!email && (
+              <Text style={styles.email} numberOfLines={1}>{email}</Text>
+            )}
           </View>
         </View>
 
-        {/* Menu Items */}
-        <View className="flex-1 pt-4">
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              className="flex-row items-center px-6 py-4 active:bg-blue-800"
-              onPress={item.onPress}
-            >
-              <Ionicons
-                name={item.icon}
-                size={24}
-                color="white"
-                className="mr-4"
-              />
-              <Text style={{fontFamily: "Gilroy-Regular"}} className="text-white text-lg font-medium ml-4">
-                {item.title}
-              </Text>
+        {/* Menu */}
+        <View style={styles.menu}>
+          {MENU.map((item) => (
+            <TouchableOpacity key={item.id} style={styles.menuItem} onPress={() => go(item)}>
+              <Ionicons name={item.icon} size={22} color={CREAM} />
+              <Text style={styles.menuText}>{item.title}</Text>
+              <Ionicons name="chevron-forward" size={18} color="rgba(251,245,233,0.35)" />
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Logout Button */}
-        <View className="p-6 pb-8">
-          <TouchableOpacity
-            className="bg-yellow-500 rounded-full py-4 items-center active:bg-yellow-600"
-            onPress={handleLogout}
-          >
-            <Text style={{fontFamily: "Gilroy-Medium"}} className="text-white text-lg font-semibold">
-              Log out
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Logout */}
+        <TouchableOpacity style={styles.logout} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color={Colors.light.primary} />
+          <Text style={styles.logoutText}>Log out</Text>
+        </TouchableOpacity>
       </Animated.View>
     </Modal>
   );
 };
+
+const styles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: '#000' },
+  drawer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    height: '100%',
+    width: 300,
+    backgroundColor: Colors.light.primary,
+    paddingTop: 72,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+  },
+  brand: {
+    fontFamily: Font.display,
+    fontSize: 38,
+    lineHeight: 38,
+    letterSpacing: displayTracking,
+    color: CREAM,
+  },
+  accentRule: {
+    height: 3,
+    width: 44,
+    borderRadius: 3,
+    backgroundColor: Colors.light.sky,
+    marginTop: 14,
+    marginBottom: 28,
+  },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingBottom: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(251,245,233,0.18)',
+  },
+  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.light.secondary },
+  avatarFallback: { justifyContent: 'center', alignItems: 'center' },
+  avatarText: { fontFamily: Font.display, fontSize: 20, color: CREAM, letterSpacing: displayTracking },
+  name: { fontFamily: Font.semibold, fontSize: 17, color: CREAM },
+  email: { fontFamily: Font.body, fontSize: 13, color: 'rgba(251,245,233,0.6)', marginTop: 2 },
+  menu: { flex: 1, paddingTop: 20, gap: 2 },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 15,
+  },
+  menuText: { flex: 1, fontFamily: Font.medium, fontSize: 16, color: CREAM },
+  logout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: CREAM,
+    borderRadius: 999,
+    paddingVertical: 15,
+  },
+  logoutText: { fontFamily: Font.semibold, fontSize: 16, color: Colors.light.primary },
+});
 
 export default ProfileDrawer;

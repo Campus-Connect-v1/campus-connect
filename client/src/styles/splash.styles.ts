@@ -73,7 +73,7 @@ export const styles = StyleSheet.create({
     marginBottom: 30,
     marginTop: 10,
     lineHeight: 24,
-    fontFamily: "Gilroy-Regular",
+    fontFamily: "Barlow_400Regular",
   },
   featuresContainer: {
     alignItems: "flex-start",
@@ -89,7 +89,7 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     color: "white",
     marginLeft: 10,
-    fontFamily: "Gilroy-Regular",
+    fontFamily: "Barlow_400Regular",
   },
   dotsContainer: {
     flexDirection: "row",
@@ -125,7 +125,7 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginRight: 8,
-    fontFamily: "Gilroy-SemiBold",
+    fontFamily: "Barlow_600SemiBold",
   },
   getStartedButton: {
     backgroundColor: Colors.light.primary,
@@ -137,6 +137,6 @@ export const styles = StyleSheet.create({
   getStartedButtonText: {
     color: "#fff",
     fontSize: 18,
-    fontFamily: "Gilroy-SemiBold",
+    fontFamily: "Barlow_600SemiBold",
   },
 });

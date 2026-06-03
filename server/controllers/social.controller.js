@@ -2,6 +2,7 @@
 import {
   createPostModel,
   getFeedPostsModel,
+  markFeedPostsSeenModel,
   getPostByIdModel,
   likePostModel,
   unlikePostModel,
@@ -30,9 +31,9 @@ export const createPost = async (req, res) => {
 
     const postData = {
       user_id: userId,
-      content,
-      media_url,
-      media_type,
+      content: content?.trim() || null,
+      media_url: media_url || null,
+      media_type: media_type || "text",
       visibility,
       expires_at: expires_at || null,
     };
@@ -71,6 +72,10 @@ export const getFeedPosts = async (req, res) => {
       parseInt(limit),
       parseInt(offset)
     );
+    void markFeedPostsSeenModel(
+      userId,
+      posts.map((post) => post.post_id)
+    ).catch((error) => console.error("Mark feed seen error:", error));
 
     res.status(200).json({
       message: "Feed posts retrieved successfully",

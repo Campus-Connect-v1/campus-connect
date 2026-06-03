@@ -1,14 +1,7 @@
-import React from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Redirect } from 'expo-router'
 
 const ProfileScreen = () => {
-  return (
-    <View>
-      <Text>ProfileScreen</Text>
-    </View>
-  )
+  return <Redirect href="/(tabs)/profile" />
 }
 
 export default ProfileScreen
-
-const styles = StyleSheet.create({})

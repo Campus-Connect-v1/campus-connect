@@ -16,6 +16,7 @@ import {
   updateInterest,
   deleteProfile,
   cancelConnectionRequest,
+  respondToConnection,
 } from "../controllers/user.controller.js";
 import authenticate from "../middleware/auth.js";
 import {
@@ -124,6 +125,15 @@ router.post("/connections/request", sendConnectionRequest);
  *     summary: Cancel connection request
  */
 router.delete("/connections/request/:connection_id", cancelConnectionRequest);
+
+/**
+ * @swagger
+ * /user/connections/respond:
+ *   post:
+ *     tags: [Connections]
+ *     summary: Accept or decline a connection request
+ */
+router.post("/connections/respond", respondToConnection);
 
 // ==================== INTERESTS ENDPOINTS ====================
 
