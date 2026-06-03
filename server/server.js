@@ -3,9 +3,11 @@ import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
 import http from "http";
+import mongoose from "mongoose";
 
 import { swaggerDocs } from "./utils/swagger.js";
 import { COLORS } from "./helper/logger.js";
+import db, { verifyMySqlConnection } from "./config/db.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
@@ -27,7 +29,8 @@ const app = express();
 const server = http.createServer(app);
 
 // ============= MONGO DB ====================
-connectMongoDB();
+await connectMongoDB();
+await verifyMySqlConnection();
 
 // ============= SWAGGER =====================
 swaggerDocs(app);
@@ -37,9 +40,9 @@ console.log(COLORS[process.env.SUCCESS], "PORT:", process.env.PORT);
 console.log(COLORS[process.env.SUCCESS], "NODE_ENV:", process.env.NODE_ENV);
 
 // ============= EXPRESS ======================
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "35mb" }));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "35mb" }));
 
 // ============= MORGAN ======================
 if (process.env.NODE_ENV === "development") {
@@ -47,8 +50,34 @@ if (process.env.NODE_ENV === "development") {
 }
 
 // ============= ROUTES ======================
-app.get("/api/health", (req, res) => {
-  res.status(200).json({ message: "API is healthy" });
+const getDbHealth = async () => {
+  const health = {
+    api: "ok",
+    mysql: "unknown",
+    mongo: mongoose.connection.readyState === 1 ? "ok" : "unavailable",
+  };
+
+  try {
+    await db.query("SELECT 1");
+    health.mysql = "ok";
+  } catch (error) {
+    health.mysql = "error";
+    health.mysql_error =
+      process.env.NODE_ENV === "development" ? error.message : undefined;
+  }
+
+  return health;
+};
+
+app.get("/api/health", async (req, res) => {
+  const health = await getDbHealth();
+  const statusCode = health.mysql === "ok" && health.mongo === "ok" ? 200 : 503;
+  res.status(statusCode).json(health);
+});
+app.get("/api/health/db", async (req, res) => {
+  const health = await getDbHealth();
+  const statusCode = health.mysql === "ok" && health.mongo === "ok" ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
@@ -74,6 +103,13 @@ app.use((req, res, next) => {
 
 // =========================Error handling middleware
 app.use((error, req, res, next) => {
+  if (error.type === "entity.too.large") {
+    return res.status(413).json({
+      message: "Request payload too large",
+      limit: "35mb",
+    });
+  }
+
   console.error(COLORS[process.env.ERROR], "Unhandled error:", error);
   res.status(500).json({
     message: "Internal server error",

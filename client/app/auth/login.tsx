@@ -2,7 +2,8 @@
 
 import Colors from "@/src/constants/Colors"
 import { loginSchema, type LoginSchema } from "@/src/schemas/authSchemas"
-import { signInWithEmail } from "@/src/services/authServices"
+import { useAuthStore } from "@/src/store/authStore"
+import { Font } from "@/src/theme/typography"
 import { Ionicons } from "@expo/vector-icons"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "expo-router"
@@ -29,7 +30,7 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: LoginScreenProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isGoogleLoading] = useState(false)
   const router = useRouter()
 
   const {
@@ -44,24 +45,28 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
     },
   })
 
+  const login = useAuthStore((s) => s.login)
+
   const onSubmit = async (data: LoginSchema) => {
-    router.push('/home');
+    setIsLoading(true)
+    try {
+      const result = await login(data)
+      if (result.success) {
+        router.replace("/(tabs)/home")
+        return
+      }
+      // 403 = registered but email not yet verified → send to OTP screen.
+      if (result.error.status === 403) {
+        router.push({ pathname: "/auth/verify-otp", params: { email: data.email } })
+        return
+      }
+      Alert.alert("Login Failed", result.error.message || "Please try again")
+    } catch {
+      Alert.alert("Error", "An unexpected error occurred")
+    } finally {
+      setIsLoading(false)
+    }
   }
-  // const onSubmit = async (data: LoginSchema) => {
-  //   setIsLoading(true)
-  //   try {
-  //     const result = await signInWithEmail(data)
-  //     if (result.success) {
-  //       onLoginSuccess()
-  //     } else {
-  //       Alert.alert("Login Failed", result.error || "Please try again")
-  //     }
-  //   } catch (error) {
-  //     Alert.alert("Error", "An unexpected error occurred")
-  //   } finally {
-  //     setIsLoading(false)
-  //   }
-  // }
 
   // const handleGoogleSignIn = async () => {
   //   setIsGoogleLoading(true)
@@ -180,7 +185,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToSignup }: Logi
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
+            <Text style={styles.signupText}>{"Don't have an account? "}</Text>
             <TouchableOpacity onPress={() => router.push("/auth/register")}>
               <Text style={styles.signupLink}>Sign Up</Text>
             </TouchableOpacity>
@@ -216,17 +221,16 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   welcomeTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
+    fontSize: 34,
     color: Colors.light.text,
     marginBottom: 8,
-    fontFamily: "Gilroy-SemiBold",
+    fontFamily: Font.displayBold,
   },
   welcomeSubtitle: {
     fontSize: 16,
     color: Colors.light.textSecondary,
     textAlign: "center",
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   formContainer: {
     flex: 1,
@@ -242,7 +246,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     backgroundColor: Colors.light.inputBackground,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   inputError: {
     borderColor: Colors.light.error,
@@ -259,7 +263,7 @@ const styles = StyleSheet.create({
     paddingRight: 50,
     fontSize: 16,
     backgroundColor: Colors.light.inputBackground,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   eyeIcon: {
     position: "absolute",
@@ -270,7 +274,7 @@ const styles = StyleSheet.create({
     color: Colors.light.error,
     fontSize: 14,
     marginTop: 4,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   forgotPasswordContainer: {
     alignItems: "flex-end",
@@ -279,7 +283,7 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: Colors.light.primary,
     fontSize: 14,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   loginButton: {
     height: 56,
@@ -296,7 +300,7 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "bold",
-    fontFamily: "Gilroy-SemiBold",
+    fontFamily: "Barlow_600SemiBold",
   },
   dividerContainer: {
     flexDirection: "row",
@@ -312,7 +316,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     color: Colors.light.textSecondary,
     fontSize: 14,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   googleButton: {
     height: 56,
@@ -333,7 +337,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginLeft: 12,
-    fontFamily: "Gilroy-SemiBold",
+    fontFamily: "Barlow_600SemiBold",
   },
   signupContainer: {
     flexDirection: "row",
@@ -343,12 +347,12 @@ const styles = StyleSheet.create({
   signupText: {
     color: Colors.light.textSecondary,
     fontSize: 14,
-    fontFamily: "Gilroy-Medium",
+    fontFamily: "Barlow_500Medium",
   },
   signupLink: {
     color: Colors.light.primary,
     fontSize: 14,
     fontWeight: "bold",
-    fontFamily: "Gilroy-SemiBold",
+    fontFamily: "Barlow_600SemiBold",
   },
 })

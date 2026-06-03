@@ -4,6 +4,51 @@
 
 ---
 
+## Database Boundary
+
+The API uses three backing stores. Keep this split intact when adding endpoints so the client contract stays predictable.
+
+### MySQL
+
+Configured in `config/db.js`.
+
+Primary source of truth for relational product data:
+
+- `models/auth.model.js`: registration, login lookup, OTP/password reset, university-domain auth lookup.
+- `models/user.model.js`: profile, interests, courses, connections, search, recommendations, stats.
+- `models/university.model.js`: universities, domains, campus buildings, campus facilities.
+- `models/studyGroup.model.js`: study groups and membership.
+- `models/event.model.js`: events, RSVPs, attendees, user event views.
+- `models/social.model.js`: posts, likes, comments, feed queries.
+- `models/location.model.js`: relational location/privacy support where used by profile/privacy flows.
+
+`server.js` explicitly verifies the MySQL pool at boot through `verifyMySqlConnection()`. `/api/health` and `/api/health/db` run a MySQL `SELECT 1` ping before reporting healthy.
+
+### MongoDB
+
+Configured in `config/mongoDB.js`.
+
+Document store for:
+
+- `models/conversation.model.js`: conversation list, participants, last-message metadata, unread counts.
+- `models/message.model.js`: direct chat messages.
+- `models/location.js`: user location history/geofencing documents.
+
+Mongo connects at boot in `server.js`. `/api/health` and `/api/health/db` report Mongo healthy only when Mongoose ready state is connected.
+
+### Redis
+
+Configured in `config/redis.js`, with an in-memory fallback for local development when Redis is unavailable.
+
+Cache/ephemeral store for:
+
+- `utils/privacyService.js`: privacy/geofencing visibility cache.
+- `utils/locationService.js`: location/geofencing cache and nearby-user support.
+
+Redis failure should not block local development; production should still provide `REDIS_URL`.
+
+---
+
 ## Authentication Routes
 
 ### 1. Register User

@@ -428,6 +428,21 @@ INSERT INTO `event_attendees` (`attendee_id`, `event_id`, `user_id`, `rsvp_statu
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `feed_post_seen`
+--
+
+CREATE TABLE `feed_post_seen` (
+  `user_id` varchar(50) NOT NULL,
+  `post_id` varchar(50) NOT NULL,
+  `seen_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`,`post_id`),
+  KEY `idx_feed_seen_post` (`post_id`),
+  KEY `idx_feed_seen_at` (`seen_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `group_members`
 --
 
@@ -539,7 +554,7 @@ CREATE TABLE `posts` (
   `post_id` varchar(50) NOT NULL,
   `user_id` varchar(50) NOT NULL,
   `content` text,
-  `media_url` varchar(500) DEFAULT NULL,
+  `media_url` longtext,
   `media_type` enum('image','video','text') DEFAULT 'text',
   `visibility` enum('public','connections','private') DEFAULT 'connections',
   `is_active` tinyint(1) DEFAULT '1',
@@ -675,6 +690,24 @@ INSERT INTO `post_likes` (`like_id`, `post_id`, `user_id`, `created_at`) VALUES
 ('like_8', 'post_4', 'user_4', '2024-01-15 18:00:00'),
 ('like_9', 'post_5', 'user_1', '2024-01-16 19:00:00'),
 ('like_afcc95e4-75bc-469f-ad8d-529a19fc9b20', 'post_1', 'user_1', '2025-10-21 01:54:10');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `statuses`
+--
+
+CREATE TABLE `statuses` (
+  `status_id` varchar(60) NOT NULL,
+  `user_id` varchar(50) NOT NULL,
+  `content` text,
+  `media_url` longtext,
+  `media_type` enum('image','video','text') DEFAULT 'text',
+  `is_active` tinyint(1) DEFAULT '1',
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
