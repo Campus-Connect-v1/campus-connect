@@ -10,12 +10,21 @@ import {
   getPostComments,
   deletePost,
 } from "../controllers/social.controller.js";
+import {
+  createStatus,
+  getLatestStatuses,
+  getUserStatuses,
+} from "../controllers/status.controller.js";
 import authenticate from "../middleware/auth.js";
 
 const router = express.Router();
 
 // Apply auth middleware to all routes
 router.use(authenticate);
+
+router.post("/statuses", createStatus);
+router.get("/statuses", getLatestStatuses);
+router.get("/statuses/users/:user_id", getUserStatuses);
 
 /**
  * @swagger

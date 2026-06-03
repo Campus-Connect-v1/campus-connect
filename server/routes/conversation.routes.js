@@ -6,6 +6,7 @@ import {
   createConversation,
   deleteConversation,
   getConversationByParticipant,
+  getMessagesWithParticipant,
 } from "../controllers/conversation.controller.js";
 import { authenticate } from "../middleware/auth.js";
 
@@ -253,6 +254,19 @@ router.get(
   "/participant/:participantId",
   authenticate,
   getConversationByParticipant
+);
+
+/**
+ * @swagger
+ * /conversations/participant/{participantId}/messages:
+ *   get:
+ *     tags: [Conversations]
+ *     summary: Get message history with a participant
+ */
+router.get(
+  "/participant/:participantId/messages",
+  authenticate,
+  getMessagesWithParticipant
 );
 
 export default router;

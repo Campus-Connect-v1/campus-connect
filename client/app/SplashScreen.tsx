@@ -89,7 +89,7 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [imageOpacity]);
 
   // Initial fade-in for content
   useEffect(() => {
@@ -99,7 +99,7 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
       delay: 300,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [contentOpacity]);
 
   const handleNext = async () => {
     if (currentStep < onboardingData.length - 1) {
@@ -112,16 +112,6 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
       // Save onboarding completion flag
       await AsyncStorage.setItem("hasSeenOnboarding", "true");
       onFinish(); // proceed to app
-    }
-  };
-
-  const handleBack = () => {
-    if (currentStep > 0) {
-      flatListRef.current?.scrollToIndex({
-        index: currentStep - 1,
-        animated: true,
-      });
-      setCurrentStep(currentStep - 1);
     }
   };
 
@@ -232,12 +222,6 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
         {renderDots()}
 
         {/* <View style={styles.buttonsContainer}>
-          {currentStep > 0 && (
-            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-              <AntDesign name="arrow-left" size={20} color="#fff" />
-            </TouchableOpacity>
-          )}
-
           {currentStep < onboardingData.length - 1 && (
             <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
               <Text style={styles.nextButtonText}>Next</Text>

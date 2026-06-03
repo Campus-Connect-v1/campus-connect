@@ -40,9 +40,9 @@ console.log(COLORS[process.env.SUCCESS], "PORT:", process.env.PORT);
 console.log(COLORS[process.env.SUCCESS], "NODE_ENV:", process.env.NODE_ENV);
 
 // ============= EXPRESS ======================
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "35mb" }));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "35mb" }));
 
 // ============= MORGAN ======================
 if (process.env.NODE_ENV === "development") {
@@ -103,6 +103,13 @@ app.use((req, res, next) => {
 
 // =========================Error handling middleware
 app.use((error, req, res, next) => {
+  if (error.type === "entity.too.large") {
+    return res.status(413).json({
+      message: "Request payload too large",
+      limit: "35mb",
+    });
+  }
+
   console.error(COLORS[process.env.ERROR], "Unhandled error:", error);
   res.status(500).json({
     message: "Internal server error",
