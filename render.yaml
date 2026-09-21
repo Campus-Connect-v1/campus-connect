@@ -11,9 +11,12 @@ services:
     name: campus-connect-api
     runtime: node
     rootDir: server
-    plan: starter          # NOT free: the free plan spins down after 15 min
-                           # idle, which drops every Socket.IO connection and
-                           # wipes the in-memory onlineUsers map in socket.js.
+    # Free plan spins down after 15 min idle. .github/workflows/keep-awake.yml
+    # pings /api/health on a schedule to prevent that. Note the free tier also
+    # caps at 750 instance-hours/month across ALL free services -- one service
+    # held awake 24/7 uses ~744, so this fits with almost no headroom. A second
+    # free service would exceed it.
+    plan: free
     region: oregon
     branch: main
 
