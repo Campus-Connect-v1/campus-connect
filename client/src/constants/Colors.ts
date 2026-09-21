@@ -1,31 +1,40 @@
-const primaryColor = "#003554"; // Indigo
-const secondaryColor = "#8B5CF6"; // Purple
-const accentColor = "#06B6D4"; // Cyan
+/**
+ * Back-compat shim. The palette now lives in `src/styles/theme.ts`; prefer
+ * `useTheme()` in new code so dark mode resolves automatically.
+ *
+ * This file stays only so screens still being migrated keep compiling. The old
+ * indigo/purple/cyan values are gone — every key below resolves to a token in
+ * the current system, and several of them now point at the same neutral because
+ * the old file drew distinctions the design system does not make.
+ */
+import { palette } from "../styles/theme";
+
+const light = palette.light;
 
 export default {
   light: {
-    primary: primaryColor,
-    secondary: secondaryColor,
-    accent: accentColor,
-    text: "#1F2937",
-    textSecondary: "#374151",
-    inputBackground: "#F9FAFB",
-    background: "#FFFFFF",
-    card: "#F9FAFB",
-    border: "#E5E7EB",
-    tint: primaryColor,
-    tabIconDefault: "#9CA3AF",
-    tabIconSelected: primaryColor,
-    lightGray: "#F3F4F6",
-    gray: "#6B7280",
-    like: "#F43F5E",
-    link: "#2563EB",
-    caption: "#4B5563",
-    username: "#111827",
-    timestamp: "#9CA3AF",
-    success: "#10B981",
-    warning: "#FBBF24",
-    error: "#EF4444",
-    notification: "#F43F5E",
+    primary: light.textPrimary,
+    secondary: light.textSecondary,
+    accent: light.accent,
+    text: light.textPrimary,
+    textSecondary: light.textSecondary,
+    inputBackground: light.surface,
+    background: light.background,
+    card: light.surface,
+    border: light.border,
+    tint: light.accent,
+    tabIconDefault: light.textMuted,
+    tabIconSelected: light.textPrimary,
+    lightGray: light.surfaceSunken,
+    gray: light.textMuted,
+    like: light.destructive,
+    link: light.textPrimary,
+    caption: light.textSecondary,
+    username: light.textPrimary,
+    timestamp: light.textMuted,
+    success: light.success,
+    warning: light.accent,
+    error: light.destructive,
+    notification: light.destructive,
   },
-};
+} as const;

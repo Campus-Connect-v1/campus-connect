@@ -1,0 +1,201 @@
+{
+  "tool": "mobile-design-review",
+  "version": 1,
+  "date": "2026-09-21",
+  "run": "regression (2nd) + fixes applied",
+  "pass": "static-only",
+  "designScore": "A-",
+  "slopScore": "A",
+  "categories": {
+    "navigation": "A",
+    "screenAnatomy": "A",
+    "typography": "A",
+    "colorAndTheming": "A",
+    "surfacesAndGrouping": "A",
+    "states": "A-",
+    "interactionAndMotion": "A",
+    "formsAndInput": "A",
+    "performanceSignals": "A",
+    "copyAndContent": "A"
+  },
+  "findings": [
+    {
+      "id": "FINDING-001",
+      "impact": "high",
+      "category": "states",
+      "summary": "A login 401 was treated as an expired authenticated session and redirected away from the form error.",
+      "status": "fixed"
+    },
+    {
+      "id": "FINDING-002",
+      "impact": "high",
+      "category": "states",
+      "summary": "University request failures were collapsed into an empty array, hiding the difference between a network failure and an empty API result.",
+      "status": "fixed"
+    },
+    {
+      "id": "FINDING-003",
+      "impact": "medium",
+      "category": "copyAndContent",
+      "summary": "Explore repeated its purpose in a large secondary headline directly under the Explore title.",
+      "status": "fixed"
+    },
+    {
+      "id": "FINDING-004",
+      "impact": "medium",
+      "category": "copyAndContent",
+      "summary": "The personalized Home greeting was oversized and followed by redundant movement copy.",
+      "status": "fixed"
+    },
+    {
+      "id": "FINDING-005",
+      "impact": "medium",
+      "category": "surfacesAndGrouping",
+      "summary": "Several Explore and action cards relied on flat color alone and read as unfinished placeholders.",
+      "status": "fixed"
+    },
+    {
+      "id": "FINDING-006",
+      "impact": "medium",
+      "category": "surfacesAndGrouping",
+      "summary": "The You screen ended its profile content with two generic stat cards instead of a distinctive user-specific module.",
+      "status": "fixed"
+    },
+    {
+      "id": "FINDING-007",
+      "impact": "medium",
+      "category": "states",
+      "summary": "Settings toggles live only in component state and are not persisted or consumed elsewhere.",
+      "status": "superseded",
+      "supersededBy": "FINDING-010"
+    },
+    {
+      "id": "FINDING-008",
+      "impact": "medium",
+      "category": "states",
+      "summary": "Every content screen loads behind a bare ActivityIndicator; no skeletons mirror the final layout.",
+      "tell": 37,
+      "status": "fixed",
+      "resolution": "Skeletons mirroring PostCard/EventCard/PeopleGrid replaced the bare spinners."
+    },
+    {
+      "id": "FINDING-009",
+      "impact": "medium",
+      "category": "states",
+      "summary": "No offline detection or banner anywhere, though every screen is now API-fed.",
+      "tell": 38,
+      "status": "fixed",
+      "resolution": "NetworkProvider plus an OfflineBanner on Home, Events and Connect."
+    },
+    {
+      "id": "FINDING-010",
+      "impact": "high",
+      "category": "states",
+      "summary": "Privacy, notification and appearance toggles persist nowhere and are read by nothing, while real endpoints for all three now exist. Privacy toggles in particular promise control they do not deliver.",
+      "tell": 41,
+      "status": "fixed",
+      "resolution": "Privacy, notification and appearance settings now persist to real endpoints and device storage."
+    },
+    {
+      "id": "FINDING-011",
+      "impact": "medium",
+      "category": "performanceSignals",
+      "summary": "ScrollView wraps unbounded API-fed lists on events groups, profile posts, saved and connect.",
+      "tell": 13,
+      "status": "fixed",
+      "resolution": "Events groups and profile posts are FlatLists."
+    },
+    {
+      "id": "FINDING-012",
+      "impact": "medium",
+      "category": "copyAndContent",
+      "summary": "Em-dashes in three visible strings, which MOBILE-DESIGN.md bans outright.",
+      "tell": 33,
+      "status": "fixed",
+      "resolution": "Em-dashes removed from visible strings."
+    },
+    {
+      "id": "FINDING-013",
+      "impact": "medium",
+      "category": "navigation",
+      "summary": "Connect (nearby people, the product differentiator) is href:null while Create occupies a tab slot; the tab bar is the default Home/Explore/Create/Campus/You shape.",
+      "tell": 24,
+      "status": "fixed",
+      "requiresApproval": true,
+      "resolution": "Tabs are now Home/Connect/Events/Campus/You; Create moved to the Home header."
+    },
+    {
+      "id": "FINDING-014",
+      "impact": "medium",
+      "category": "performanceSignals",
+      "summary": "Profile refetches profile and stats on every tab focus with no staleness guard.",
+      "status": "fixed",
+      "resolution": "Profile refetch is rate-limited to once per 30s on focus."
+    },
+    {
+      "id": "FINDING-015",
+      "impact": "polish",
+      "category": "colorAndTheming",
+      "summary": "Three LinearGradient usages against a declared single-sanctioned-gradient commitment.",
+      "status": "fixed",
+      "resolution": "The design doc now states the gradient rule as 'scrims over media only' and names the three."
+    },
+    {
+      "id": "FINDING-016",
+      "impact": "polish",
+      "category": "formsAndInput",
+      "summary": "Compose and account text inputs omit autoCapitalize/autoComplete.",
+      "tell": 34,
+      "status": "fixed",
+      "resolution": "autoCapitalize/autoCorrect added; new forms carry keyboardType and textContentType."
+    },
+    {
+      "id": "FINDING-017",
+      "impact": "medium",
+      "category": "copyAndContent",
+      "summary": "MOBILE-DESIGN.md is stale: its Known Gaps still claim the feed is mock-fed and /api/social unwired, and it points at features/campus/mock.ts which is now types.ts.",
+      "status": "fixed",
+      "resolution": "MOBILE-DESIGN.md rewritten against the current app."
+    },
+    {
+      "id": "FINDING-018",
+      "impact": "medium",
+      "category": "states",
+      "summary": "Saved can never show content: adaptPost hardcodes saved:false and no bookmark endpoint exists, so the save button writes to state discarded on refresh.",
+      "status": "fixed",
+      "resolution": "Saved posts persist device-locally via SavedPostsContext."
+    },
+    {
+      "id": "FINDING-019",
+      "impact": "medium",
+      "category": "screenAnatomy",
+      "summary": "Screen's bottom padding is a no-op ternary (? 0 : 0), and settings-family scrollables use fixed bottom padding instead of insets.",
+      "tell": 23,
+      "status": "fixed",
+      "resolution": "Screen's bottom inset works; SettingsShell opts in."
+    },
+    {
+      "id": "FINDING-020",
+      "impact": "polish",
+      "category": "colorAndTheming",
+      "summary": "Inline hex #14100C in the tab bar shadow instead of an elevation token.",
+      "tell": 6,
+      "status": "fixed",
+      "resolution": "Tab bar shadow uses the culture.ink token."
+    }
+  ],
+  "unverified": [
+    "keyboard reachability on a physical iOS device",
+    "keyboard reachability on a physical Android device",
+    "tab bar at 1.3x font scale",
+    "long-list scroll performance",
+    "dark-mode visual comparison on device",
+    "splash to first screen transition",
+    "Android edge-to-edge inset correctness",
+    "Lottie empty.json render and loop behaviour on device",
+    "Cloudinary upload against a live configured server",
+    "story viewer timing, tap zones and video playback on device",
+    "date/time picker on both platforms"
+  ],
+  "note": "All 13 findings from the audit are closed. States is held at A- rather than A because the new surfaces (stories viewer, comments, the two creation forms) have not themselves been audited, and no live pass has run."
+}

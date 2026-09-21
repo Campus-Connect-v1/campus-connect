@@ -1,292 +1,157 @@
-import ProfileDrawer from '@/src/components/layout/profile-drawer';
-import { icons } from '@/src/constants/icons';
-import { Ionicons } from '@expo/vector-icons';
-import { router, Tabs } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
-import '../globals.css';
+import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
+import { Tabs } from "expo-router";
+import { View } from "react-native";
+import Animated, { LinearTransition } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const TabIcon = ({ focused, icon, title }: any) => {
-  const indicatorAnim = useRef(new Animated.Value(0)).current;
+import { Icon, Text, type IconName } from "@/src/components/ui";
+import { culture, radius, spacing } from "@/src/styles/theme";
+import { useTheme } from "@/src/styles/useTheme";
 
-  useEffect(() => {
-    Animated.timing(indicatorAnim, {
-      toValue: focused ? 1 : 0,
-      duration: 300,
-      useNativeDriver: false, // Using layout props (opacity, scaleX)
-    }).start();
-  }, [focused]);
+import { PressableScale } from "@/src/components/ui";
 
-  const indicatorStyle = {
-    opacity: indicatorAnim,
-    transform: [
-      {
-        scaleX: indicatorAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.5, 1],
-        }),
-      },
-      {
-        translateY: indicatorAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [10, 0], // slides up smoothly
-        }),
-      },
-    ],
-  };
-
-  return (
-    <View className="size-full justify-center items-center mt-4 rounded-full bg-white" >
-      <Image
-        source={icon}
-        tintColor={focused ? '#002D69' : '#000'}
-        className="size-6 mb-1"
-      />
-      <Animated.View
-        style={[
-          {
-            width: 24,
-            height: 4,
-            borderRadius: 9999,
-            backgroundColor: '#002D69',
-          },
-          indicatorStyle,
-        ]}
-      />
-    </View>
-  );
+/**
+ * The five top-level destinations.
+ *
+ * Connect and Events hold slots because they are where the app's own data
+ * lives: people nearby and what is happening. Create came out because it is an
+ * action, not a destination (it now sits in the Home header and the drawer),
+ * and Explore came out because it is a grid of links into these same tabs
+ * rather than a place with content of its own.
+ */
+const TABS: Record<string, { icon: IconName; label: string }> = {
+  home: { icon: "home", label: "Home" },
+  connect: { icon: "connect", label: "Connect" },
+  events: { icon: "events", label: "Events" },
+  campus: { icon: "campus", label: "Campus" },
+  profile: { icon: "profile", label: "You" },
 };
 
+/**
+ * A single ink-dark capsule floating over the content. The active tab is a
+ * filled pill in that section's hue with its label; the others are bare icons.
+ *
+ * The bar is glass: a blur over whatever is scrolling underneath, tinted dark
+ * so the icons hold their contrast. Blur is confined to overlays like this one
+ * and the map card — it is not used on cards or list rows, where it costs
+ * compositing work and buys nothing.
+ *
+ * `overflow: hidden` on the wrapper is load-bearing: without it the BlurView
+ * ignores the border radius on Android and renders a blurred rectangle.
+ */
+function TabBar({ state, navigation }: BottomTabBarProps) {
+  const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
-const _Layout = () => {
-    const [isDrawerVisible, setIsDrawerVisible] = useState(false);
+  const restingIcon = "rgba(255,255,255,0.65)";
 
-     const user = {
-    name: 'Joshua User',
-    username: '@joshuser',
-    avatar: 'https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-  };
-
-  const handleNavigate = (screen: string) => {
-    console.log(`Navigate to ${screen}`);
-    // Add your navigation logic here
-  };
-
-  const handleLogout = () => {
-    console.log('Logout');
-    // Add your logout logic here
-  };
-  
-  const handleProfilePress = () => {
-    router.push('/(tabs)/profile');
-  };
   return (
-    <>
-      <ProfileDrawer
-        isVisible={isDrawerVisible}
-        onClose={() => setIsDrawerVisible(false)}
-        user={user}
-        onNavigate={handleNavigate}
-        onLogout={handleLogout}
-      />
-
-    <Tabs
-      screenOptions={{
-        tabBarShowLabel: false,
-        tabBarItemStyle: {
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
-        tabBarStyle: {
-          borderRadius: 50,
-          marginHorizontal: 10,
-          marginBottom: 36,
-          height: 52,
-          width: '90%',
-          alignSelf: 'center',
-         
-          overflow: 'hidden',
-          borderColor: 'rgba(255, 255, 255, 0.1)',
-        },
-       
+    <View
+      pointerEvents="box-none"
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: Math.max(insets.bottom, spacing.md),
+        alignItems: "center",
       }}
     >
-      <Tabs.Screen
-        name='home'
-        options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
-          title: 'HOME',
-          headerTitleStyle: {
-            fontFamily: 'Gilroy-SemiBold',
-            color: '#000',
-            
-          },
-          headerLeft: () => (
-      <TouchableOpacity onPress={() => setIsDrawerVisible(true)} className="ml-4">
-        <Ionicons name="settings-outline" size={28} color="#000" />
-      </TouchableOpacity>
-    ),
-    headerRight: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="mr-4">
-        <Image
-          source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
-          className="w-10 h-10 rounded-full"
-        />
-      </TouchableOpacity>
-    ),
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.home} title='HOME' />
-          ),
+      <View
+        style={{
+          borderRadius: radius.full,
+          overflow: "hidden",
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.14)",
+          shadowColor: culture.ink,
+          shadowOpacity: 0.28,
+          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 10 },
+          elevation: 12,
         }}
-      />
-      <Tabs.Screen
-        name='profile'
-        options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
-          title: 'PROFILE',
-          headerTitleStyle: {
-            fontFamily: 'Gilroy-SemiBold',
-            color: '#fff',
-          },
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.search} title='SEARCH' />
-          ),
-           headerLeft: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
-        <Image
-          source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
-          className="w-10 h-10 rounded-full"
-        />
-      </TouchableOpacity>
-    ),
-        }}
-      />
-      {/* <Tabs.Screen
-      name='messaging'
-        options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
-          title: 'MESSAGING',
-          headerTitleStyle: {
-            fontFamily: 'Gilroy-SemiBold',
-            color: '#fff',
-          },
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.chat} title='CHAT' />
-          ),
-           headerLeft: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
-        <Image
-          source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
-          className="w-10 h-10 rounded-full"
-        />
-      </TouchableOpacity>
-    ),
-        }}
-      />
-      <Tabs.Screen
-        name='community'
-        options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
-          title: 'COMMUNITY',
-           headerTitleStyle: {
-            fontFamily: 'Gilroy-SemiBold',
-            color: '#fff',
-          },
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.person} title='COMMUNITY' />
-          ),
-           headerLeft: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
-        <Image
-          source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
-          className="w-10 h-10 rounded-full"
-        />
-      </TouchableOpacity>
-    ),
-        }}
-      />
-      <Tabs.Screen
-        name='notifications'
-        options={{
-          headerBackground: () => (
-            <View className="bg-[#002D69] h-28 absolute w-full" />
-          ),
-          title: 'NOTIFICATIONS',
-          headerTitleStyle: {
-            fontFamily: 'Gilroy-SemiBold',
-            color: '#fff',
-          },
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.bell} title='NOTIFICATIONS' />
-          ),
-           headerLeft: () => (
-      <TouchableOpacity onPress={handleProfilePress} className="ml-4">
-        <Image
-          source={{ uri: "https://plus.unsplash.com/premium_photo-1747504296823-71ded9ee2b15?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }} // replace with your avatar URL
-          className="w-10 h-10 rounded-full"
-        />
-      </TouchableOpacity>
-    ),
-        }}
-      /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="profile"
-  /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="chat"
-    /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="settings"
-    /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="community/community-profile-screen"
-    /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="community/community-settings-screen"
-    /> */}
-      {/* <Tabs.Screen
-      options={{
-        headerShown: false,
-        href: null, 
-      }}
-    name="community/join-requests-screen"
-    /> */}
-    </Tabs>
-        </>
+      >
+        <BlurView
+          intensity={isDark ? 60 : 40}
+          tint="dark"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing["3xs"],
+            padding: spacing["2xs"] + 2,
+            // Android's blur is weaker, so it gets a scrim underneath to keep
+            // the icons legible over a bright photo.
+            backgroundColor: "rgba(11,14,18,0.42)",
+          }}
+        >
+          {state.routes.map((route, index) => {
+            const focused = state.index === index;
+            const tab = TABS[route.name];
+            if (!tab) return null;
+            const foreground = culture.ink;
+
+            return (
+              // A duration, not a spring: a spring on the bar's own layout
+              // overshoots and the whole row visibly bounces on every tab change.
+              <Animated.View key={route.key} layout={LinearTransition.duration(200)}>
+                <PressableScale
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: focused }}
+                  accessibilityLabel={tab.label}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    const event = navigation.emit({
+                      type: "tabPress",
+                      target: route.key,
+                      canPreventDefault: true,
+                    });
+                    if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing["2xs"],
+                    height: 48,
+                    minWidth: 52,
+                    justifyContent: "center",
+                    paddingHorizontal: focused ? spacing.md : 0,
+                    borderRadius: radius.full,
+                    backgroundColor: focused ? culture.lime : "transparent",
+                  }}
+                >
+                  <Icon
+                    name={tab.icon}
+                    size={21}
+                    strokeWidth={focused ? 2 : 1.8}
+                    color={focused ? foreground : restingIcon}
+                  />
+                  {focused ? (
+                    <Text variant="label" style={{ color: foreground }}>
+                      {tab.label}
+                    </Text>
+                  ) : null}
+                </PressableScale>
+              </Animated.View>
+            );
+          })}
+        </BlurView>
+      </View>
+    </View>
   );
-};
+}
 
-export default _Layout
-
-const styles = StyleSheet.create({})
+export default function TabsLayout() {
+  return (
+    <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
+      <Tabs.Screen name="home" options={{ title: "Home" }} />
+      <Tabs.Screen name="connect" options={{ title: "Connect" }} />
+      <Tabs.Screen name="events" options={{ title: "Events" }} />
+      <Tabs.Screen name="campus" options={{ title: "Campus" }} />
+      <Tabs.Screen name="profile" options={{ title: "You" }} />
+      {/* Reachable from the Home header, Campus and the drawer, but not
+          destinations in their own right. */}
+      <Tabs.Screen name="explore" options={{ href: null }} />
+      <Tabs.Screen name="create" options={{ href: null }} />
+    </Tabs>
+  );
+}

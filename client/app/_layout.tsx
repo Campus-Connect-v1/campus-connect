@@ -1,70 +1,72 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import './globals.css';
+
+import { NetworkProvider } from "@/src/services/NetworkContext";
+import { PreferencesProvider, usePreferences } from "@/src/services/PreferencesContext";
+import { SavedPostsProvider } from "@/src/services/SavedPostsContext";
+import { SessionProvider } from "@/src/services/SessionContext";
+import { ThemeScheme } from "@/src/styles/ThemeScheme";
+
+import "./globals.css";
 
 SplashScreen.preventAutoHideAsync();
 
+/**
+ * Applies the stored appearance preference to everything below it.
+ *
+ * It sits inside the provider rather than beside it because it has to read the
+ * preference; `ThemeScheme` with a null scheme is a no-op pass-through, which
+ * is what "System" means.
+ */
+function Themed({ children }: { children: React.ReactNode }) {
+  const { forcedScheme } = usePreferences();
+  return <ThemeScheme scheme={forcedScheme}>{children}</ThemeScheme>;
+}
+
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
-    "Gilroy-Medium": require("../assets/fonts/Gilroy-Medium.ttf"),
+  const [fontsLoaded, fontError] = useFonts({
     "Gilroy-Regular": require("../assets/fonts/Gilroy-Regular.ttf"),
+    "Gilroy-Medium": require("../assets/fonts/Gilroy-Medium.ttf"),
     "Gilroy-SemiBold": require("../assets/fonts/Gilroy-SemiBold.ttf"),
-    "Chillis": require("../assets/fonts/chilispepper.ttf"),
+    // Temporary brand display face. UI/body copy remains on Gilroy until the
+    // final typography set is ready.
+    Blackbold: require("../assets/fonts/Blackbold/Blackbold.ttf"),
   });
 
-  const [loading, setLoading] = useState(true);
-  const [initialRoute, setInitialRoute] = useState<string>("onboarding");
-
   useEffect(() => {
-    const init = async () => {
-      const seen = await AsyncStorage.getItem("hasSeenOnboarding");
-      const loggedIn = false; // TODO: hook Firebase here
+    // Hide on font ERROR too, otherwise a missing font file leaves the user
+    // staring at the native splash screen forever.
+    if (fontsLoaded || fontError) SplashScreen.hideAsync();
+  }, [fontsLoaded, fontError]);
 
-      if (seen) {
-        setInitialRoute("onboarding");
-      } else if (loggedIn) {
-        setInitialRoute("/(tabs)/home");
-      } else {
-        setInitialRoute("auth/login");
-      }
-
-      setLoading(false);
-    };
-    init();
-  }, []);
-
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded || loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#6200ee" />
-      </View>
-    );
-  }
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <Stack
-          screenOptions={{ headerShown: false }}
-          initialRouteName={initialRoute}
-        >
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="/(tabs)/home" />
-          <Stack.Screen name="auth/login" />
-          <Stack.Screen name="auth/register" />
-        </Stack>
+        {/*
+          SessionProvider sits above the navigator so the signed-in user
+          survives navigation, and a 401 anywhere can clear it once.
+
+          Route gating still lives in app/index.tsx, not here. Driving
+          `initialRouteName` from async state re-mounts the navigator once the
+          state resolves, which drops any deep link the app was opened with.
+        */}
+        <PreferencesProvider>
+          <NetworkProvider>
+            <SessionProvider>
+              <SavedPostsProvider>
+                <Themed>
+                  <Stack screenOptions={{ headerShown: false }} />
+                </Themed>
+              </SavedPostsProvider>
+            </SessionProvider>
+          </NetworkProvider>
+        </PreferencesProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

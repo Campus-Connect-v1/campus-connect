@@ -1,188 +1,342 @@
-// import { fetcher } from '@/services/fetcher';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React from 'react';
-import {
-  Image,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useRef } from "react";
+import { FlatList, RefreshControl, StyleSheet, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-interface ProfileScreenProps {
-  navigation?: any;
+import { PostCard } from "@/src/components/feed/PostCard";
+import {
+  Button,
+  EmptyState,
+  SkeletonList,
+  GraphicOverlay,
+  Media,
+  PressableScale,
+  Tag,
+  Text,
+  Icon,
+} from "@/src/components/ui";
+import { adaptPost } from "@/src/features/feed/adapt";
+import { adaptProfile } from "@/src/features/profile/adapt";
+import { useAsync } from "@/src/hooks/useAsync";
+import { useSavedPosts } from "@/src/services/SavedPostsContext";
+import { useSession } from "@/src/services/SessionContext";
+import { fetchPostsByAuthor } from "@/src/services/socialServices";
+import { TAB_BAR_CLEARANCE } from "@/src/styles/layout";
+import { culture, radius, spacing } from "@/src/styles/theme";
+import { useTheme } from "@/src/styles/useTheme";
+
+/** How long a loaded profile is treated as fresh when the tab regains focus. */
+const STALE_AFTER_MS = 30_000;
+
+/** No cover column exists on users yet, so every profile shares this backdrop. */
+const COVER_FALLBACK =
+  "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1200&q=75&auto=format&fit=crop";
+
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <View style={{ gap: 2 }}>
+      <Text variant="heading">{value.toLocaleString()}</Text>
+      <Text variant="micro" color="textMuted">
+        {label}
+      </Text>
+    </View>
+  );
 }
 
-const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
-  // const { data, error, isLoading } = useSWR('/api/v1/status/profile', fetcher);
+export default function ProfileScreen() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const { user, profile, stats, university, loadingProfile, profileError, refresh } = useSession();
+  const store = useSavedPosts();
 
-  // if (isLoading) {
-  //   return (
-  //     <SafeAreaView className="flex-1 items-center justify-center bg-white">
-  //       <ActivityIndicator size="large" color="#000" />
-  //       <Text className="mt-4 text-gray-500">Loading profile...</Text>
-  //     </SafeAreaView>
-  //   );
-  // }
+  const heroHeight = Math.max(380, height * 0.52);
 
-  // if (error) {
-  //   return (
-  //     <SafeAreaView className="flex-1 items-center justify-center bg-white">
-  //       <Text>Error loading profile.</Text>
-  //     </SafeAreaView>
-  //   );
-  // }
+  // Refetched on focus so an edit made in settings shows on the way back, but
+  // rate-limited: without the guard every tab switch costs two API calls, and
+  // a profile does not change between two taps a second apart.
+  const lastFetched = useRef(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (Date.now() - lastFetched.current < STALE_AFTER_MS) return;
+      lastFetched.current = Date.now();
+      refresh();
+    }, [refresh])
+  );
 
+  const display = useMemo(() => (profile ? adaptProfile(profile) : null), [profile]);
 
+  const userId = user?.id;
+  const posts = useAsync(
+    useCallback(
+      () =>
+        userId ? fetchPostsByAuthor(userId) : Promise.resolve({ success: true as const, data: [] }),
+      [userId]
+    ),
+    [userId]
+  );
 
-  const posts = [
-    {
-      id: '1',
-      user: {
-        name: 'Joshua User',
-        username: '@joshuser',
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      },
-      date: 'Feb 8, 2025',
-      content: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.',
-      stats: {
-        comments: 57,
-        retweets: 144,
-        likes: 184,
-      },
-    },
-  ];
-  const user = posts[0].user;
+  const myPosts = useMemo(() => (posts.data ?? []).map(adaptPost), [posts.data]);
+
+  if (loadingProfile && !display) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <EmptyState.Loading />
+      </View>
+    );
+  }
+
+  if (!display) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: "center" }}>
+        <EmptyState
+          tone="error"
+          title="Could not load your profile"
+          body={profileError ?? "Check your connection and try again."}
+          actionLabel="Try again"
+          onAction={refresh}
+        />
+      </View>
+    );
+  }
+
+  const meta = [display.year, display.programme].filter(Boolean).join(" · ");
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <StatusBar barStyle="dark-content" />
-      
-      <ScrollView className="flex-1">
-        {/* Header */}
-        <View className="flex-row items-center px-4 py-3 bg-white">
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-          <View className="flex-row items-center ml-4">
-            <Image
-              source={{ uri: posts[0].user.avatar }}
-              className="w-8 h-8 rounded-full mr-3"
-            />
-            <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-base font-semibold">{user.username}</Text>
-          </View>
-        </View>
-
-        {/* Hero Section with Trophy */}
-        <View className="relative h-48 bg-black">
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1567427017947-545c5f8d16ad?w=400&h=300&fit=crop' }}
-            className="w-full h-full opacity-70"
-            resizeMode="cover"
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <FlatList
+        data={myPosts}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+        refreshControl={
+          <RefreshControl
+            refreshing={loadingProfile}
+            onRefresh={() => {
+              lastFetched.current = Date.now();
+              refresh();
+              posts.refresh();
+            }}
+            tintColor={colors.textMuted}
+            colors={[culture.violet]}
           />
-          <View className="absolute inset-0 items-center justify-center">
-            <Text className="text-yellow-400 text-lg font-light italic">I am a winner</Text>
-          </View>
-        </View>
+        }
+        ListHeaderComponent={
+          <>
+            <View style={{ height: heroHeight }}>
+              <Media
+                source={display.avatar ?? COVER_FALLBACK}
+                scrim="full"
+                rounded="none"
+                style={{ flex: 1 }}
+                accessibilityIgnoresInvertColors
+              >
+                <View
+                  style={{
+                    flex: 1,
+                    justifyContent: "flex-end",
+                    padding: spacing.xl,
+                    gap: spacing.sm,
+                  }}
+                >
+                  <Text variant="display" onMedia>
+                    {display.name}
+                  </Text>
 
-        {/* Profile Picture with Edit Button - LEFT ALIGNED */}
-        <View className="px-4 -mt-16 mb-4">
-          <View className="relative w-32 h-32">
-            <Image
-              source={{ uri: posts[0].user.avatar }}
-              className="w-32 h-32 rounded-full border-4 border-white"
-            />
-            <TouchableOpacity className="absolute -bottom-0 -right-0 w-8 h-8 bg-yellow-500 rounded-full items-center justify-center">
-              <Ionicons name="add" size={18} color="white" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Stats */}
-        <View className="flex-row px-4 mb-4">
-          <View className="mr-8">
-            <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-500 text-md">Followers</Text>
-            <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-black text-base font-semibold">{user.name || '100'}</Text>
-          </View>
-          <View>
-            <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-500 text-md">Following</Text>
-            <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-black text-base font-semibold">{user.name || '50'}</Text>
-          </View>
-        </View>
-
-        {/* User Info */}
-        <View className="px-4 mb-4">
-          <View className="flex-row items-center justify-between mb-1">
-            <View className="flex-1">
-              <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-lg font-semibold text-black">{user.username}</Text>
-              <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-500 text-md">{user.name || '@joshuser'}</Text>
-            </View>
-            <View className="flex-row items-center bg-yellow-100 px-3 py-2 rounded-full">
-              <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-yellow-700 text-md font-medium mr-1">Bleoo {user.name}</Text>
-              <Ionicons name="trophy" size={14} color="#b45309" />
-            </View>
-          </View>
-        </View>
-
-        {/* About Section */}
-        <View className="px-4 mb-6">
-          <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-lg font-semibold text-black mb-2">About</Text>
-          <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-600 leading-5 text-md">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit ut diam nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat volutpat. Ut wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper suscipit lobortis nisl ut aliquip ex ea commodo consequat.
-          </Text>
-        </View>
-
-        {/* Posts Section */}
-        <View className="px-4">
-          <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-base font-semibold text-black mb-4">Posts</Text>
-          
-          {posts.map((post) => (
-            <View key={post.id} className="mb-6">
-              <View className="flex-row">
-                <Image
-                  source={{ uri: post.user.avatar }}
-                  className="w-10 h-10 rounded-full mr-3"
-                />
-                <View className="flex-1">
-                  <View className="flex-row items-center mb-1">
-                    <Text style={{fontFamily: 'Gilroy-SemiBold'}} className="text-black text-md mr-2">{post.user.name}</Text>
-                    <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-500 text-md mr-2">{post.user.username}</Text>
-                    <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-500 text-sm">· {post.date}</Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: spacing.md,
+                    }}
+                  >
+                    {meta ? (
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center", gap: spacing["2xs"] }}
+                      >
+                        <Icon name="course" size={13} color={colors.onMedia} />
+                        <Text variant="caption" onMedia>
+                          {meta}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <Text variant="caption" onMedia>
+                      {display.age ? `${display.age} · ` : ""}@{display.handle}
+                    </Text>
                   </View>
-                  <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-800 leading-5 mb-3 text-md">{post.content}</Text>
-                  
-                  {/* Post Stats */}
-                  <View className="flex-row items-center">
-                    <TouchableOpacity className="flex-row items-center mr-6">
-                      <Ionicons name="chatbubble-outline" size={16} color="#666" />
-                      <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-600 text-sm ml-1">{post.stats.comments}</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity className="flex-row items-center mr-6">
-                      <Ionicons name="repeat-outline" size={16} color="#666" />
-                      <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-600 text-sm ml-1">{post.stats.retweets}</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity className="flex-row items-center mr-6">
-                      <Ionicons name="heart-outline" size={16} color="#666" />
-                      <Text style={{fontFamily: 'Gilroy-Regular'}} className="text-gray-600 text-sm ml-1">{post.stats.likes}</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity>
-                      <Ionicons name="share-outline" size={16} color="#666" />
-                    </TouchableOpacity>
+
+                  {display.interests.length ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: spacing.xs,
+                        marginTop: spacing["2xs"],
+                      }}
+                    >
+                      {display.interests.map((interest) => (
+                        <Tag key={interest} label={interest} onMedia />
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </Media>
+            </View>
+
+            <View
+              style={{ backgroundColor: colors.background, padding: spacing.xl, gap: spacing.lg }}
+            >
+              <Button
+                label="Edit profile"
+                icon={<Icon name="edit" size={17} color={colors.accentFg} />}
+                onPress={() => router.push("/settings/account")}
+              />
+
+              <View style={{ flexDirection: "row", gap: spacing["3xl"] }}>
+                <Stat value={myPosts.length} label="Posts" />
+                <Stat value={stats?.connections ?? 0} label="Connections" />
+                <Stat value={stats?.groups ?? 0} label="Groups" />
+              </View>
+
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+
+              {display.bio ? (
+                <Text variant="body" color="textSecondary">
+                  {display.bio}
+                </Text>
+              ) : (
+                <Text variant="body" color="textMuted">
+                  No bio yet. Add one so people know what you are around for.
+                </Text>
+              )}
+
+              <View style={{ gap: spacing.sm }}>
+                <Text variant="micro" color="textMuted">
+                  ABOUT YOU
+                </Text>
+                <View style={{ gap: spacing.sm }}>
+                  {university || display.programme ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                      <Icon name="campus" size={18} color={colors.textMuted} />
+                      <Text variant="body">
+                        {[university?.label, display.programme].filter(Boolean).join(" · ")}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                    <Icon name="profile" size={18} color={colors.textMuted} />
+                    <Text variant="body">
+                      {display.age ? `${display.age} years old · ` : ""}@{display.handle}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                    <Icon name="message" size={18} color={colors.textMuted} />
+                    <Text selectable variant="body">
+                      {display.email}
+                    </Text>
                   </View>
                 </View>
               </View>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-};
 
-export default ProfileScreen;
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel="Open your campus activity"
+                onPress={() => router.push("/(tabs)/events")}
+                style={{
+                  minHeight: 176,
+                  borderRadius: radius.lg,
+                  overflow: "hidden",
+                  backgroundColor: culture.lime,
+                  padding: spacing.lg,
+                  justifyContent: "space-between",
+                }}
+              >
+                <GraphicOverlay color={culture.ink} pattern="orbit" opacity={0.13} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+                  <Icon name="campus" size={18} color={culture.ink} />
+                  <Text variant="micro" style={{ color: culture.ink }}>
+                    YOUR CAMPUS YEAR
+                  </Text>
+                </View>
+                <View style={{ gap: spacing["2xs"], maxWidth: 245 }}>
+                  <Text variant="title" style={{ color: culture.ink }}>
+                    {stats?.events ?? 0} events. {stats?.groups ?? 0} groups.
+                  </Text>
+                  <Text variant="caption" style={{ color: culture.ink, opacity: 0.72 }}>
+                    Your saved plans and communities, all in one place.
+                  </Text>
+                </View>
+              </PressableScale>
+            </View>
+
+            <Text
+              variant="micro"
+              color="textMuted"
+              style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}
+            >
+              Posts
+            </Text>
+          </>
+        }
+        ListEmptyComponent={
+          posts.loading ? (
+            <SkeletonList count={2} />
+          ) : (
+            <EmptyState
+              compact
+              title="Nothing posted yet"
+              body="Your posts will show up here once you share something."
+              actionLabel="Write a post"
+              onAction={() => router.push("/compose/post")}
+            />
+          )
+        }
+        renderItem={({ item }) => (
+          <PostCard
+            post={{ ...item, saved: store.isSaved(item.id) }}
+            onToggleLike={() => {}}
+            onToggleSave={store.toggle}
+          />
+        )}
+      />
+
+      {/* Floating over media, so it needs its own contrast, not the page's. */}
+      <View
+        style={{
+          position: "absolute",
+          top: insets.top + spacing.xs,
+          left: spacing.lg,
+          right: spacing.lg,
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
+      >
+        <View />
+
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Open settings"
+          onPress={() => router.push("/settings")}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(7,18,25,0.45)",
+          }}
+        >
+          <Icon name="settings" size={20} color={colors.onMedia} />
+        </PressableScale>
+      </View>
+    </View>
+  );
+}

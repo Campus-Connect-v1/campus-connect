@@ -1,20 +1,19 @@
-import React, { forwardRef, useMemo } from 'react';
-import { StyleSheet } from 'react-native';
-import BottomSheet, {
-  BottomSheetView,
-  BottomSheetProps,
-} from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetView, type BottomSheetProps } from "@gorhom/bottom-sheet";
+import React, { forwardRef, useMemo } from "react";
+
+import { radius, spacing } from "@/src/styles/theme";
+import { useTheme } from "@/src/styles/useTheme";
 
 type BottomModalProps = {
   children: React.ReactNode;
-  snapPoints: BottomSheetProps['snapPoints'];
+  snapPoints: BottomSheetProps["snapPoints"];
   state: boolean;
   onChange?: (index: number) => void;
 };
 
 const BottomModal = forwardRef<BottomSheet, BottomModalProps>(
   ({ children, snapPoints, state, onChange, ...props }, ref) => {
-    // Memoize snap points to prevent unnecessary re-renders
+    const { colors } = useTheme();
     const snapPointsMemo = useMemo(() => snapPoints, [snapPoints]);
 
     return (
@@ -22,14 +21,20 @@ const BottomModal = forwardRef<BottomSheet, BottomModalProps>(
         ref={ref}
         index={state ? 0 : -1}
         snapPoints={snapPointsMemo}
-        enablePanDownToClose={true}
-        backgroundStyle={styles.background}
-        handleIndicatorStyle={styles.indicator}
+        enablePanDownToClose
         enableOverDrag={false}
         onChange={onChange}
+        // Themed rather than left on the library defaults: an unstyled sheet
+        // ships a white background that clashes in dark mode.
+        backgroundStyle={{
+          backgroundColor: colors.surface,
+          borderTopLeftRadius: radius.lg,
+          borderTopRightRadius: radius.lg,
+        }}
+        handleIndicatorStyle={{ backgroundColor: colors.borderStrong, width: 40, height: 4 }}
         {...props}
       >
-        <BottomSheetView className={'bg-lightCream'} style={styles.container}>
+        <BottomSheetView style={{ flex: 1, padding: spacing.md, backgroundColor: colors.surface }}>
           {children}
         </BottomSheetView>
       </BottomSheet>
@@ -37,22 +42,6 @@ const BottomModal = forwardRef<BottomSheet, BottomModalProps>(
   }
 );
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    height: 450,
-  },
-  background: {
-    backgroundColor: '#FBFCFE', // lightCream color
-  },
-  indicator: {
-    backgroundColor: '#D1D5DB',
-    width: 40,
-    height: 4,
-  },
-});
-
-BottomModal.displayName = 'BottomModal';
+BottomModal.displayName = "BottomModal";
 
 export default BottomModal;
