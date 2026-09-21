@@ -13,6 +13,7 @@ import {
   impact,
 } from "../controllers/admin/resource.controller.js";
 import * as operators from "../controllers/admin/operators.controller.js";
+import { ask, status as aiStatus } from "../controllers/admin/ai.controller.js";
 import {
   listPacks,
   runPack,
@@ -49,6 +50,12 @@ router.get("/operators", requirePermission("manageOperators"), operators.list);
 router.post("/operators", requirePermission("manageOperators"), operators.create);
 router.patch("/operators/:id", requirePermission("manageOperators"), operators.update);
 router.delete("/operators/:id", requirePermission("manageOperators"), operators.remove);
+
+// Plain-English querying. Read-only by construction, but gated on "write"
+// rather than "read": free-form SQL reaches every table, whereas the resource
+// routes only expose what the registry whitelists.
+router.get("/ai/status", requirePermission("read"), aiStatus);
+router.post("/ai/sql", requirePermission("write"), ask);
 
 // Populating the database: curated packs, pasted JSON, and bulk approval.
 // All declared before the :resource wildcard so they are not swallowed by it.

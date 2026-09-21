@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, humanize, formatValue } from "../api.js";
+import { api, humanize } from "../api.js";
+import { Cell, orderColumns, headerClass } from "../columns.jsx";
 import { useAuth } from "../auth.jsx";
 
 const PAGE = 50;
@@ -65,10 +66,17 @@ export default function Resource() {
     setNotice("");
   }, [resource]);
 
-  const columns = useMemo(() => {
-    if (!rows?.length) return [];
-    return Object.keys(rows[0]);
+  // Primary key first and pinned, then names, then flags, then timestamps.
+  const pkColumn = useMemo(() => {
+    if (!rows?.length) return null;
+    const keys = Object.keys(rows[0]);
+    return keys.find((c) => c.endsWith("_id")) || keys[0];
   }, [rows]);
+
+  const columns = useMemo(
+    () => (rows?.length ? orderColumns(Object.keys(rows[0]), pkColumn) : []),
+    [rows, pkColumn]
+  );
 
   const canWrite = permissions?.write;
 
@@ -122,8 +130,6 @@ export default function Resource() {
 
   if (!meta && !error) return <div className="empty">Loading…</div>;
   if (!meta) return <div className="msg err">{error || "Unknown resource"}</div>;
-
-  const pkColumn = columns.find((c) => c.endsWith("_id")) || columns[0];
 
   return (
     <>
@@ -189,27 +195,21 @@ export default function Resource() {
             <thead>
               <tr>
                 {columns.map((c) => (
-                  <th key={c}>{humanize(c)}</th>
+                  <th key={c} className={headerClass(c, pkColumn)}>
+                    {humanize(c)}
+                  </th>
                 ))}
-                {canWrite && <th aria-label="Actions" />}
+                {canWrite && <th className="actions" aria-label="Actions" />}
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row[pkColumn]}>
                   {columns.map((c) => (
-                    <td key={c} className="clip">
-                      {BOOLEANS.test(c) ? (
-                        <span className={`pill ${row[c] ? "on" : "off"}`}>
-                          {row[c] ? "yes" : "no"}
-                        </span>
-                      ) : (
-                        formatValue(row[c])
-                      )}
-                    </td>
+                    <Cell key={c} name={c} value={row[c]} pk={pkColumn} />
                   ))}
                   {canWrite && (
-                    <td>
+                    <td className="actions">
                       <div className="row" style={{ gap: 6 }}>
                         {meta.canUpdate && (
                           <button

@@ -22,9 +22,13 @@ export const setToken = (token) => {
 };
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, extra = {}) {
     super(message);
     this.status = status;
+    // Some endpoints return context alongside the error -- the /ai/sql route
+    // includes the SQL it rejected, which is more useful than the message
+    // alone.
+    Object.assign(this, extra);
   }
 }
 
@@ -48,7 +52,11 @@ async function request(method, path, body) {
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new ApiError(data.message || `Request failed (${res.status})`, res.status);
+    throw new ApiError(
+      data.message || `Request failed (${res.status})`,
+      res.status,
+      data.sql ? { sql: data.sql } : {}
+    );
   }
   return data;
 }

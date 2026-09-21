@@ -7,6 +7,7 @@ import Operators from "./pages/Operators.jsx";
 import Activity from "./pages/Activity.jsx";
 import Populate from "./pages/Populate.jsx";
 import Approvals from "./pages/Approvals.jsx";
+import Ask from "./pages/Ask.jsx";
 
 const CAMPUS = [
   ["universities", "Universities"],
@@ -53,6 +54,7 @@ export default function App() {
         ))}
 
         <div className="nav-group">Data</div>
+        <NavLink to="/ask" className="nav-item">Ask</NavLink>
         <NavLink to="/approvals" className="nav-item">Approvals</NavLink>
         <NavLink to="/populate" className="nav-item">Populate</NavLink>
 
@@ -62,6 +64,12 @@ export default function App() {
         {permissions?.manageOperators && (
           <NavLink to="/operators" className="nav-item">Operators</NavLink>
         )}
+
+        <div className="sidebar-foot">
+          <strong>{operator.first_name} {operator.last_name}</strong>
+          {operator.role}
+          {!permissions?.write && " · read-only"}
+        </div>
       </nav>
 
       <div className="main">
@@ -87,6 +95,7 @@ export default function App() {
             <Route path="/activity" element={<Activity />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/populate" element={<Populate />} />
+            <Route path="/ask" element={<Ask />} />
             <Route
               path="/operators"
               element={
