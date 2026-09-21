@@ -43,7 +43,7 @@ export default function App() {
 
         <NavLink to="/" end className="nav-item">Overview</NavLink>
 
-        <div className="nav-group">Campus data</div>
+        <div className="nav-group">Campus</div>
         {CAMPUS.map(([key, label]) => (
           <NavLink key={key} to={`/r/${key}`} className="nav-item">{label}</NavLink>
         ))}
@@ -53,10 +53,10 @@ export default function App() {
           <NavLink key={key} to={`/r/${key}`} className="nav-item">{label}</NavLink>
         ))}
 
-        <div className="nav-group">Data</div>
+        <div className="nav-group">Tools</div>
         <NavLink to="/ask" className="nav-item">Ask</NavLink>
-        <NavLink to="/approvals" className="nav-item">Approvals</NavLink>
         <NavLink to="/populate" className="nav-item">Populate</NavLink>
+        <NavLink to="/approvals" className="nav-item">Approvals</NavLink>
 
         <div className="nav-group">System</div>
         <NavLink to="/activity" className="nav-item">Activity</NavLink>

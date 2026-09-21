@@ -80,15 +80,24 @@ h2 { font-size: 16px; }
   letter-spacing: 0.1em;
 }
 
+/* Section headings. A hairline above each one separates the groups without
+   adding a full divider row, and they sit dimmer and smaller than the links
+   so they read as labels rather than as clickable items. */
 .nav-group {
   color: var(--text-dim);
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  padding: 16px 18px 6px;
+  letter-spacing: 0.11em;
+  margin: 14px 10px 2px;
+  padding: 12px 8px 5px;
+  border-top: 1px solid var(--border);
 }
-.nav-group:first-of-type { padding-top: 6px; }
+.nav-group:first-of-type {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: none;
+}
 
 .nav-item {
   position: relative;
