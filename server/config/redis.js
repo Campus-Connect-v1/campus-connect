@@ -46,6 +46,20 @@ let redisClient;
  */
 async function initializeRedis() {
   const redisUrl = process.env.REDIS_URL;
+
+  // No URL configured at all. The in-memory cache below is the intended
+  // fallback, so take it directly -- reading .includes() off an undefined
+  // value here would throw outside the try and kill the process at boot,
+  // which is exactly what happened on the first Render deploy.
+  if (!redisUrl) {
+    console.warn(
+      COLORS[process.env.WARNING],
+      "REDIS_URL is not set → using in-memory cache"
+    );
+    redisClient = new MemoryCache();
+    return redisClient;
+  }
+
   const isLocal =
     redisUrl.includes("localhost") || redisUrl.includes("127.0.0.1");
 
