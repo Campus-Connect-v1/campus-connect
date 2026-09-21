@@ -237,44 +237,123 @@ export const searchUsersModel = async (filters = {}) => {
 };
 
 // Get connection recommendations
+//
+// Scores every same-campus user the caller is not already connected to, and
+// returns the best `limit` of them.
+//
+// This used to read from the `connection_recommendations` view. It no longer
+// does, for two reasons:
+//
+//   1. Correctness. The view's mutual-friend subquery required
+//      `c1.requester_id = u1.user_id` in BOTH of its OR branches, so a mutual
+//      friend was only counted when the caller had SENT the friend request.
+//      `connections` stores one directed row per pair, so roughly half of
+//      every user's friendships were invisible to the scorer.
+//   2. Cost. The view has subqueries in its select list, which forces MySQL to
+//      use the TEMPTABLE algorithm. It materialises the scored candidate set
+//      and runs three dependent subqueries per candidate row.
+//
+// The query below pre-aggregates each score once for the caller and hash-joins
+// the results onto the candidate list, so each signal is computed in a single
+// pass instead of once per candidate.
 export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
   try {
     // sanitize limit safely
     const safeLimit = Math.min(parseInt(limit, 10) || 10, 50);
 
+    // Placeholder order matters: shared courses, shared groups, then the three
+    // occurrences in the mutual-connections block, then the caller themselves.
     const query = `
-      SELECT 
-        u.user_id, 
-        u.first_name, 
-        u.last_name, 
-        u.profile_picture_url,
-        u.profile_headline, 
-        u.program, 
-        u.graduation_year,
+      SELECT
+        u2.user_id,
+        u2.first_name,
+        u2.last_name,
+        u2.profile_picture_url,
+        u2.profile_headline,
+        u2.program,
+        u2.graduation_year,
         (
-          COALESCE(common_courses_score, 0) +
-          COALESCE(common_groups_score, 0) +
-          COALESCE(mutual_connections_score, 0) +
-          COALESCE(same_program_score, 0) +
-          COALESCE(same_graduation_score, 0)
+          COALESCE(shared_courses.score, 0) +
+          COALESCE(shared_groups.score, 0) +
+          COALESCE(mutuals.score, 0) +
+          CASE WHEN u1.program = u2.program THEN 1 ELSE 0 END +
+          CASE WHEN u1.graduation_year = u2.graduation_year THEN 1 ELSE 0 END
         ) AS match_score
-      FROM connection_recommendations cr
-      JOIN users u 
-        ON cr.recommended_user_id = u.user_id
-      WHERE cr.source_user_id = ?
-        -- AND u.is_active = 1
-        -- chnage to active when all members are active
+      FROM users u1
+      JOIN users u2
+        ON u2.university_id = u1.university_id
+       AND u2.user_id <> u1.user_id
+       AND u2.is_active = 1
+       AND u2.privacy_profile IN ('public', 'university')
 
+      -- Courses the caller currently takes, and who else currently takes them.
+      LEFT JOIN (
+        SELECT uc2.user_id, COUNT(*) AS score
+        FROM user_courses uc1
+        JOIN user_courses uc2
+          ON uc2.course_code = uc1.course_code
+         AND uc2.user_id <> uc1.user_id
+         AND uc2.is_current = 1
+        WHERE uc1.user_id = ?
+          AND uc1.is_current = 1
+        GROUP BY uc2.user_id
+      ) AS shared_courses
+        ON shared_courses.user_id = u2.user_id
 
-        AND u.privacy_profile IN ('public', 'university')
+      -- Study groups the caller belongs to, and who else belongs to them.
+      LEFT JOIN (
+        SELECT gm2.user_id, COUNT(*) AS score
+        FROM group_members gm1
+        JOIN group_members gm2
+          ON gm2.group_id = gm1.group_id
+         AND gm2.user_id <> gm1.user_id
+        WHERE gm1.user_id = ?
+        GROUP BY gm2.user_id
+      ) AS shared_groups
+        ON shared_groups.user_id = u2.user_id
+
+      -- Friends-of-friends. The inner select normalises each of the caller's
+      -- accepted connections to "the other person", regardless of who sent the
+      -- request, which is what the view got wrong.
+      LEFT JOIN (
+        SELECT fof.other_id AS user_id, COUNT(DISTINCT fof.via_id) AS score
+        FROM (
+          SELECT
+            IF(c2.requester_id = friends.friend_id, c2.receiver_id, c2.requester_id) AS other_id,
+            friends.friend_id AS via_id
+          FROM (
+            SELECT IF(requester_id = ?, receiver_id, requester_id) AS friend_id
+            FROM connections
+            WHERE status = 'accepted'
+              AND (requester_id = ? OR receiver_id = ?)
+          ) AS friends
+          JOIN connections c2
+            ON c2.status = 'accepted'
+           AND (c2.requester_id = friends.friend_id OR c2.receiver_id = friends.friend_id)
+        ) AS fof
+        GROUP BY fof.other_id
+      ) AS mutuals
+        ON mutuals.user_id = u2.user_id
+
+      WHERE u1.user_id = ?
+        AND u1.is_active = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM connections c
+          WHERE (c.requester_id = u1.user_id AND c.receiver_id = u2.user_id)
+             OR (c.requester_id = u2.user_id AND c.receiver_id = u1.user_id)
+        )
       ORDER BY match_score DESC
       LIMIT ${safeLimit};
     `;
 
-    // console.log("Recommendation Query:", query);
-    // console.log("Params:", [userId]);
-
-    const [rows] = await db.execute(query, [userId]);
+    const [rows] = await db.execute(query, [
+      userId, // shared_courses
+      userId, // shared_groups
+      userId, // mutuals: normalise direction
+      userId, // mutuals: caller is requester
+      userId, // mutuals: caller is receiver
+      userId, // outer: the caller
+    ]);
     return rows;
   } catch (error) {
     throw new Error(
@@ -282,7 +361,6 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
     );
   }
 };
-
 // Add user interest
 export const addInterestModel = async (userId, interestData) => {
   try {

@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import { randomInt } from "node:crypto";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import {
@@ -73,7 +74,7 @@ export const register = async (req, res) => {
     });
 
     // Generate OTP for email verification
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = randomInt(100000, 1000000).toString();
     await createOTP(email, otp);
 
     try {
@@ -241,7 +242,7 @@ export const resendOTP = async (req, res) => {
     }
 
     // Generate new OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = randomInt(100000, 1000000).toString();
     await createOTP(email, otp);
 
     try {
