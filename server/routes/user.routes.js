@@ -16,6 +16,9 @@ import {
   updateInterest,
   deleteProfile,
   cancelConnectionRequest,
+  respondToConnection,
+  getInterests,
+  getCourses,
 } from "../controllers/user.controller.js";
 import authenticate from "../middleware/auth.js";
 import {
@@ -116,6 +119,9 @@ router.get("/connections/:status", getConnections);
  */
 router.post("/connections/request", sendConnectionRequest);
 
+/** Respond to a request received by the signed-in user. */
+router.post("/connections/respond", respondToConnection);
+
 /**
  * @swagger
  * /user/connections/request/{connection_id}:
@@ -138,6 +144,15 @@ router.post("/interests", interestValidation, addInterest);
 
 /**
  * @swagger
+ * /user/interests:
+ *   get:
+ *     tags: [Interests]
+ *     summary: List the signed-in user's interests
+ */
+router.get("/interests", getInterests);
+
+/**
+ * @swagger
  * /user/interests/{interest_id}:
  *   put:
  *     tags: [Interests]
@@ -152,7 +167,7 @@ router.put("/interests/:interest_id", updateInterest);
  *     tags: [Interests]
  *     summary: Remove interest
  */
-router.delete("/interests/:interestId", interestValidation, removeInterest);
+router.delete("/interests/:interestId", interestIdParamValidation, removeInterest);
 
 // ==================== COURSES ENDPOINTS ====================
 
@@ -167,12 +182,21 @@ router.post("/courses", courseValidation, addCourse);
 
 /**
  * @swagger
+ * /user/courses:
+ *   get:
+ *     tags: [Courses]
+ *     summary: List the signed-in user's courses
+ */
+router.get("/courses", getCourses);
+
+/**
+ * @swagger
  * /user/courses/{courseId}:
  *   delete:
  *     tags: [Courses]
  *     summary: Remove course
  */
-router.delete("/courses/:courseId", courseValidation, removeCourse);
+router.delete("/courses/:courseId", courseIdParamValidation, removeCourse);
 
 // ==================== DISCOVERY ENDPOINTS ====================
 

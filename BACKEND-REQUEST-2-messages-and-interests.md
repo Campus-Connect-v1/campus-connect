@@ -1,5 +1,12 @@
 # Backend requests (2): message history, and the interests/courses split
 
+> **Status: implemented (2026-09-21).** The API now exposes paginated message
+> history at `GET /api/conversations/:conversationId/messages`; conversation
+> identities use real names and `profile_picture_url`; interests and courses
+> use their normalized tables as the read source through both profile responses
+> and dedicated GET endpoints. The participant route was also moved ahead of
+> the wildcard conversation route so Express no longer shadows it.
+
 Two gaps found while wiring the remaining features. Both are cases where the
 write side exists but the read side does not, so the mobile app can put data in
 and then cannot show it.

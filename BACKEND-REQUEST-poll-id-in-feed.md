@@ -1,5 +1,8 @@
 # Backend request: expose `poll_id` on post payloads
 
+> **Status: implemented (2026-09-21).** Feed, single-post, and create-post
+> responses now include `poll_id` (`null` for non-poll posts).
+
 **Why:** polls work end to end on the server, but the mobile app cannot render a
 votable poll, because the endpoint that lists posts never returns the poll's id.
 

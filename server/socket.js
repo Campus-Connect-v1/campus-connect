@@ -36,6 +36,8 @@ export default function socketServer(httpServer) {
         const senderId = socket.user.id;
         console.log(`📨 Message from ${senderId} to ${receiverId}`);
 
+        const sender = await findById(senderId);
+
         // Find receiver in MySQL (EXISTING CODE - UNCHANGED)
         let receiver;
         if (receiverId.includes("@")) {
@@ -69,13 +71,20 @@ export default function socketServer(httpServer) {
           const senderParticipant = {
             userId: senderId,
             email: socket.user.email,
-            username: socket.user.username,
+            username:
+              [sender?.first_name, sender?.last_name].filter(Boolean).join(" ") ||
+              socket.user.email?.split("@")[0] ||
+              "Campus user",
           };
 
           const receiverParticipant = {
             userId: actualReceiverId,
             email: receiver.email,
-            username: receiver.username,
+            username:
+              [receiver.first_name, receiver.last_name].filter(Boolean).join(" ") ||
+              receiver.username ||
+              receiver.email?.split("@")[0] ||
+              "Campus user",
           };
 
           // Find or create conversation
@@ -104,12 +113,18 @@ export default function socketServer(httpServer) {
           _id: msg._id,
           senderId: {
             _id: senderId,
-            username: socket.user.username,
+            username:
+              [sender?.first_name, sender?.last_name].filter(Boolean).join(" ") ||
+              socket.user.email?.split("@")[0] ||
+              "Campus user",
             email: socket.user.email,
           },
           receiverId: {
             _id: actualReceiverId,
-            username: receiver.username,
+            username:
+              [receiver.first_name, receiver.last_name].filter(Boolean).join(" ") ||
+              receiver.email?.split("@")[0] ||
+              "Campus user",
             email: receiver.email,
           },
           content: content,

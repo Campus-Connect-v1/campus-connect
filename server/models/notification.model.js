@@ -15,25 +15,122 @@ const FAN_OUT_CHUNK_SIZE = 500;
 // notify() swallows its errors, so a rejected INSERT would vanish silently.
 const TITLE_MAX = 255;
 const BODY_MAX = 500;
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+const EXPO_PUSH_CHUNK_SIZE = 100;
 
 const clamp = (value, max) =>
   typeof value === "string" && value.length > max ? value.slice(0, max) : value;
 
-// Push/email delivery is NOT implemented yet.
-//
-// This is the hook point: when a transport (FCM/APNs, or a mailer for
-// notification_email) is added, it goes here, and it must honour the
-// recipient's preference flag before sending anything. The notifications row
-// is inserted regardless of the flag, because the in-app list and the badge
-// are not "delivery" -- turning push off should silence the device, not hide
-// the notification inside the app.
-//
-// Deliberately never throws and never awaits anything slow: notify() runs
-// inside request handlers on hot paths.
-const deliverPush = (notification, pushEnabled) => {
-  if (!pushEnabled) return;
-  // TODO: enqueue for the push transport (do not send inline -- a request
-  // handler must not wait on a third-party network call).
+const isExpoPushToken = (token) =>
+  typeof token === "string" &&
+  /^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/.test(token);
+
+const sendExpoPushBatch = async (messages) => {
+  if (!messages.length) return;
+  const headers = {
+    Accept: "application/json",
+    "Accept-Encoding": "gzip, deflate",
+    "Content-Type": "application/json",
+  };
+  if (process.env.EXPO_ACCESS_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.EXPO_ACCESS_TOKEN}`;
+  }
+
+  const response = await fetch(EXPO_PUSH_URL, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(messages),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Expo push answered ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const tickets = Array.isArray(payload.data) ? payload.data : [];
+  const invalidTokens = [];
+  tickets.forEach((ticket, index) => {
+    if (ticket.status === "error") {
+      console.error(
+        "Expo push ticket error:",
+        ticket.message,
+        ticket.details || ""
+      );
+      if (ticket.details?.error === "DeviceNotRegistered" && messages[index]?.to) {
+        invalidTokens.push(messages[index].to);
+      }
+    }
+  });
+
+  if (invalidTokens.length) {
+    const placeholders = invalidTokens.map(() => "?").join(",");
+    await db.execute(
+      `UPDATE user_push_tokens
+       SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+       WHERE expo_push_token IN (${placeholders})`,
+      invalidTokens
+    );
+  }
+};
+
+const deliverPush = async (notification) => {
+  const [rows] = await db.execute(
+    `SELECT pt.expo_push_token
+     FROM user_push_tokens pt
+     JOIN users u ON u.user_id = pt.user_id
+     WHERE pt.user_id = ? AND pt.is_active = 1 AND u.notification_push = 1`,
+    [notification.user_id]
+  );
+  const tokens = rows.map((row) => row.expo_push_token).filter(isExpoPushToken);
+
+  for (let i = 0; i < tokens.length; i += EXPO_PUSH_CHUNK_SIZE) {
+    const messages = tokens.slice(i, i + EXPO_PUSH_CHUNK_SIZE).map((to) => ({
+      to,
+      sound: "default",
+      title: notification.title,
+      body: notification.body || undefined,
+      data: {
+        notification_id: notification.notification_id,
+        type: notification.type,
+        resource_type: notification.resource_type,
+        resource_id: notification.resource_id,
+      },
+    }));
+    await sendExpoPushBatch(messages);
+  }
+};
+
+const deliverPushMany = async (userIds, notification) => {
+  for (let i = 0; i < userIds.length; i += FAN_OUT_CHUNK_SIZE) {
+    const chunk = userIds.slice(i, i + FAN_OUT_CHUNK_SIZE);
+    const placeholders = chunk.map(() => "?").join(",");
+    const [rows] = await db.execute(
+      `SELECT pt.expo_push_token
+       FROM user_push_tokens pt
+       JOIN users u ON u.user_id = pt.user_id
+       WHERE pt.is_active = 1
+         AND u.notification_push = 1
+         AND pt.user_id IN (${placeholders})`,
+      chunk
+    );
+    const tokens = rows.map((row) => row.expo_push_token).filter(isExpoPushToken);
+
+    for (let offset = 0; offset < tokens.length; offset += EXPO_PUSH_CHUNK_SIZE) {
+      await sendExpoPushBatch(
+        tokens.slice(offset, offset + EXPO_PUSH_CHUNK_SIZE).map((to) => ({
+          to,
+          sound: "default",
+          title: notification.title,
+          body: notification.body || undefined,
+          data: {
+            type: notification.type,
+            resource_type: notification.resourceType,
+            resource_id: notification.resourceId,
+          },
+        }))
+      );
+    }
+  }
 };
 
 /**
@@ -130,23 +227,12 @@ export const notify = async ({
       is_read: 0,
     };
 
-    // Only read the preference once a row actually exists -- suppressed
-    // duplicates skip this entirely, so the common hot-path repeat costs one
-    // query, and this is a primary key lookup.
-    try {
-      const [prefs] = await db.execute(
-        `SELECT notification_push FROM users WHERE user_id = ?`,
-        [userId]
-      );
-      deliverPush(notification, prefs[0]?.notification_push !== 0);
-    } catch (prefError) {
-      // The row is already saved; failing to check a preference must not
-      // undo that or bubble out.
-      console.error(
-        "notify: could not read notification_push preference:",
-        prefError.message
-      );
-    }
+    // Delivery is deliberately detached from the request path. The in-app row
+    // is authoritative; a third-party transport failure must never turn the
+    // user's successful action into a 500.
+    void deliverPush(notification).catch((pushError) =>
+      console.error("notify: push delivery failed:", pushError.message)
+    );
 
     return notification;
   } catch (error) {
@@ -224,6 +310,18 @@ export const notifyMany = async (
         // their notification.
         console.error("notifyMany: chunk failed:", chunkError.message);
       }
+    }
+
+    if (inserted > 0) {
+      void deliverPushMany(recipients, {
+        type,
+        resourceType,
+        resourceId,
+        title: safeTitle,
+        body: safeBody,
+      }).catch((pushError) =>
+        console.error("notifyMany: push delivery failed:", pushError.message)
+      );
     }
 
     return inserted;
@@ -381,4 +479,35 @@ export const clearNotificationsModel = async (userId) => {
   } catch (error) {
     throw new Error(`Database error in clearNotifications: ${error.message}`);
   }
+};
+
+export const registerPushTokenModel = async (
+  userId,
+  { token, platform = "unknown", deviceId = null }
+) => {
+  if (!isExpoPushToken(token)) throw new Error("Invalid Expo push token");
+  const tokenId = `push_${uuidv4()}`;
+  await db.execute(
+    `INSERT INTO user_push_tokens
+       (token_id, user_id, expo_push_token, platform, device_id, is_active)
+     VALUES (?, ?, ?, ?, ?, 1)
+     ON DUPLICATE KEY UPDATE
+       user_id = VALUES(user_id),
+       platform = VALUES(platform),
+       device_id = VALUES(device_id),
+       is_active = 1,
+       updated_at = CURRENT_TIMESTAMP`,
+    [tokenId, userId, token, platform, deviceId]
+  );
+  return { token, platform, device_id: deviceId };
+};
+
+export const unregisterPushTokenModel = async (userId, token) => {
+  const [result] = await db.execute(
+    `UPDATE user_push_tokens
+     SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = ? AND expo_push_token = ?`,
+    [userId, token]
+  );
+  return result.affectedRows > 0;
 };

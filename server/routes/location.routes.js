@@ -550,7 +550,14 @@ router.post("/incognito", toggleIncognitoMode);
  *       500:
  *         description: Internal server error
  */
-router.get("/debug/locations", async (req, res) => {
+const developmentOnly = (req, res, next) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ message: "API endpoint not found" });
+  }
+  next();
+};
+
+router.get("/debug/locations", developmentOnly, async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -624,7 +631,7 @@ router.get("/debug/locations", async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-router.post("/debug/set-test-location", async (req, res) => {
+router.post("/debug/set-test-location", developmentOnly, async (req, res) => {
   try {
     const userId = req.user.id;
     const { latitude = 37.4275, longitude = -122.1697 } = req.body;

@@ -1,5 +1,12 @@
 # API coverage
 
+> **Backend gap update (2026-09-21):** the five interests/courses blockers,
+> message-history endpoint, feed `poll_id`, connection-response route, complete
+> profile fields, and push-token endpoints are now implemented. Production also
+> returns 404 for both geofencing debug routes. The route counts below preserve
+> the original client audit rather than mixing backend additions into its
+> historical totals.
+
 > **Updated.** Messaging, delete account, event detail/edit/delete, password
 > reset and facilities are now wired. Coverage went 67 -> **83 of 125**.
 >

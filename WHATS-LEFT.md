@@ -3,9 +3,17 @@
 Findings from a read of the client and server as they stand. Nothing here is
 speculative — each item names the file or route it came from.
 
+> **Backend update (2026-09-21):** the backend items in sections 1, 2, 4, 4b,
+> and 8 are implemented. Connection requests can be accepted or declined;
+> message history, poll IDs, table-backed interests/courses, complete profile
+> fields, and Expo push-token endpoints now exist; debug location endpoints are
+> unavailable in production. Apply `server/db/migrations/004_push_tokens.sql`
+> before enabling push registration. Client push-token registration and the
+> unread-message action in section 3 remain client work.
+
 ---
 
-## 1. Blocker: a connection request can never be accepted
+## 1. Connection request acceptance — resolved
 
 **This breaks the core social loop.** You can send a request and cancel one.
 Nobody can accept one, so the graph never forms an edge, and everything built on
@@ -34,7 +42,7 @@ sent and accepted, with accept/decline on incoming.
 
 ---
 
-## 2. Push notifications cannot be delivered
+## 2. Push notification backend — resolved; client registration remains
 
 `expo-notifications` is in `package.json` and is **never imported anywhere** in
 `src/` or `app/`. No permission prompt, no `getExpoPushTokenAsync`, no token
@@ -62,7 +70,7 @@ since right now there are no historical messages to mark.
 
 ---
 
-## 4. Already sent to the backend (3 docs)
+## 4. Backend requests — resolved
 
 | Doc | Effect while outstanding |
 |---|---|
@@ -75,7 +83,7 @@ the column is `profile_picture_url`, so every conversation avatar is blank.
 
 ---
 
-## 4b. Profile editing (DONE, with two caveats)
+## 4b. Profile editing — backend caveats resolved
 
 `app/settings/edit-profile.tsx` now edits the nine fields that round-trip:
 first and last name, headline, bio, programme, graduation year, date of birth,
@@ -146,7 +154,7 @@ it is reachable from Campus and the drawer.
 
 ---
 
-## 8. Server-side privacy leak
+## 8. Server-side privacy leak — resolved
 
 `GET /api/geofencing/debug/locations` and
 `POST /api/geofencing/debug/set-test-location`.
