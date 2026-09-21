@@ -1,12 +1,20 @@
+import bcrypt from "bcrypt";
 import { db } from "../config/db.js";
 import { v4 as uuidv4 } from "uuid";
+
+// Work factor for OTP hashes, matching the one used for passwords.
+const OTP_SALT_ROUNDS = 12;
+// Wrong guesses allowed against a single OTP before it is burned.
+const OTP_MAX_ATTEMPTS = 5;
 
 export const createUser = async (userData) => {
   const {
     first_name,
     last_name,
     email,
-    password,
+    // Explicitly null, not undefined: OAuth users have no password, and mysql2
+    // rejects undefined bind parameters outright.
+    password = null,
     university_id,
     auth_provider = "email",
     provider_id = null,
@@ -79,36 +87,59 @@ export const markEmailAsVerified = async (email) => {
   return result.affectedRows > 0;
 };
 
+// The OTP is stored as a bcrypt hash. Nothing that can be replayed is ever
+// written to the database, so a dump or a stray log cannot be used to verify
+// somebody else's email address.
 export const createOTP = async (email, otp) => {
   // Delete any existing OTP for this email first
   await db.execute("DELETE FROM otps WHERE email = ?", [email]);
 
   // Set expiration to 10 minutes from now
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const otpHash = await bcrypt.hash(otp, OTP_SALT_ROUNDS);
 
   const [result] = await db.execute(
     "INSERT INTO otps (email, otp_code, expires_at) VALUES (?, ?, ?)",
-    [email, otp, expiresAt]
+    [email, otpHash, expiresAt]
   );
 
   return result.insertId;
 };
 
+// Because the stored value is a hash, the code can no longer be matched in the
+// WHERE clause -- the row is fetched by email and compared in constant time by
+// bcrypt. That also gives us somewhere to count failed guesses: hashing protects
+// a leaked database, but it does nothing against someone simply trying codes.
 export const verifyOTP = async (email, otp) => {
   const [rows] = await db.execute(
-    "SELECT * FROM otps WHERE email = ? AND otp_code = ? AND expires_at > NOW()",
-    [email, otp]
+    "SELECT id, otp_code, attempts FROM otps WHERE email = ? AND expires_at > NOW()",
+    [email]
   );
 
-  if (rows.length > 0) {
-    // Mark email as verified
-    await markEmailAsVerified(email);
-    // Delete the used OTP
+  if (rows.length === 0) return false;
+
+  const record = rows[0];
+
+  if (record.attempts >= OTP_MAX_ATTEMPTS) {
+    // Burn it rather than leaving a locked row that blocks a legitimate resend.
     await deleteOTP(email);
-    return true;
+    return false;
   }
 
-  return false;
+  const isMatch = await bcrypt.compare(otp, record.otp_code);
+
+  if (!isMatch) {
+    await db.execute("UPDATE otps SET attempts = attempts + 1 WHERE id = ?", [
+      record.id,
+    ]);
+    return false;
+  }
+
+  // Mark email as verified
+  await markEmailAsVerified(email);
+  // Delete the used OTP
+  await deleteOTP(email);
+  return true;
 };
 
 export const deleteOTP = async (email) => {

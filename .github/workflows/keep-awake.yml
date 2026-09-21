@@ -1,0 +1,58 @@
+# Keeps the Render free-tier API from spinning down.
+#
+# Render suspends a free web service after 15 minutes without traffic; the next
+# request then pays a ~50s cold start, and socket.js loses every connected
+# client along with its in-memory onlineUsers map.
+#
+# The schedule below is every 10 minutes rather than 14. GitHub's cron is
+# best-effort and routinely runs several minutes late when the shared runner
+# pool is busy -- a 14-minute interval that slips by two minutes crosses
+# Render's 15-minute threshold and the service sleeps anyway. 10 leaves slack.
+#
+# Setup: add a repository variable named API_HEALTH_URL, set to
+#   https://<your-service>.onrender.com/api/health
+# under Settings -> Secrets and variables -> Actions -> Variables.
+# Without it the job exits successfully and does nothing, so this workflow is
+# safe to merge before the service exists.
+#
+# Caveat: GitHub disables scheduled workflows in repositories with no activity
+# for 60 days. If the repo goes quiet, re-enable it from the Actions tab.
+
+name: Keep API awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: # lets you trigger a ping by hand from the Actions tab
+
+# If a previous ping is somehow still running, drop it rather than queue up.
+concurrency:
+  group: keep-awake
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping health endpoint
+        env:
+          URL: ${{ vars.API_HEALTH_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "API_HEALTH_URL is not set — nothing to ping. Skipping."
+            exit 0
+          fi
+
+          # A cold start can take ~50s, so allow generous timeouts and retry.
+          # --fail makes curl treat a 4xx/5xx as an error so the step goes red.
+          code=$(curl --silent --show-error --fail \
+                      --retry 3 --retry-delay 20 --retry-all-errors \
+                      --connect-timeout 15 --max-time 90 \
+                      --write-out '%{http_code}' --output /dev/null \
+                      "$URL") || {
+            echo "Ping failed. The service may be down, not just asleep."
+            exit 1
+          }
+
+          echo "OK — HTTP $code from $URL"
