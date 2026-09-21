@@ -6,6 +6,7 @@ import http from "http";
 
 import { swaggerDocs } from "./utils/swagger.js";
 import { COLORS } from "./helper/logger.js";
+import { corsOptions } from "./config/cors.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
@@ -38,7 +39,7 @@ console.log(COLORS[process.env.SUCCESS], "NODE_ENV:", process.env.NODE_ENV);
 
 // ============= EXPRESS ======================
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // ============= MORGAN ======================

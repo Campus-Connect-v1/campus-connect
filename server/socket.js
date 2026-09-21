@@ -4,12 +4,19 @@ import Message from "./models/message.model.js";
 import Conversation from "./models/conversation.model.js"; // NEW
 import { findByEmail, findById } from "./models/user.model.js";
 import { verifySocketToken } from "./middleware/verifySocketToken.js";
+import { isOriginAllowed } from "./config/cors.js";
 
 export default function socketServer(httpServer) {
   const io = new Server(httpServer, {
     cors: {
-      origin: "*",
+      // Same policy as the HTTP app: named origins only, but native clients
+      // that send no Origin header still get through.
+      origin(origin, callback) {
+        if (isOriginAllowed(origin)) return callback(null, true);
+        callback(new Error(`Blocked by CORS: ${origin}`));
+      },
       methods: ["GET", "POST"],
+      credentials: true,
     },
   });
 

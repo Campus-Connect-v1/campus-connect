@@ -40,22 +40,44 @@ export const db = mysql.createPool({
   // connectTimeout: 10000,
 });
 
-(async () => {
+// Startup connectivity probe.
+//
+// This used to process.exit(1) on the first failure, which meant a momentary
+// blip at the database -- a restart on the host, a network hiccup, the brief
+// window while a sleeping instance wakes -- killed the process outright. The
+// pool itself reconnects per query, so the only thing exiting achieved was
+// turning a recoverable error into downtime.
+//
+// Instead, retry with exponential backoff and keep retrying in the background.
+// The service stays up and heals by itself once the database answers.
+const RETRY_BASE_MS = 1000;
+const RETRY_MAX_MS = 30000;
+
+const probeDatabase = async (attempt = 1) => {
   try {
     const connection = await db.getConnection();
     console.log(
       COLORS[process.env.SUCCESS],
-      "Successfully connected to the database"
+      attempt === 1
+        ? "Successfully connected to the database"
+        : `Successfully connected to the database (after ${attempt} attempts)`
     );
     connection.release();
   } catch (err) {
+    // Full backoff doubles to a 30s ceiling rather than growing without bound.
+    const delay = Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
     console.error(
-      COLORS[process.env.SUCCESS],
-      "Database connection failed:",
-      err
+      COLORS[process.env.ERROR],
+      `Database connection failed (attempt ${attempt}), retrying in ${
+        delay / 1000
+      }s:`,
+      err.code || err.message
     );
-    process.exit(1);
+    // unref() so a pending retry never holds the process open on shutdown.
+    setTimeout(() => probeDatabase(attempt + 1), delay).unref();
   }
-})();
+};
+
+probeDatabase();
 
 export default db;
