@@ -213,14 +213,16 @@ export function FormSwitchRow({
   );
 }
 
-function format(date: Date) {
-  return date.toLocaleString([], {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function format(date: Date, mode: "date" | "datetime") {
+  return mode === "date"
+    ? date.toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" })
+    : date.toLocaleString([], {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 }
 
 /**
@@ -234,48 +236,62 @@ export function FormDateTime({
   label,
   value,
   minimumDate,
+  maximumDate,
+  mode = "datetime",
+  placeholder,
   onChange,
 }: {
   label: string;
-  value: Date;
+  /** null renders the placeholder, for a date that has never been set. */
+  value: Date | null;
   minimumDate?: Date;
+  maximumDate?: Date;
+  /** "date" skips the time step entirely (birthdays, not events). */
+  mode?: "date" | "datetime";
+  placeholder?: string;
   onChange: (next: Date) => void;
 }) {
   const { colors } = useTheme();
   const [showing, setShowing] = useState<"none" | "date" | "time">("none");
 
+  const shown = value ? format(value, mode) : (placeholder ?? "Not set");
+
   return (
-    <View style={{ gap: spacing["2xs"] }}>
-      <Text variant="micro" color="textMuted">
-        {label.toUpperCase()}
+    <View style={{ gap: 6 }}>
+      <Text variant="label" color="textSecondary">
+        {label}
       </Text>
 
       <PressableScale
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${format(value)}. Change`}
+        accessibilityLabel={`${label}: ${shown}. Change`}
         onPress={() => setShowing("date")}
         style={{
           flexDirection: "row",
           alignItems: "center",
           gap: spacing.sm,
-          minHeight: 52,
+          minHeight: 56,
           paddingHorizontal: spacing.md,
           borderRadius: radius.sm,
           backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.border,
         }}
       >
         <Icon name="events" size={18} color={colors.textMuted} />
-        <Text variant="body" style={{ flex: 1 }}>
-          {format(value)}
+        <Text variant="body" color={value ? undefined : "textMuted"} style={{ flex: 1 }}>
+          {shown}
         </Text>
         <Icon name="forward" size={16} color={colors.textMuted} />
       </PressableScale>
 
       {showing !== "none" ? (
         <DateTimePicker
-          value={value}
+          // Falls back to a sensible starting point when nothing is set yet.
+          value={value ?? maximumDate ?? new Date()}
           minimumDate={minimumDate}
-          mode={Platform.OS === "ios" ? "datetime" : showing}
+          maximumDate={maximumDate}
+          mode={Platform.OS === "ios" ? mode : showing}
           display={Platform.OS === "ios" ? "inline" : "default"}
           onChange={(event, selected) => {
             if (Platform.OS === "ios") {
@@ -289,7 +305,9 @@ export function FormDateTime({
               return;
             }
             if (selected) onChange(selected);
-            setShowing(showing === "date" ? "time" : "none");
+            // Android has no combined picker, so datetime runs the two dialogs
+            // back to back. A date-only field stops after the first.
+            setShowing(mode === "date" ? "none" : showing === "date" ? "time" : "none");
           }}
         />
       ) : null}

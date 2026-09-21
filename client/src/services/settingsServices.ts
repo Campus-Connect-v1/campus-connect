@@ -44,10 +44,30 @@ export function updateNotificationPreferences(patch: {
   return updateProfile(patch as never);
 }
 
-/** Both are plain columns on the users row, updated through PUT /user/profile. */
+/**
+ * Audience enums on the users row, NOT booleans.
+ *
+ * The server validates these against "friends" | "university" | "none" and
+ * answers 400 for anything else, so a switch has to map onto a value rather
+ * than send true/false. "university" is the on position: visible to the
+ * campus, which is what the switch's label promises.
+ */
+export type VisibilityAudience = "friends" | "university" | "none";
+
+export function audienceFor(enabled: boolean): VisibilityAudience {
+  return enabled ? "university" : "none";
+}
+
 export function updateVisibilityPreferences(patch: {
-  show_location_preference?: boolean;
-  show_status_preference?: boolean;
+  show_location_preference?: VisibilityAudience;
+  show_status_preference?: VisibilityAudience;
 }) {
   return updateProfile(patch as never);
+}
+
+/** Who can see the profile at all. Also an enum, also 400s on anything else. */
+export type ProfileVisibility = "public" | "university" | "friends" | "private";
+
+export function updateProfileVisibility(privacy_profile: ProfileVisibility) {
+  return updateProfile({ privacy_profile } as never);
 }

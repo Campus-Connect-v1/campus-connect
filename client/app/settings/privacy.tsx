@@ -7,6 +7,7 @@ import { useAsync } from "@/src/hooks/useAsync";
 import { useOptimisticToggle } from "@/src/hooks/useOptimisticToggle";
 import { useSession } from "@/src/services/SessionContext";
 import {
+  audienceFor,
   fetchPrivacySettings,
   updatePrivacySettings,
   updateVisibilityPreferences,
@@ -43,7 +44,9 @@ export default function PrivacySettingsScreen() {
     true,
     useCallback(
       async (next: boolean) => {
-        const result = await updateVisibilityPreferences({ show_status_preference: next });
+        const result = await updateVisibilityPreferences({
+          show_status_preference: audienceFor(next),
+        });
         if (result.success) await refresh();
         return result;
       },
@@ -62,10 +65,10 @@ export default function PrivacySettingsScreen() {
   }, [settings.data, syncDiscoverable, syncExact]);
 
   useEffect(() => {
-    if (profile)
-      syncActivity(
-        Boolean((profile as { show_status_preference?: number }).show_status_preference ?? 1)
-      );
+    if (!profile) return;
+    // The column is an audience enum; anything other than "none" is on.
+    const value = (profile as { show_status_preference?: string }).show_status_preference;
+    syncActivity(value !== "none");
   }, [profile, syncActivity]);
 
   const error = settings.error ?? discoverable.error ?? exactLocation.error ?? activity.error;

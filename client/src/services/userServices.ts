@@ -44,6 +44,9 @@ export interface ApiPublicUser {
   program: string | null;
   graduation_year: number | null;
   year_of_study: number | null;
+  phone_number: string | null;
+  linkedin_url: string | null;
+  website_url: string | null;
   university_name: string | null;
   university_domain: string | null;
   /** Straight from the JSON column — the public endpoint does NOT parse it. */

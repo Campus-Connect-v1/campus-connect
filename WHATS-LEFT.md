@@ -75,6 +75,28 @@ the column is `profile_picture_url`, so every conversation avatar is blank.
 
 ---
 
+## 4b. Profile editing (DONE, with two caveats)
+
+`app/settings/edit-profile.tsx` now edits the nine fields that round-trip:
+first and last name, headline, bio, programme, graduation year, date of birth,
+phone, LinkedIn and website. Client validation mirrors the server's Joi rules so
+a bad value lands next to its field instead of as a flat 400.
+
+Two things worth knowing:
+
+- It seeds from `GET /user/:userId`, not `GET /user/profile`. The latter does
+  NOT return `profile_headline`, `linkedin_url` or `website_url`, even though
+  PUT accepts all three, so seeding from it would show those blank on every
+  visit and look like the save had failed. Worth fixing server-side by adding
+  the three fields to `getProfile`'s response.
+- **`year_of_study` still cannot be set.** The profile displays it as
+  "Level 300", but it is absent from `updateUserProfileModel`'s `allowedFields`,
+  so no API call can write it. Add it there to make it editable.
+
+Also fixed while here: `show_location_preference` and `show_status_preference`
+are audience enums (`friends` / `university` / `none`), not booleans. The
+privacy screen was sending `true`/`false`, which the server rejects with a 400.
+
 ## 5. Capability wired, no UI for it
 
 These services exist and work; nothing calls them from a screen.

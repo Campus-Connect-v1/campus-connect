@@ -1,9 +1,8 @@
-import { router } from "expo-router";
-import { useMemo, useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, View } from "react-native";
 import * as Haptics from "expo-haptics";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Linking, ScrollView, View } from "react-native";
 
-import { FormField } from "@/src/components/forms/FormControls";
 import { SettingsRow, SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import {
   Avatar,
@@ -22,8 +21,8 @@ import {
   type PickedMedia,
   type PickResult,
 } from "@/src/services/media";
-import { uploadMedia } from "@/src/services/uploadServices";
 import { useSession } from "@/src/services/SessionContext";
+import { uploadMedia } from "@/src/services/uploadServices";
 import { updateProfile } from "@/src/services/userServices";
 import { radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
@@ -34,38 +33,19 @@ export default function AccountSettingsScreen() {
 
   const display = useMemo(() => (profile ? adaptProfile(profile) : null), [profile]);
 
-  const [editing, setEditing] = useState(false);
-  const [bio, setBio] = useState("");
-  const [program, setProgram] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<PickedMedia | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [permissionBlocked, setPermissionBlocked] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const canUpload = useUploadsEnabled();
 
-  if (loadingProfile && !display) {
-    return (
-      <SettingsShell title="Account">
-        <EmptyState.Loading />
-      </SettingsShell>
-    );
-  }
-
-  if (!display) {
-    return (
-      <SettingsShell title="Account">
-        <EmptyState
-          tone="error"
-          title="Could not load your account"
-          body={profileError ?? "Check your connection and try again."}
-          actionLabel="Try again"
-          onAction={refresh}
-        />
-      </SettingsShell>
-    );
-  }
+  // Picks up whatever the edit screen saved on the way back.
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const choosePhoto = async (pick: () => Promise<PickResult>) => {
     setError(null);
@@ -118,29 +98,32 @@ export default function AccountSettingsScreen() {
     setPicked(null);
   };
 
-  const startEditing = () => {
-    setBio(display.bio ?? "");
-    setProgram(display.programme ?? "");
-    setNotice(null);
-    setError(null);
-    setEditing(true);
-  };
+  if (loadingProfile && !display) {
+    return (
+      <SettingsShell title="Account">
+        <EmptyState.Loading />
+      </SettingsShell>
+    );
+  }
 
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    const result = await updateProfile({ bio, program });
-    setSaving(false);
+  if (!display) {
+    return (
+      <SettingsShell title="Account">
+        <EmptyState
+          tone="error"
+          title="Could not load your account"
+          body={profileError ?? "Check your connection and try again."}
+          actionLabel="Try again"
+          onAction={refresh}
+        />
+      </SettingsShell>
+    );
+  }
 
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setEditing(false);
-    setNotice("Profile updated.");
-    await refresh();
-  };
+  // Headline, LinkedIn and website are deliberately not shown here:
+  // GET /user/profile does not return them, so every row would read "Not set".
+  // The edit screen reads them from GET /user/:userId instead.
+  const row = profile as { graduation_year?: number | null };
 
   return (
     <SettingsShell title="Account">
@@ -196,20 +179,18 @@ export default function AccountSettingsScreen() {
             @{display.handle}
             {university ? ` · ${university.label}` : ""}
           </Text>
-          {!editing ? (
-            // `fullWidth={false}` pins the button to flex-start, which beats the
-            // parent's centering — so the alignment is stated here explicitly.
-            <Button
-              label="Edit profile"
-              fullWidth={false}
-              onPress={startEditing}
-              style={{ alignSelf: "center" }}
-            />
-          ) : null}
+
+          <Button
+            label="Edit profile"
+            fullWidth={false}
+            icon={<Icon name="edit" size={17} color={colors.accentFg} />}
+            onPress={() => router.push("/settings/edit-profile")}
+            style={{ alignSelf: "center" }}
+          />
         </View>
 
         {notice ? <InlineNotice tone="success" message={notice} /> : null}
-        {error ? <InlineNotice tone="error" message={error} /> : null}
+        {error ? <InlineNotice message={error} /> : null}
         {permissionBlocked ? (
           <Button
             label="Open settings"
@@ -218,53 +199,28 @@ export default function AccountSettingsScreen() {
           />
         ) : null}
 
-        {editing ? (
-          <View style={{ gap: spacing.md }}>
-            <FormField
-              label="Bio"
-              multiline
-              autoCapitalize="sentences"
-              autoCorrect
-              value={bio}
-              onChangeText={setBio}
-              placeholder="What are you around for?"
-            />
-
-            <FormField
-              label="Programme"
-              autoCapitalize="words"
-              autoCorrect={false}
-              value={program}
-              onChangeText={setProgram}
-              placeholder="Computer Science"
-            />
-
-            <View style={{ flexDirection: "row", gap: spacing.sm }}>
-              <View style={{ flex: 1 }}>
-                <Button label="Cancel" variant="secondary" onPress={() => setEditing(false)} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Button label="Save" loading={saving} onPress={save} />
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View
-            style={{ borderRadius: radius.md, backgroundColor: colors.surface, overflow: "hidden" }}
-          >
-            <SettingsRow title="Campus email" detail={display.email ?? "Not set"} icon="message" />
-            <SettingsRow
-              title="Programme"
-              detail={[display.programme, display.year].filter(Boolean).join(" · ") || "Not set"}
-              icon="course"
-            />
-            <SettingsRow
-              title="University"
-              detail={display.university ?? "Not set"}
-              icon="campus"
-            />
-          </View>
-        )}
+        <View
+          style={{ borderRadius: radius.md, backgroundColor: colors.surface, overflow: "hidden" }}
+        >
+          <SettingsRow title="Campus email" detail={display.email ?? "Not set"} icon="message" />
+          <SettingsRow
+            title="Programme"
+            detail={[display.programme, display.year].filter(Boolean).join(" · ") || "Not set"}
+            icon="course"
+            onPress={() => router.push("/settings/edit-profile")}
+          />
+          <SettingsRow
+            title="Graduating"
+            detail={row?.graduation_year ? String(row.graduation_year) : "Not set"}
+            icon="academic"
+            onPress={() => router.push("/settings/edit-profile")}
+          />
+          <SettingsRow
+            title="University"
+            detail={university?.label ?? display.university ?? "Not set"}
+            icon="campus"
+          />
+        </View>
 
         <View
           style={{ borderRadius: radius.md, backgroundColor: colors.surface, overflow: "hidden" }}
