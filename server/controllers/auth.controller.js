@@ -77,8 +77,13 @@ export const register = async (req, res) => {
     const otp = randomInt(100000, 1000000).toString();
     await createOTP(email, otp);
 
+    // Reported honestly below. Registration still succeeds on failure, but
+    // the client must be able to tell the difference so it can offer a resend
+    // instead of telling the user to check an inbox nothing was sent to.
+    let emailSent = false;
     try {
       await sendOTPEmail(email, otp, first_name, last_name);
+      emailSent = true;
     } catch (emailError) {
       console.error("Failed to send OTP email:", emailError);
       // Don't fail the registration if email fails.
@@ -90,9 +95,11 @@ export const register = async (req, res) => {
     }
 
     res.status(201).json({
-      message: "User registered successfully. Please verify your email.",
+      message: emailSent
+        ? "User registered successfully. Please verify your email."
+        : "User registered, but the verification email could not be sent. Please request a new code.",
       userId,
-      emailSent: true,
+      emailSent,
       emailVerified: false,
     });
   } catch (error) {

@@ -11,6 +11,12 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD, // Use App Password for Gmail
   },
+  // Without these, a host that silently drops outbound SMTP leaves the
+  // connection hanging for ~90s and the caller waits the whole time. Fail
+  // fast instead: registration already tolerates a failed send.
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 });
 
 // Verify transporter configuration

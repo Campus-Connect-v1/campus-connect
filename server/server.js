@@ -38,6 +38,12 @@ console.log(COLORS[process.env.SUCCESS], "PORT:", process.env.PORT);
 console.log(COLORS[process.env.SUCCESS], "NODE_ENV:", process.env.NODE_ENV);
 
 // ============= EXPRESS ======================
+// Render terminates TLS at its proxy and forwards the client address in
+// X-Forwarded-For. Without this, express-rate-limit sees every request as
+// coming from the proxy and throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR, so
+// rate limiting is effectively disabled. 1 = trust exactly one hop.
+app.set("trust proxy", 1);
+
 app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions));
 app.use(express.json());
