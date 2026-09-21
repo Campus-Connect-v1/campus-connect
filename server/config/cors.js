@@ -3,6 +3,10 @@
 //
 // CLIENT_URL may hold several origins, comma separated, e.g.
 //   CLIENT_URL='https://campus.example.com,https://staging.campus.example.com'
+//
+// Set it to '*' to allow every origin deliberately. That is the current
+// production setting: the client is not deployed yet, so there is no origin
+// to name. Replace '*' with the real URL before taking real traffic.
 
 import { COLORS } from "../helper/logger.js";
 
@@ -15,17 +19,21 @@ export const allowedOrigins = (process.env.CLIENT_URL || "")
 // curl or server-to-server calls. Rejecting those would break the Expo app on
 // every platform except web, so a missing Origin is always allowed -- CORS is
 // a browser mechanism and gives us nothing there anyway.
+export const allowAllOrigins =
+  allowedOrigins.length === 0 || allowedOrigins.includes("*");
+
 export function isOriginAllowed(origin) {
   if (!origin) return true;
-  if (allowedOrigins.length === 0) return true; // see warning below
+  if (allowAllOrigins) return true;
   return allowedOrigins.includes(origin.replace(/\/$/, ""));
 }
 
-if (allowedOrigins.length === 0) {
+if (allowAllOrigins) {
   console.warn(
     COLORS[process.env.WARNING],
-    "CLIENT_URL is not set → CORS is allowing every origin. Set it before " +
-      "taking real traffic."
+    allowedOrigins.includes("*")
+      ? "CORS is allowing every origin (CLIENT_URL='*')"
+      : "CLIENT_URL is not set → CORS is allowing every origin"
   );
 } else {
   console.log(
