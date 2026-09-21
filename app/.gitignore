@@ -1,0 +1,6 @@
+node_modules
+
+# dist IS committed: server/server.js serves app/dist at /admin, and Render's
+# build only runs `npm ci` in server/. Committing the bundle keeps the operator
+# console deployable without adding a second build step to the service.
+# Rebuild with `npm run build` in app/ and commit the result.

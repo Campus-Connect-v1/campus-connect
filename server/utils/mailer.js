@@ -19,14 +19,62 @@ const transporter = nodemailer.createTransport({
   socketTimeout: 15000,
 });
 
-// Verify transporter configuration
-transporter.verify((error, success) => {
-  if (error) {
-    console.error(COLORS[process.env.ERROR], "Mail transporter failed:", error);
-  } else {
-    console.log(COLORS[process.env.SUCCESS], "Mail transporter is ready");
+// Which transport actually sends.
+//
+// Render (and most hosts) block outbound SMTP on ports 25/465/587, so
+// nodemailer times out at the TCP connect stage -- `command: 'CONN'`, before
+// any password is offered. Resend goes over HTTPS on 443, which is not
+// blocked. Set RESEND_API_KEY to use it; without one we fall back to SMTP,
+// which still works fine for local development.
+const useResend = Boolean(process.env.RESEND_API_KEY);
+
+// Resend requires a verified domain. Until one is set up, onboarding@resend.dev
+// works but will ONLY deliver to the address the Resend account was created
+// with -- anyone else's signup will be rejected by Resend, not by us.
+const MAIL_FROM = process.env.EMAIL_FROM || "Campus Connect <onboarding@resend.dev>";
+
+if (useResend) {
+  console.log(
+    COLORS[process.env.SUCCESS],
+    `Mail transport: Resend HTTPS API (from: ${MAIL_FROM})`
+  );
+} else {
+  // Only probe SMTP when it is the transport in use.
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error(
+        COLORS[process.env.ERROR],
+        "Mail transporter failed:",
+        error.code === "ETIMEDOUT"
+          ? "SMTP is unreachable (the host likely blocks outbound SMTP). Set RESEND_API_KEY to send over HTTPS instead."
+          : error
+      );
+    } else {
+      console.log(COLORS[process.env.SUCCESS], "Mail transporter is ready");
+    }
+  });
+}
+
+// Send one message over the Resend HTTPS API.
+const sendViaResend = async ({ to, subject, html }) => {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, html }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      `Resend returned ${res.status}: ${body.message || JSON.stringify(body)}`
+    );
   }
-});
+  return { messageId: body.id };
+};
 
 // Email templates
 const emailTemplates = {
@@ -126,15 +174,23 @@ export const sendEmail = async (to, templateType, data) => {
       emailContent = template;
     }
 
-    const mailOptions = {
-      from: `"Campus Connect" <${process.env.EMAIL_USER}>`,
-      to,
-      subject: emailContent.subject,
-      html: emailContent.html,
-    };
+    // Identical templates either way -- only the transport differs.
+    const result = useResend
+      ? await sendViaResend({
+          to,
+          subject: emailContent.subject,
+          html: emailContent.html,
+        })
+      : await transporter.sendMail({
+          from: `"Campus Connect" <${process.env.EMAIL_USER}>`,
+          to,
+          subject: emailContent.subject,
+          html: emailContent.html,
+        });
 
-    const result = await transporter.sendMail(mailOptions);
-    console.log(`Email sent to ${to}: ${templateType}`);
+    console.log(
+      `Email sent to ${to}: ${templateType} (via ${useResend ? "Resend" : "SMTP"})`
+    );
     return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error(`Failed to send email to ${to}:`, error);

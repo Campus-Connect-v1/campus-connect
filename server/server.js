@@ -3,6 +3,9 @@ import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
 import http from "http";
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { swaggerDocs } from "./utils/swagger.js";
 import { COLORS } from "./helper/logger.js";
@@ -16,6 +19,7 @@ import locationRoutes from "./routes/location.routes.js";
 import eventRoutes from "./routes/event.routes.js";
 import studyGroupRoutes from "./routes/studyGroup.routes.js";
 import conversationRoutes from "./routes/conversation.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 
 import connectMongoDB from "./config/mongoDB.js";
 
@@ -65,6 +69,53 @@ app.use("/api/geofencing", locationRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/study-group", studyGroupRoutes);
 app.use("/api/conversations", conversationRoutes);
+app.use("/api/admin", adminRoutes);
+
+// ============= OPERATOR WEB APP (app/) ======================
+// Built bundle from ../app, served at /admin. Single service, so the UI and
+// the API share an origin and there is no CORS between them.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const adminDist = path.resolve(__dirname, "../app/dist");
+
+if (fs.existsSync(path.join(adminDist, "index.html"))) {
+  // Hashed assets are immutable; index.html must never be cached or operators
+  // keep loading a stale bundle after a deploy.
+  app.use(
+    "/admin",
+    express.static(adminDist, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-store");
+        }
+      },
+    })
+  );
+
+  // Client-side routing: any /admin/* path that is not a real file returns the
+  // shell so a deep link or a refresh does not 404.
+  app.get(/^\/admin(?:\/.*)?$/, (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(path.join(adminDist, "index.html"));
+  });
+
+  console.log(
+    COLORS[process.env.SUCCESS],
+    "Operator app served at /admin"
+  );
+} else {
+  // Not fatal: the API must still boot if the UI was never built.
+  app.get(/^\/admin(?:\/.*)?$/, (req, res) =>
+    res.status(503).json({
+      message:
+        "Operator app is not built. Run: cd app && npm install && npm run build",
+    })
+  );
+  console.warn(
+    COLORS[process.env.WARNING],
+    "app/dist not found → /admin will return 503 until the app is built"
+  );
+}
 
 // ============= MIDDLWAREs ======================
 // =========================404 handler

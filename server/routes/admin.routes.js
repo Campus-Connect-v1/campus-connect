@@ -1,0 +1,57 @@
+import express from "express";
+import rateLimit from "express-rate-limit";
+
+import { login, me } from "../controllers/admin/auth.controller.js";
+import { getStats, getActivity } from "../controllers/admin/stats.controller.js";
+import {
+  listResourceTypes,
+  list,
+  getOne,
+  create,
+  update,
+  remove,
+  impact,
+} from "../controllers/admin/resource.controller.js";
+import * as operators from "../controllers/admin/operators.controller.js";
+import { requireOperator, requirePermission } from "../middleware/adminAuth.js";
+
+const router = express.Router();
+
+// Tighter than the public authLimiter: this endpoint guards every campus's
+// data, and there is no legitimate reason to attempt it often.
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { message: "Too many login attempts, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ---- public --------------------------------------------------------------
+router.post("/auth/login", adminLoginLimiter, login);
+
+// ---- everything below requires a valid operator token -------------------
+router.use(requireOperator);
+
+router.get("/auth/me", me);
+
+router.get("/stats", requirePermission("read"), getStats);
+router.get("/activity", requirePermission("read"), getActivity);
+
+// Operator management: owner only.
+router.get("/operators", requirePermission("manageOperators"), operators.list);
+router.post("/operators", requirePermission("manageOperators"), operators.create);
+router.patch("/operators/:id", requirePermission("manageOperators"), operators.update);
+router.delete("/operators/:id", requirePermission("manageOperators"), operators.remove);
+
+// Generic resources. Declared last so /operators above is not swallowed by
+// the :resource wildcard.
+router.get("/resources", requirePermission("read"), listResourceTypes);
+router.get("/:resource", requirePermission("read"), list);
+router.get("/:resource/:id", requirePermission("read"), getOne);
+router.get("/:resource/:id/impact", requirePermission("read"), impact);
+router.post("/:resource", requirePermission("write"), create);
+router.patch("/:resource/:id", requirePermission("write"), update);
+router.delete("/:resource/:id", requirePermission("write"), remove);
+
+export default router;

@@ -246,6 +246,32 @@ CREATE TABLE IF NOT EXISTS `otps` (
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
+-- Operator accounts for the admin web app in app/.
+--
+-- Deliberately separate from `users`. Operators are staff, not campus members:
+-- keeping them out of `users` means they never surface in search, feeds,
+-- recommendations or connection counts, and no student row can be escalated to
+-- admin with a single UPDATE.
+CREATE TABLE IF NOT EXISTS `operators` (
+  `operator_id`    varchar(50)  NOT NULL,
+  `email`          varchar(255) NOT NULL,
+  `password_hash`  varchar(255) NOT NULL,
+  `first_name`     varchar(100) NOT NULL,
+  `last_name`      varchar(100) NOT NULL,
+  -- owner   : full access, and the only role that may manage other operators
+  -- admin   : full data access, cannot touch operator accounts
+  -- support : read-only
+  `role`           enum('owner','admin','support') NOT NULL DEFAULT 'support',
+  `is_active`      tinyint(1)   DEFAULT '1',
+  `last_login`     timestamp    NULL DEFAULT NULL,
+  `created_at`     timestamp    NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp    NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`operator_id`),
+  UNIQUE KEY `email` (`email`),
+  KEY `idx_role` (`role`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
 -- ============================================================================
 -- 3. Profile detail
 -- ============================================================================
