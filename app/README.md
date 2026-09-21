@@ -14,9 +14,25 @@ production there is nothing separate to deploy.
 npm install
 npm run build
 
-# local development, with the API proxied from :8000
+# local development
 npm run dev     # http://localhost:5174/admin/
 ```
+
+`npm run dev` proxies `/api` to `http://localhost:8000`, so it needs a server
+running locally (`cd ../server && npm run dev`). Without one, every request
+fails with `ECONNREFUSED` and the login screen cannot submit.
+
+To work on the UI without running a server, point the proxy at the deployed
+API instead:
+
+```bash
+VITE_API_PROXY=https://campus-connect-api-o0xt.onrender.com npm run dev
+```
+
+**Be aware which database you are hitting.** `server/.env` points at the
+production Hostinger database, so a locally-run server reads and writes live
+data — it is not a separate dev database. Either way, edits made from the dev
+UI are real.
 
 ## First sign-in
 
