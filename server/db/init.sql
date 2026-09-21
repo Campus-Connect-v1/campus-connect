@@ -506,7 +506,7 @@ CREATE TABLE IF NOT EXISTS `posts` (
   `user_id`     varchar(50)  NOT NULL,
   `content`     text,
   `media_url`   varchar(500) DEFAULT NULL,
-  `media_type`  enum('image','video','text') DEFAULT 'text',
+  `media_type`  enum('image','video','text','poll') DEFAULT 'text',
   `visibility`  enum('public','connections','private') DEFAULT 'connections',
   `is_active`   tinyint(1)   DEFAULT '1',
   `expires_at`  timestamp    NULL DEFAULT NULL,
@@ -568,7 +568,192 @@ CREATE TABLE IF NOT EXISTS `post_likes` (
 
 
 -- ============================================================================
--- 8. Audit
+-- 8. Polls
+-- ----------------------------------------------------------------------------
+-- A poll is a post (media_type='poll'), so it appears in the feed and carries
+-- comments and likes without any of that being duplicated here.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS `polls` (
+  `poll_id`         varchar(50)  NOT NULL,
+  `post_id`         varchar(50)  NOT NULL,
+  `question`        varchar(500) NOT NULL,
+  `max_selections`  int          NOT NULL DEFAULT '1',
+  `closes_at`       timestamp    NULL DEFAULT NULL,
+  `allow_change`    tinyint(1)   NOT NULL DEFAULT '1',
+  `created_at`      timestamp    NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`poll_id`),
+  UNIQUE KEY `unique_poll_post` (`post_id`),
+  CONSTRAINT `polls_ibfk_1` FOREIGN KEY (`post_id`)
+    REFERENCES `posts` (`post_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE IF NOT EXISTS `poll_options` (
+  `option_id`    varchar(50)  NOT NULL,
+  `poll_id`      varchar(50)  NOT NULL,
+  `option_text`  varchar(255) NOT NULL,
+  `position`     int          NOT NULL DEFAULT '0',
+  PRIMARY KEY (`option_id`),
+  UNIQUE KEY `unique_option_position` (`poll_id`,`position`),
+  CONSTRAINT `poll_options_ibfk_1` FOREIGN KEY (`poll_id`)
+    REFERENCES `polls` (`poll_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- One row per option chosen, so a multi-select poll produces several rows per
+-- voter. Percentages must therefore be computed over DISTINCT voters.
+CREATE TABLE IF NOT EXISTS `poll_votes` (
+  `vote_id`     varchar(50) NOT NULL,
+  `poll_id`     varchar(50) NOT NULL,
+  `option_id`   varchar(50) NOT NULL,
+  `user_id`     varchar(50) NOT NULL,
+  `created_at`  timestamp   NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`vote_id`),
+  UNIQUE KEY `unique_option_vote` (`option_id`,`user_id`),
+  KEY `idx_poll_user` (`poll_id`,`user_id`),
+  CONSTRAINT `poll_votes_ibfk_1` FOREIGN KEY (`poll_id`)
+    REFERENCES `polls` (`poll_id`) ON DELETE CASCADE,
+  CONSTRAINT `poll_votes_ibfk_2` FOREIGN KEY (`option_id`)
+    REFERENCES `poll_options` (`option_id`) ON DELETE CASCADE,
+  CONSTRAINT `poll_votes_ibfk_3` FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- ============================================================================
+-- 9. Stories
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS `stories` (
+  `story_id`          varchar(50) NOT NULL,
+  `user_id`           varchar(50) NOT NULL,
+  `story_type`        enum('image','video','text','repost') NOT NULL DEFAULT 'image',
+  `media_url`         varchar(500) DEFAULT NULL,
+  `content`           text,
+  `background_color`  varchar(7)   DEFAULT NULL,
+  `repost_post_id`    varchar(50)  DEFAULT NULL,
+  `visibility`        enum('public','connections','university') DEFAULT 'connections',
+  -- Stored rather than computed, so the window can vary per story and the
+  -- index below can drive the active-stories query directly.
+  `expires_at`        timestamp   NOT NULL,
+  `is_active`         tinyint(1)  DEFAULT '1',
+  `created_at`        timestamp   NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`story_id`),
+  KEY `idx_active_window` (`is_active`,`expires_at`),
+  KEY `idx_user_created` (`user_id`,`created_at`),
+  CONSTRAINT `stories_ibfk_1` FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `stories_ibfk_2` FOREIGN KEY (`repost_post_id`)
+    REFERENCES `posts` (`post_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE IF NOT EXISTS `story_views` (
+  `view_id`    varchar(50) NOT NULL,
+  `story_id`   varchar(50) NOT NULL,
+  `user_id`    varchar(50) NOT NULL,
+  `viewed_at`  timestamp   NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`view_id`),
+  UNIQUE KEY `unique_story_view` (`story_id`,`user_id`),
+  KEY `idx_user` (`user_id`),
+  CONSTRAINT `story_views_ibfk_1` FOREIGN KEY (`story_id`)
+    REFERENCES `stories` (`story_id`) ON DELETE CASCADE,
+  CONSTRAINT `story_views_ibfk_2` FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- ============================================================================
+-- 10. Moderation
+-- ============================================================================
+
+-- Composite primary key rather than a surrogate id: the pair IS the identity,
+-- and it makes the feed's NOT EXISTS lookup a single index hit.
+CREATE TABLE IF NOT EXISTS `hidden_posts` (
+  `user_id`     varchar(50) NOT NULL,
+  `post_id`     varchar(50) NOT NULL,
+  `created_at`  timestamp   NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`,`post_id`),
+  KEY `idx_post` (`post_id`),
+  CONSTRAINT `hidden_posts_ibfk_1` FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `hidden_posts_ibfk_2` FOREIGN KEY (`post_id`)
+    REFERENCES `posts` (`post_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE IF NOT EXISTS `post_reports` (
+  `report_id`    varchar(50) NOT NULL,
+  `post_id`      varchar(50) NOT NULL,
+  `reporter_id`  varchar(50) NOT NULL,
+  `reason`       enum('spam','harassment','hate_speech','misinformation','inappropriate','other') NOT NULL,
+  `details`      varchar(500) DEFAULT NULL,
+  `status`       enum('pending','reviewed','actioned','dismissed') NOT NULL DEFAULT 'pending',
+  -- An operator_id. Deliberately no FK: an operator may be deleted while the
+  -- moderation record must survive as an audit trail.
+  `reviewed_by`  varchar(50)  DEFAULT NULL,
+  `reviewed_at`  timestamp    NULL DEFAULT NULL,
+  `created_at`   timestamp    NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`report_id`),
+  UNIQUE KEY `unique_reporter_post` (`post_id`,`reporter_id`),
+  KEY `idx_status` (`status`,`created_at`),
+  CONSTRAINT `post_reports_ibfk_1` FOREIGN KEY (`post_id`)
+    REFERENCES `posts` (`post_id`) ON DELETE CASCADE,
+  CONSTRAINT `post_reports_ibfk_2` FOREIGN KEY (`reporter_id`)
+    REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- "See less of this kind of post" as a ranking signal rather than a hard
+-- filter, so the feed can down-rank instead of removing content outright.
+CREATE TABLE IF NOT EXISTS `feed_preferences` (
+  `user_id`       varchar(50)  NOT NULL,
+  `signal_type`   enum('media_type','author','university','course') NOT NULL,
+  `signal_value`  varchar(100) NOT NULL,
+  `weight`        int          NOT NULL DEFAULT '-1',
+  `created_at`    timestamp    NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp    NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`,`signal_type`,`signal_value`),
+  CONSTRAINT `feed_preferences_ibfk_1` FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- ============================================================================
+-- 11. Notifications
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `notification_id`  varchar(50) NOT NULL,
+  `user_id`          varchar(50) NOT NULL,
+  -- Who caused it. NULL for system notices.
+  `actor_id`         varchar(50) DEFAULT NULL,
+  `type`             enum('connection_request','connection_accepted','post_like',
+                          'post_comment','comment_reply','group_invite','group_joined',
+                          'event_invite','event_reminder','event_rsvp','story_view',
+                          'poll_vote','report_actioned','system') NOT NULL,
+  -- What it points at, so the client can deep-link without a type switch.
+  `resource_type`    varchar(50)  DEFAULT NULL,
+  `resource_id`      varchar(50)  DEFAULT NULL,
+  `title`            varchar(255) NOT NULL,
+  `body`             varchar(500) DEFAULT NULL,
+  `is_read`          tinyint(1)   NOT NULL DEFAULT '0',
+  `read_at`          timestamp    NULL DEFAULT NULL,
+  `created_at`       timestamp    NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`notification_id`),
+  -- Drives both the unread badge count and the paged list.
+  KEY `idx_user_unread` (`user_id`,`is_read`,`created_at`),
+  KEY `idx_user_created` (`user_id`,`created_at`),
+  CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `notifications_ibfk_2` FOREIGN KEY (`actor_id`)
+    REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- ============================================================================
+-- 12. Audit
 -- ============================================================================
 
 -- No FK on user_id: audit rows must outlive the user they describe.
@@ -592,7 +777,7 @@ CREATE TABLE IF NOT EXISTS `audit_logs` (
 
 
 -- ============================================================================
--- 9. Views
+-- 13. Views
 -- ----------------------------------------------------------------------------
 -- DEFINER=`root`@`localhost` from the dump is removed — that account will not
 -- exist on prod and would make these fail to create. SQL SECURITY INVOKER
