@@ -23,39 +23,99 @@ const transporter = nodemailer.createTransport({
 //
 // Render (and most hosts) block outbound SMTP on ports 25/465/587, so
 // nodemailer times out at the TCP connect stage -- `command: 'CONN'`, before
-// any password is offered. Resend goes over HTTPS on 443, which is not
-// blocked. Set RESEND_API_KEY to use it; without one we fall back to SMTP,
-// which still works fine for local development.
-const useResend = Boolean(process.env.RESEND_API_KEY);
+// any password is offered. Brevo and Resend both go over HTTPS on 443, which
+// is not blocked.
+//
+// Chosen by which key is present, or forced with MAIL_PROVIDER. SMTP remains
+// the fallback and still works fine for local development.
+//
+//   brevo   — verifies a single SENDER ADDRESS, so it needs no domain.
+//             300/day free.
+//   resend  — requires a VERIFIED DOMAIN. Without one it only delivers to the
+//             Resend account owner's own address.
+//   smtp    — local development only.
+const PROVIDER =
+  process.env.MAIL_PROVIDER ||
+  (process.env.BREVO_API_KEY
+    ? "brevo"
+    : process.env.RESEND_API_KEY
+    ? "resend"
+    : "smtp");
 
-// Resend requires a verified domain. Until one is set up, onboarding@resend.dev
-// works but will ONLY deliver to the address the Resend account was created
-// with -- anyone else's signup will be rejected by Resend, not by us.
-const MAIL_FROM = process.env.EMAIL_FROM || "Campus Connect <onboarding@resend.dev>";
+// "Campus Connect <noreply@example.com>" -> { name, email }
+const parseFrom = (value) => {
+  const match = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(value || "");
+  return match
+    ? { name: match[1].replace(/^"|"$/g, "") || "Campus Connect", email: match[2] }
+    : { name: "Campus Connect", email: (value || "").trim() };
+};
 
-if (useResend) {
-  console.log(
-    COLORS[process.env.SUCCESS],
-    `Mail transport: Resend HTTPS API (from: ${MAIL_FROM})`
-  );
-} else {
+const MAIL_FROM =
+  process.env.EMAIL_FROM ||
+  (PROVIDER === "brevo"
+    ? // Brevo sends from a verified address, which is usually the account's
+      // own mailbox -- the same one already configured for SMTP.
+      `Campus Connect <${process.env.EMAIL_USER || ""}>`
+    : "Campus Connect <onboarding@resend.dev>");
+
+const FROM = parseFrom(MAIL_FROM);
+
+if (PROVIDER === "smtp") {
   // Only probe SMTP when it is the transport in use.
-  transporter.verify((error, success) => {
+  transporter.verify((error) => {
     if (error) {
       console.error(
         COLORS[process.env.ERROR],
         "Mail transporter failed:",
         error.code === "ETIMEDOUT"
-          ? "SMTP is unreachable (the host likely blocks outbound SMTP). Set RESEND_API_KEY to send over HTTPS instead."
+          ? "SMTP is unreachable (the host likely blocks outbound SMTP). Set BREVO_API_KEY or RESEND_API_KEY to send over HTTPS instead."
           : error
       );
     } else {
       console.log(COLORS[process.env.SUCCESS], "Mail transporter is ready");
     }
   });
+} else {
+  console.log(
+    COLORS[process.env.SUCCESS],
+    `Mail transport: ${PROVIDER} HTTPS API (from: ${FROM.name} <${FROM.email}>)`
+  );
+  if (!FROM.email) {
+    console.warn(
+      COLORS[process.env.WARNING],
+      "No sender address. Set EMAIL_FROM (or EMAIL_USER) to the address verified with the provider."
+    );
+  }
 }
 
-// Send one message over the Resend HTTPS API.
+// Brevo: https://api.brevo.com/v3/smtp/email
+const sendViaBrevo = async ({ to, subject, html }) => {
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": process.env.BREVO_API_KEY,
+      "Content-Type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: FROM,
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      `Brevo returned ${res.status}: ${body.message || JSON.stringify(body)}`
+    );
+  }
+  return { messageId: body.messageId };
+};
+
+// Resend: https://api.resend.com/emails
 const sendViaResend = async ({ to, subject, html }) => {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -63,7 +123,12 @@ const sendViaResend = async ({ to, subject, html }) => {
       Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, html }),
+    body: JSON.stringify({
+      from: `${FROM.name} <${FROM.email}>`,
+      to: [to],
+      subject,
+      html,
+    }),
     signal: AbortSignal.timeout(15000),
   });
 
@@ -174,22 +239,24 @@ export const sendEmail = async (to, templateType, data) => {
       emailContent = template;
     }
 
-    // Identical templates either way -- only the transport differs.
-    const result = useResend
-      ? await sendViaResend({
-          to,
-          subject: emailContent.subject,
-          html: emailContent.html,
-        })
-      : await transporter.sendMail({
-          from: `"Campus Connect" <${process.env.EMAIL_USER}>`,
-          to,
-          subject: emailContent.subject,
-          html: emailContent.html,
-        });
+    // Identical templates whichever transport is in use.
+    const payload = {
+      to,
+      subject: emailContent.subject,
+      html: emailContent.html,
+    };
+    const result =
+      PROVIDER === "brevo"
+        ? await sendViaBrevo(payload)
+        : PROVIDER === "resend"
+        ? await sendViaResend(payload)
+        : await transporter.sendMail({
+            from: `"${FROM.name}" <${process.env.EMAIL_USER}>`,
+            ...payload,
+          });
 
     console.log(
-      `Email sent to ${to}: ${templateType} (via ${useResend ? "Resend" : "SMTP"})`
+      `Email sent to ${to}: ${templateType} (via ${PROVIDER})`
     );
     return { success: true, messageId: result.messageId };
   } catch (error) {
