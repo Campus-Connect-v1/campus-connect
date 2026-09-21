@@ -8,6 +8,7 @@ import {
   Avatar,
   EmptyState,
   Icon,
+  Loader,
   PressableScale,
   SkeletonList,
   Text,
@@ -20,6 +21,7 @@ import {
   fetchNotifications,
   type ApiNotification,
 } from "@/src/services/notificationServices";
+import { respondToConnection } from "@/src/services/userServices";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -53,6 +55,12 @@ function destinationFor(notification: ApiNotification) {
   const { resource_type, resource_id } = notification;
   if (!resource_id) return null;
 
+  if (notification.type === "connection_request" && notification.actor) {
+    return {
+      pathname: "/person/[id]",
+      params: { id: notification.actor.user_id },
+    };
+  }
   if (resource_type === "post") return { pathname: "/post/[id]", params: { id: resource_id } };
   if (resource_type === "user") return { pathname: "/person/[id]", params: { id: resource_id } };
   if (resource_type === "story") {
@@ -66,83 +74,185 @@ function destinationFor(notification: ApiNotification) {
   return null;
 }
 
-function Row({ notification, onPress }: { notification: ApiNotification; onPress: () => void }) {
+type ResponseState =
+  | { status: "idle" | "accepting" | "declining" | "accepted" | "declined" }
+  | { status: "error"; message: string };
+
+function Row({
+  notification,
+  response,
+  onPress,
+  onRespond,
+}: {
+  notification: ApiNotification;
+  response: ResponseState;
+  onPress: () => void;
+  onRespond: (action: "accept" | "decline") => void;
+}) {
   const { colors } = useTheme();
   const destination = destinationFor(notification);
+  const isRequest = notification.type === "connection_request" && Boolean(notification.resource_id);
+  const responding = response.status === "accepting" || response.status === "declining";
   const name = notification.actor
     ? [notification.actor.first_name, notification.actor.last_name].filter(Boolean).join(" ")
     : null;
 
   return (
-    <PressableScale
-      accessibilityRole={destination ? "button" : "none"}
-      accessibilityLabel={`${notification.title}${notification.is_read ? "" : ", unread"}`}
-      disabled={!destination}
-      onPress={onPress}
+    <View
       style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.md,
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.md,
+        gap: spacing.sm,
         // The unread marker is a tinted ground, not a dot: the whole row is
         // the thing you have not dealt with.
         backgroundColor: notification.is_read ? "transparent" : colors.surface,
       }}
     >
-      {notification.actor ? (
-        <Avatar uri={notification.actor.profile_picture_url ?? undefined} size={42} />
-      ) : (
+      <PressableScale
+        accessibilityRole={destination ? "button" : "none"}
+        accessibilityLabel={`${notification.title}${notification.is_read ? "" : ", unread"}`}
+        disabled={!destination}
+        onPress={onPress}
+        style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}
+      >
+        {notification.actor ? (
+          <Avatar uri={notification.actor.profile_picture_url ?? undefined} size={42} />
+        ) : (
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: radius.full,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.surfaceSunken,
+            }}
+          >
+            <Icon
+              name={ICON_FOR[notification.type] ?? "notification"}
+              size={19}
+              color={colors.textSecondary}
+            />
+          </View>
+        )}
+
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="body" numberOfLines={2}>
+            {notification.title}
+          </Text>
+          {notification.body ? (
+            <Text variant="caption" color="textMuted" numberOfLines={2}>
+              {notification.body}
+            </Text>
+          ) : null}
+          <Text variant="caption" color="textMuted">
+            {name ? `${name} · ` : ""}
+            {since(notification.created_at)}
+          </Text>
+        </View>
+
+        {!notification.is_read ? (
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: radius.full,
+              backgroundColor: culture.pink,
+            }}
+          />
+        ) : null}
+      </PressableScale>
+
+      {isRequest && (response.status === "idle" || response.status === "error" || responding) ? (
+        <View style={{ paddingLeft: 42 + spacing.md, gap: spacing.xs }}>
+          <View style={{ flexDirection: "row", gap: spacing.xs }}>
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`Accept ${name ?? "connection"} request`}
+              disabled={responding}
+              onPress={() => onRespond("accept")}
+              style={{
+                minHeight: 44,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.full,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.xs,
+                backgroundColor: culture.yellow,
+                opacity: responding ? 0.6 : 1,
+              }}
+            >
+              {response.status === "accepting" ? <Loader size={17} color={culture.ink} /> : null}
+              <Text variant="label" style={{ color: culture.ink }}>
+                Accept
+              </Text>
+            </PressableScale>
+
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`Decline ${name ?? "connection"} request`}
+              disabled={responding}
+              onPress={() => onRespond("decline")}
+              style={{
+                minHeight: 44,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.full,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.xs,
+                borderWidth: 1,
+                borderColor: colors.borderStrong,
+                opacity: responding ? 0.6 : 1,
+              }}
+            >
+              {response.status === "declining" ? (
+                <Loader size={17} color={colors.textPrimary} />
+              ) : null}
+              <Text variant="label">Decline</Text>
+            </PressableScale>
+          </View>
+
+          {response.status === "error" ? (
+            <Text variant="caption" color="destructive">
+              {response.message}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {response.status === "accepted" || response.status === "declined" ? (
         <View
           style={{
-            width: 42,
-            height: 42,
-            borderRadius: radius.full,
+            minHeight: 36,
+            paddingLeft: 42 + spacing.md,
+            flexDirection: "row",
             alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: colors.surfaceSunken,
+            gap: spacing.xs,
           }}
         >
           <Icon
-            name={ICON_FOR[notification.type] ?? "notification"}
-            size={19}
-            color={colors.textSecondary}
+            name={response.status === "accepted" ? "check" : "close"}
+            size={16}
+            color={response.status === "accepted" ? colors.success : colors.textMuted}
           />
-        </View>
-      )}
-
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="body" numberOfLines={2}>
-          {notification.title}
-        </Text>
-        {notification.body ? (
-          <Text variant="caption" color="textMuted" numberOfLines={2}>
-            {notification.body}
+          <Text
+            variant="label"
+            style={{ color: response.status === "accepted" ? colors.success : colors.textMuted }}
+          >
+            {response.status === "accepted" ? "You’re now friends" : "Request declined"}
           </Text>
-        ) : null}
-        <Text variant="caption" color="textMuted">
-          {name ? `${name} · ` : ""}
-          {since(notification.created_at)}
-        </Text>
-      </View>
-
-      {!notification.is_read ? (
-        <View
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: radius.full,
-            backgroundColor: culture.pink,
-          }}
-        />
+        </View>
       ) : null}
-    </PressableScale>
+    </View>
   );
 }
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [responses, setResponses] = useState<Record<string, ResponseState>>({});
 
   const feed = useAsync(
     useCallback(() => fetchNotifications(30, 0), []),
@@ -168,6 +278,37 @@ export default function NotificationsScreen() {
     Haptics.selectionAsync();
     setReadIds(new Set(notifications.map((n) => n.notification_id)));
     await markAllNotificationsRead();
+  };
+
+  const respond = async (notification: ApiNotification, action: "accept" | "decline") => {
+    if (!notification.resource_id) return;
+    const id = notification.notification_id;
+    const current = responses[id]?.status;
+    if (current === "accepting" || current === "declining") return;
+
+    setResponses((state) => ({
+      ...state,
+      [id]: { status: action === "accept" ? "accepting" : "declining" },
+    }));
+
+    const result = await respondToConnection(notification.resource_id, action);
+    if (!result.success) {
+      setResponses((state) => ({ ...state, [id]: { status: "error", message: result.error } }));
+      return;
+    }
+
+    setResponses((state) => ({
+      ...state,
+      [id]: { status: action === "accept" ? "accepted" : "declined" },
+    }));
+    setReadIds((currentIds) => new Set(currentIds).add(id));
+    markNotificationRead(id);
+
+    if (action === "accept") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      Haptics.selectionAsync();
+    }
   };
 
   return (
@@ -218,7 +359,14 @@ export default function NotificationsScreen() {
             />
           )
         }
-        renderItem={({ item }) => <Row notification={item} onPress={() => open(item)} />}
+        renderItem={({ item }) => (
+          <Row
+            notification={item}
+            response={responses[item.notification_id] ?? { status: "idle" }}
+            onPress={() => open(item)}
+            onRespond={(action) => respond(item, action)}
+          />
+        )}
       />
     </SettingsShell>
   );

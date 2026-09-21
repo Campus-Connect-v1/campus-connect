@@ -6,6 +6,7 @@ export { GraphicOverlay } from "./GraphicOverlay";
 export { Icon, ICONS, type IconName } from "./Icon";
 export { OfflineBanner } from "./OfflineBanner";
 export { InlineNotice } from "./InlineNotice";
+export { Loader } from "./Loader";
 export { Media } from "./Media";
 export { PhotoCollage } from "./PhotoCollage";
 export { PressableScale } from "./PressableScale";

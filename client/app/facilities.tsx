@@ -1,10 +1,10 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, ScrollView, TextInput, View } from "react-native";
+import { FlatList, ScrollView, TextInput, View } from "react-native";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
-import { EmptyState, Icon, PressableScale, SkeletonList, Text } from "@/src/components/ui";
+import { EmptyState, Icon, Loader, PressableScale, SkeletonList, Text } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
 import {
   fetchFacilitiesByType,
@@ -218,7 +218,7 @@ export default function FacilitiesScreen() {
             returnKeyType="search"
             style={[inputTextStyle(), { flex: 1, color: colors.textPrimary, paddingVertical: 0 }]}
           />
-          {busy ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+          {busy ? <Loader size={18} color={colors.textMuted} /> : null}
           {query ? (
             <PressableScale
               accessibilityRole="button"

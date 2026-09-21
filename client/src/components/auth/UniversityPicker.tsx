@@ -1,9 +1,9 @@
 import * as Haptics from "expo-haptics";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Modal, Pressable, TextInput, View } from "react-native";
+import { FlatList, Modal, Pressable, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Button, PressableScale, Text, Icon } from "@/src/components/ui";
+import { Button, PressableScale, Text, Icon, Loader } from "@/src/components/ui";
 import type { UniversityOption } from "@/src/services/universityServices";
 import { inputTextStyle, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
@@ -102,7 +102,7 @@ export function UniversityPicker({
           gap: spacing.sm,
         }}
       >
-        {loading ? <ActivityIndicator color={colors.textMuted} /> : null}
+        {loading ? <Loader color={colors.textMuted} /> : null}
         {!loading ? <Icon name="campus" size={20} color={colors.textMuted} /> : null}
         <Text
           variant="body"

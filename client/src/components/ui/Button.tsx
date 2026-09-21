@@ -1,10 +1,11 @@
 import * as Haptics from "expo-haptics";
-import { ActivityIndicator, View, type ViewStyle } from "react-native";
+import { View, type ViewStyle } from "react-native";
 
 import { radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 import { PressableScale } from "./PressableScale";
+import { Loader } from "./Loader";
 import { Text } from "./Text";
 
 type Variant = "primary" | "secondary" | "ghost";
@@ -75,7 +76,7 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "primary" ? colors.accentFg : colors.textPrimary} />
+        <Loader color={variant === "primary" ? colors.accentFg : colors.textPrimary} />
       ) : (
         <>
           {icon ? <View>{icon}</View> : null}
