@@ -10,6 +10,8 @@ import {
   deletePostModel,
 } from "../models/social.model.js";
 import { isOwnMediaUrl } from "../config/cloudinary.js";
+import { notify } from "../models/notification.model.js";
+import { db } from "../config/db.js";
 
 // Create a new post
 export const createPost = async (req, res) => {
@@ -170,12 +172,53 @@ export const getPost = async (req, res) => {
 };
 
 // Like a post
+// Who should be told about activity on a post. Returns null when the actor is
+// the author, so the caller can skip notifying someone about their own action.
+const postAuthorToNotify = async (postId, actorId) => {
+  try {
+    const [[row]] = await db.execute(
+      "SELECT user_id FROM posts WHERE post_id = ?",
+      [postId]
+    );
+    return row && row.user_id !== actorId ? row.user_id : null;
+  } catch {
+    return null;
+  }
+};
+
+const actorName = async (userId) => {
+  try {
+    const [[row]] = await db.execute(
+      "SELECT first_name, last_name FROM users WHERE user_id = ?",
+      [userId]
+    );
+    return row ? `${row.first_name} ${row.last_name}` : "Someone";
+  } catch {
+    return "Someone";
+  }
+};
+
 export const likePost = async (req, res) => {
   try {
     const userId = req.user.id;
     const { post_id } = req.params;
 
     const like = await likePostModel(post_id, userId);
+
+    // After the response is sent, not before: a notification failure must not
+    // turn a successful like into a 500. notify() never throws, but the await
+    // would still delay the reply for no benefit to the caller.
+    const author = await postAuthorToNotify(post_id, userId);
+    if (author) {
+      notify({
+        userId: author,
+        actorId: userId,
+        type: "post_like",
+        resourceType: "post",
+        resourceId: post_id,
+        title: `${await actorName(userId)} liked your post`,
+      });
+    }
 
     res.status(201).json({
       message: "Post liked successfully",
@@ -258,6 +301,19 @@ export const addComment = async (req, res) => {
     };
 
     const comment = await addCommentModel(commentData);
+
+    const commentAuthor = await postAuthorToNotify(post_id, userId);
+    if (commentAuthor) {
+      notify({
+        userId: commentAuthor,
+        actorId: userId,
+        type: "post_comment",
+        resourceType: "post",
+        resourceId: post_id,
+        title: `${await actorName(userId)} commented on your post`,
+        body: String(content || "").slice(0, 140),
+      });
+    }
 
     res.status(201).json({
       message: "Comment added successfully",

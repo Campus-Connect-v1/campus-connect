@@ -21,6 +21,10 @@ import studyGroupRoutes from "./routes/studyGroup.routes.js";
 import conversationRoutes from "./routes/conversation.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
+import pollRoutes from "./routes/poll.routes.js";
+import storyRoutes from "./routes/story.routes.js";
+import moderationRoutes from "./routes/moderation.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
 
 import connectMongoDB from "./config/mongoDB.js";
 
@@ -72,6 +76,10 @@ app.use("/api/study-group", studyGroupRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/polls", pollRoutes);
+app.use("/api/stories", storyRoutes);
+app.use("/api/moderation", moderationRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // ============= OPERATOR WEB APP (app/) ======================
 // Built bundle from ../app, served at /admin. Single service, so the UI and

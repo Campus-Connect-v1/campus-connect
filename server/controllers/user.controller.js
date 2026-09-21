@@ -20,6 +20,8 @@ import {
   cancelConnectionRequestModel,
 } from "../models/user.model.js";
 import { authenticate } from "../middleware/auth.js";
+import { notify } from "../models/notification.model.js";
+import { db } from "../config/db.js";
 
 // Get user profile
 export const getProfile = async (req, res) => {
@@ -190,6 +192,21 @@ export const searchUsers = async (req, res) => {
 };
 
 // Send connection request
+// Notification helpers. These never block or fail the action that triggered
+// them -- notify() swallows its own errors, and the name lookup falls back to
+// a generic label rather than throwing.
+const displayName = async (userId) => {
+  try {
+    const [[row]] = await db.execute(
+      "SELECT first_name, last_name FROM users WHERE user_id = ?",
+      [userId]
+    );
+    return row ? `${row.first_name} ${row.last_name}` : "Someone";
+  } catch {
+    return "Someone";
+  }
+};
+
 export const sendConnectionRequest = async (req, res) => {
   try {
     const requesterId = req.user.id;
@@ -258,6 +275,16 @@ export const sendConnectionRequest = async (req, res) => {
       connection_note,
       shared_courses
     );
+
+    notify({
+      userId: receiver_id,
+      actorId: requesterId,
+      type: "connection_request",
+      resourceType: "connection",
+      resourceId: connectionId,
+      title: `${await displayName(requesterId)} sent you a connection request`,
+      body: connection_note || null,
+    });
 
     res.status(201).json({
       message: "Connection request sent successfully",
@@ -343,6 +370,27 @@ export const respondToConnection = async (req, res) => {
 
     if (!updated) {
       return res.status(404).json({ message: "Connection request not found" });
+    }
+
+    // Only an acceptance is worth telling the other side about. Declines are
+    // deliberately silent -- surfacing them invites hassle and tells the
+    // requester something the receiver may not want shared.
+    if (action === "accept") {
+      const [[conn]] = await db
+        .execute("SELECT requester_id FROM connections WHERE connection_id = ?", [
+          connection_id,
+        ])
+        .catch(() => [[]]);
+      if (conn?.requester_id) {
+        notify({
+          userId: conn.requester_id,
+          actorId: userId,
+          type: "connection_accepted",
+          resourceType: "connection",
+          resourceId: connection_id,
+          title: `${await displayName(userId)} accepted your connection request`,
+        });
+      }
     }
 
     res.status(200).json({

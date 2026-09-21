@@ -2,6 +2,10 @@
 import { v4 as uuidv4 } from "uuid";
 import db from "../config/db.js";
 import mysql from "mysql";
+import {
+  hiddenPostFilterSql,
+  feedPreferenceScoreSql,
+} from "./moderation.model.js";
 
 // Create a new post
 export const createPostModel = async (postData) => {
@@ -43,7 +47,19 @@ export const getFeedPostsModel = async (userId, limit = 20, offset = 0) => {
   const safeOffset = Number.isInteger(parseInt(offset)) ? parseInt(offset) : 0;
 
   try {
-    // First, get basic posts data (no parameters in complex WHERE clauses)
+    // Visibility is enforced here, in the query.
+    //
+    // This previously returned every active post regardless of `visibility`,
+    // so posts marked 'connections' or 'private' were served to everyone. The
+    // column existed and was written on create, but nothing ever read it.
+    //
+    // The connections test is bidirectional: you are connected if you are
+    // either side of an accepted row, because `connections` stores one
+    // directed row per pair.
+    //
+    // Hidden posts and "see less" signals come from moderation.model.js so the
+    // two stay in one place. preference_score is aliased and then ordered by
+    // name, which keeps the correlated subquery to a single bind.
     const postsQuery = `
       SELECT 
         p.post_id,
@@ -57,18 +73,40 @@ export const getFeedPostsModel = async (userId, limit = 20, offset = 0) => {
         u.first_name,
         u.last_name,
         u.profile_picture_url,
-        u.profile_headline
+        u.profile_headline,
+        ${feedPreferenceScoreSql()} AS preference_score
       FROM posts p
       JOIN users u ON p.user_id = u.user_id
       WHERE p.is_active = 1
         AND (p.expires_at IS NULL OR p.expires_at > NOW())
-      ORDER BY p.created_at DESC
-  LIMIT ${safeLimit} OFFSET ${safeOffset};
+        AND (
+          p.user_id = ?
+          OR p.visibility = 'public'
+          OR (
+            p.visibility = 'connections'
+            AND EXISTS (
+              SELECT 1 FROM connections c
+              WHERE c.status = 'accepted'
+                AND (
+                  (c.requester_id = ? AND c.receiver_id = p.user_id)
+                  OR (c.receiver_id = ? AND c.requester_id = p.user_id)
+                )
+            )
+          )
+        )
+        AND ${hiddenPostFilterSql()}
+      ORDER BY preference_score DESC, p.created_at DESC
+      LIMIT ${safeLimit} OFFSET ${safeOffset};
     `;
 
+    // Five binds, all the same viewer: preference score, own posts, both sides
+    // of the connections test, and the hidden-posts filter.
     const [posts] = await db.execute(postsQuery, [
-      parseInt(limit),
-      parseInt(offset),
+      userId,
+      userId,
+      userId,
+      userId,
+      userId,
     ]);
 
     // If no posts, return empty array
