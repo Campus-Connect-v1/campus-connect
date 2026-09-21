@@ -7,11 +7,28 @@ import {
   markAllNotificationsRead,
   deleteNotification,
   clearNotifications,
+  registerPushToken,
+  unregisterPushToken,
 } from "../controllers/notification.controller.js";
 
 const router = express.Router();
 
 router.use(authenticate);
+
+/**
+ * @swagger
+ * /api/notifications/push-tokens:
+ *   post:
+ *     summary: Register or reactivate an Expo push token for this user
+ *     tags: [Notifications]
+ *     security: [{ bearerAuth: [] }]
+ *   delete:
+ *     summary: Deactivate an Expo push token for this user
+ *     tags: [Notifications]
+ *     security: [{ bearerAuth: [] }]
+ */
+router.post("/push-tokens", registerPushToken);
+router.delete("/push-tokens", unregisterPushToken);
 
 /**
  * @swagger

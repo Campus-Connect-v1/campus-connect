@@ -121,6 +121,7 @@ export const updateUserProfileModel = async (userId, updateData) => {
       "notification_email",
       "notification_push",
       "privacy_profile",
+      "year_of_study",
     ];
 
     const updates = {};
@@ -377,6 +378,18 @@ export const addInterestModel = async (userId, interestData) => {
     throw new Error(`Database error in addInterest: ${error.message}`);
   }
 };
+
+export const getUserInterestsModel = async (userId) => {
+  const [rows] = await db.execute(
+    `SELECT interest_id, interest_type, interest_name,
+            interest_name AS name, skill_level, created_at
+     FROM user_interests
+     WHERE user_id = ?
+     ORDER BY created_at DESC, interest_name ASC`,
+    [userId]
+  );
+  return rows;
+};
 export const updateInterestModel = async (userId, interestId, interestData) => {
   try {
     const { interest_type, interest_name, skill_level } = interestData;
@@ -626,9 +639,9 @@ export const createConnectionRequest = async (
 };
 export const updateConnectionStatus = async (connectionId, status, userId) => {
   const [result] = await db.execute(
-    `UPDATE uconnections SET status = ?, updated_at = CURRENT_TIMESTAMP 
-     WHERE connection_id = ? AND (user_id_1 = ? OR user_id_2 = ?)`,
-    [status, connectionId, userId, userId]
+    `UPDATE connections SET status = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE connection_id = ? AND receiver_id = ? AND status = 'pending'`,
+    [status, connectionId, userId]
   );
   return result.affectedRows > 0;
 };
@@ -746,17 +759,22 @@ export const getAllUserConnectionsModel = async (
 };
 
 export const getUserProfile = async (userId) => {
-  const [rows] = await db.execute(
+  const [[rows], interests, courses] = await Promise.all([
+    db.execute(
     `SELECT 
       user_id, university_id, email, first_name, last_name, 
-      profile_picture_url, phone_number, program, bio, 
+      profile_picture_url, phone_number, program, bio, profile_headline,
+      linkedin_url, website_url,
       date_of_birth, gender, year_of_study, graduation_year,
-      interests, social_links, privacy_settings, is_profile_complete,
+      social_links, privacy_settings, is_profile_complete,
       is_email_verified, created_at, updated_at
      FROM users WHERE user_id = ? AND is_active = TRUE`,
     [userId]
-  );
-  return rows[0];
+    ),
+    getUserInterestsModel(userId),
+    getUserCoursesModel(userId),
+  ]);
+  return rows[0] ? { ...rows[0], interests, courses } : null;
 };
 // In your user.model.js
 export const addCourseModel = async (courseData) => {
@@ -837,7 +855,7 @@ export const removeCourseByCodeModel = async (userId, courseCode) => {
 export const checkExistingConnectionModel = async (requesterId, receiverId) => {
   try {
     const query = `
-    SELECT connection_id, status 
+    SELECT connection_id, requester_id, receiver_id, status
 FROM connections 
 WHERE (requester_id = ? AND receiver_id = ?) 
    OR (requester_id = ? AND receiver_id = ?)

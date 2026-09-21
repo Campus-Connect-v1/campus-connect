@@ -18,6 +18,8 @@ import {
   getAllUserConnectionsModel,
   updateInterestModel,
   cancelConnectionRequestModel,
+  getUserInterestsModel,
+  getUserCoursesModel,
 } from "../models/user.model.js";
 import { authenticate } from "../middleware/auth.js";
 import { notify } from "../models/notification.model.js";
@@ -41,14 +43,18 @@ export const getProfile = async (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         profile_picture_url: user.profile_picture_url,
+        profile_headline: user.profile_headline,
         phone_number: user.phone_number,
+        linkedin_url: user.linkedin_url,
+        website_url: user.website_url,
         program: user.program,
         bio: user.bio,
         date_of_birth: user.date_of_birth,
         gender: user.gender,
         year_of_study: user.year_of_study,
         graduation_year: user.graduation_year,
-        interests: user.interests ? JSON.parse(user.interests) : [],
+        interests: user.interests ?? [],
+        courses: user.courses ?? [],
         social_links: user.social_links ? JSON.parse(user.social_links) : {},
         privacy_settings: user.privacy_settings
           ? JSON.parse(user.privacy_settings)
@@ -359,6 +365,10 @@ export const respondToConnection = async (req, res) => {
     const userId = req.user.id;
     const { connection_id, action } = req.body; // action: 'accept' or 'decline'
 
+    if (!connection_id) {
+      return res.status(400).json({ message: "Connection ID is required" });
+    }
+
     if (!["accept", "decline"].includes(action)) {
       return res
         .status(400)
@@ -382,7 +392,7 @@ export const respondToConnection = async (req, res) => {
         ])
         .catch(() => [[]]);
       if (conn?.requester_id) {
-        notify({
+        void notify({
           userId: conn.requester_id,
           actorId: userId,
           type: "connection_accepted",
@@ -394,8 +404,8 @@ export const respondToConnection = async (req, res) => {
     }
 
     res.status(200).json({
-      message: `Connection request ${action}ed successfully`,
-      status: status,
+      message: `Connection request ${status} successfully`,
+      status,
     });
   } catch (error) {
     console.error("Respond to connection error:", error);
@@ -592,6 +602,18 @@ export const addCourse = async (req, res) => {
   }
 };
 
+export const getCourses = async (req, res) => {
+  try {
+    const courses = await getUserCoursesModel(req.user.id);
+    res.status(200).json({ count: courses.length, courses });
+  } catch (error) {
+    console.error("Get courses error:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error while retrieving courses" });
+  }
+};
+
 // Remove course from user profile
 export const removeCourse = async (req, res) => {
   try {
@@ -675,6 +697,18 @@ export const addInterest = async (req, res) => {
     });
   }
 };
+
+export const getInterests = async (req, res) => {
+  try {
+    const interests = await getUserInterestsModel(req.user.id);
+    res.status(200).json({ count: interests.length, interests });
+  } catch (error) {
+    console.error("Get interests error:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error while retrieving interests" });
+  }
+};
 export const updateInterest = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -756,6 +790,7 @@ export const updateInterest = async (req, res) => {
 export const getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
+    const viewerId = req.user.id;
 
     if (!userId) {
       return res.status(400).json({
@@ -771,6 +806,12 @@ export const getUserById = async (req, res) => {
         message: "User not found",
       });
     }
+
+    const existingConnection =
+      viewerId === userId
+        ? null
+        : await checkExistingConnectionModel(viewerId, userId);
+    const interests = await getUserInterestsModel(userId);
 
     // Return user data (exclude sensitive information)
     res.status(200).json({
@@ -800,7 +841,7 @@ export const getUserById = async (req, res) => {
         linkedin_url: user.linkedin_url,
         website_url: user.website_url,
         social_links: user.social_links,
-        interests: user.interests,
+        interests,
 
         // University Context
         university_name: user.university_name,
@@ -824,6 +865,19 @@ export const getUserById = async (req, res) => {
         last_login: user.last_login,
         created_at: user.created_at,
         updated_at: user.updated_at,
+
+        // The profile action must reflect the relationship that already
+        // exists; otherwise every visit offers a duplicate friend request.
+        connection: existingConnection
+          ? {
+              connection_id: existingConnection.connection_id,
+              status: existingConnection.status,
+              your_role:
+                existingConnection.requester_id === viewerId
+                  ? "requester"
+                  : "receiver",
+            }
+          : null,
       },
     });
   } catch (error) {

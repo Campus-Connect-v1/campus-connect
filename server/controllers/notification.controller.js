@@ -6,6 +6,8 @@ import {
   markAllNotificationsReadModel,
   deleteNotificationModel,
   clearNotificationsModel,
+  registerPushTokenModel,
+  unregisterPushTokenModel,
 } from "../models/notification.model.js";
 
 // Shape a row for the client. The actor is nested rather than left as flat
@@ -159,5 +161,41 @@ export const clearNotifications = async (req, res) => {
       message: "Failed to clear notifications",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
+  }
+};
+
+export const registerPushToken = async (req, res) => {
+  try {
+    const { token, platform = "unknown", device_id = null } = req.body;
+    if (!token) return res.status(400).json({ message: "Push token is required" });
+    if (!["ios", "android", "web", "unknown"].includes(platform)) {
+      return res.status(400).json({ message: "Invalid push token platform" });
+    }
+
+    const saved = await registerPushTokenModel(req.user.id, {
+      token,
+      platform,
+      deviceId: device_id,
+    });
+    res.status(200).json({ message: "Push token registered", token: saved });
+  } catch (error) {
+    if (error.message.includes("Invalid Expo push token")) {
+      return res.status(400).json({ message: error.message });
+    }
+    console.error("Register push token error:", error);
+    res.status(500).json({ message: "Failed to register push token" });
+  }
+};
+
+export const unregisterPushToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ message: "Push token is required" });
+    const removed = await unregisterPushTokenModel(req.user.id, token);
+    if (!removed) return res.status(404).json({ message: "Push token not found" });
+    res.status(200).json({ message: "Push token unregistered" });
+  } catch (error) {
+    console.error("Unregister push token error:", error);
+    res.status(500).json({ message: "Failed to unregister push token" });
   }
 };

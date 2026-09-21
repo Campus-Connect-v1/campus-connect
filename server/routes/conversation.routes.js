@@ -6,6 +6,7 @@ import {
   createConversation,
   deleteConversation,
   getConversationByParticipant,
+  getConversationMessages,
 } from "../controllers/conversation.controller.js";
 import { authenticate } from "../middleware/auth.js";
 
@@ -153,6 +154,39 @@ router.get("/", authenticate, getConversations);
  *       500:
  *         description: Server error
  */
+// Specific paths must precede /:conversationId or Express treats
+// "participant" as a conversation id.
+router.get(
+  "/participant/:participantId",
+  authenticate,
+  getConversationByParticipant
+);
+
+/**
+ * @swagger
+ * /api/conversations/{conversationId}/messages:
+ *   get:
+ *     summary: Get paginated message history, oldest-to-newest within each page
+ *     tags: [Conversations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+ *       - in: query
+ *         name: before
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200: { description: Message history and pagination cursor }
+ *       400: { description: Invalid ID, date, or limit }
+ *       404: { description: Conversation not found for this user }
+ */
+router.get("/:conversationId/messages", authenticate, getConversationMessages);
 router.get("/:conversationId", authenticate, getConversation);
 
 /**
@@ -249,10 +283,4 @@ router.delete("/:conversationId", authenticate, deleteConversation);
  *       500:
  *         description: Server error
  */
-router.get(
-  "/participant/:participantId",
-  authenticate,
-  getConversationByParticipant
-);
-
 export default router;

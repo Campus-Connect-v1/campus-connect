@@ -1,17 +1,15 @@
 import Joi from "joi";
 
 // Validation middleware generator
-const createValidationMiddleware = (schema) => {
+const createValidationMiddleware = (schema, source = "auto") => {
   return (req, res, next) => {
-    let dataToValidate;
+    const dataToValidate =
+      source === "params"
+        ? req.params
+        : source === "query" || (source === "auto" && req.method === "GET")
+          ? req.query
+          : req.body;
 
-    if (req.method === "GET") {
-      dataToValidate = req.query;
-    } else {
-      dataToValidate = req.body;
-    }
-
-    // For param validations, use req.params
     const { error } = schema.validate(dataToValidate, { abortEarly: false });
 
     if (error) {
@@ -183,6 +181,10 @@ export const updateProfileValidation = createValidationMiddleware(
         "number.min": "Graduation year must be after 2000",
         "number.max": "Graduation year must be before 2030",
       }),
+    year_of_study: Joi.string()
+      .valid("1", "2", "3", "4", "5+", "graduate")
+      .optional()
+      .messages({ "any.only": "Invalid year of study" }),
     bio: Joi.string().max(1000).optional().messages({
       "string.max": "Bio must be less than 1000 characters",
     }),
@@ -327,7 +329,8 @@ export const userIdParamValidation = createValidationMiddleware(
       "string.max": "Invalid user ID",
       "string.empty": "User ID is required",
     }),
-  })
+  }),
+  "params"
 );
 
 export const interestIdParamValidation = createValidationMiddleware(
@@ -337,7 +340,8 @@ export const interestIdParamValidation = createValidationMiddleware(
       "string.max": "Invalid interest ID",
       "string.empty": "Interest ID is required",
     }),
-  })
+  }),
+  "params"
 );
 
 export const courseIdParamValidation = createValidationMiddleware(
@@ -347,5 +351,6 @@ export const courseIdParamValidation = createValidationMiddleware(
       "string.max": "Invalid course ID",
       "string.empty": "Course ID is required",
     }),
-  })
+  }),
+  "params"
 );

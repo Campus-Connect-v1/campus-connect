@@ -74,9 +74,11 @@ export const getFeedPostsModel = async (userId, limit = 20, offset = 0) => {
         u.last_name,
         u.profile_picture_url,
         u.profile_headline,
+        pol.poll_id,
         ${feedPreferenceScoreSql()} AS preference_score
       FROM posts p
       JOIN users u ON p.user_id = u.user_id
+      LEFT JOIN polls pol ON pol.post_id = p.post_id
       WHERE p.is_active = 1
         AND (p.expires_at IS NULL OR p.expires_at > NOW())
         AND (
@@ -187,11 +189,13 @@ export const getPostByIdModel = async (postId, userId) => {
         EXISTS(
           SELECT 1 FROM post_likes pl2 
           WHERE pl2.post_id = p.post_id AND pl2.user_id = ?
-        ) as has_liked
+        ) as has_liked,
+        pol.poll_id
       FROM posts p
       JOIN users u ON p.user_id = u.user_id
       LEFT JOIN post_likes pl ON p.post_id = pl.post_id
       LEFT JOIN post_comments pc ON p.post_id = pc.post_id AND pc.is_active = 1
+      LEFT JOIN polls pol ON pol.post_id = p.post_id
       WHERE p.post_id = ? AND p.is_active = 1
       GROUP BY p.post_id
     `;
