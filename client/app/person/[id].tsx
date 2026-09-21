@@ -1,14 +1,20 @@
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { EmptyState, Media, PressableScale, Tag, Text, Icon } from "@/src/components/ui";
+import { EmptyState, Loader, Media, PressableScale, Tag, Text, Icon } from "@/src/components/ui";
 import { adaptPublicUser } from "@/src/features/profile/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
 import { createConversation, fetchConversationWith } from "@/src/services/conversationServices";
-import { fetchUserById, sendConnectionRequest } from "@/src/services/userServices";
+import { useSession } from "@/src/services/SessionContext";
+import {
+  fetchUserById,
+  respondToConnection,
+  sendConnectionRequest,
+  type ApiConnectionSummary,
+} from "@/src/services/userServices";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -25,8 +31,9 @@ export default function PersonScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useSession();
 
-  const [requested, setRequested] = useState(false);
+  const [connection, setConnection] = useState<ApiConnectionSummary | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
@@ -38,8 +45,12 @@ export default function PersonScreen() {
 
   const person = useMemo(() => (remote.data ? adaptPublicUser(remote.data) : null), [remote.data]);
 
+  useEffect(() => {
+    setConnection(remote.data?.connection ?? null);
+  }, [remote.data]);
+
   const connect = async () => {
-    if (!person || requested) return;
+    if (!person || connection || requesting) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRequesting(true);
     setRequestError(null);
@@ -48,14 +59,37 @@ export default function PersonScreen() {
     setRequesting(false);
 
     if (result.success) {
-      setRequested(true);
+      setConnection({
+        connection_id: result.data.connection_id,
+        status: "pending",
+        your_role: "requester",
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return;
     }
-    // A duplicate request is not a failure worth an error banner — the user's
-    // intent already holds, so the button just settles into its sent state.
+    // A request could have arrived since the profile loaded. Re-read the
+    // relationship instead of turning that race into a false failure.
     if (result.status === 409) {
-      setRequested(true);
+      await remote.refresh();
+      return;
+    }
+    setRequestError(result.error);
+  };
+
+  const accept = async () => {
+    if (!connection || connection.status !== "pending" || connection.your_role !== "receiver") {
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRequesting(true);
+    setRequestError(null);
+    const result = await respondToConnection(connection.connection_id, "accept");
+    setRequesting(false);
+
+    if (result.success) {
+      setConnection({ ...connection, status: "accepted" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return;
     }
     setRequestError(result.error);
@@ -123,6 +157,24 @@ export default function PersonScreen() {
   // The profile opens as a complete identity card. Extra bio content continues
   // below, but the first viewport is deliberately edge-to-edge photography.
   const heroHeight = height;
+  const isSelf = person.id === user?.id;
+  const isFriend = connection?.status === "accepted";
+  const sentRequest = connection?.status === "pending" && connection.your_role === "requester";
+  const receivedRequest = connection?.status === "pending" && connection.your_role === "receiver";
+  const unavailable = connection?.status === "blocked" || connection?.status === "declined";
+  const friendLabel = requesting
+    ? receivedRequest
+      ? "Accepting…"
+      : "Sending…"
+    : isFriend
+      ? "Friends"
+      : sentRequest
+        ? "Request sent"
+        : receivedRequest
+          ? "Accept request"
+          : unavailable
+            ? "Unavailable"
+            : "Add friend";
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -242,57 +294,91 @@ export default function PersonScreen() {
           bottom: insets.bottom + spacing.md,
         }}
       >
-        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+        {isSelf ? (
           <PressableScale
             accessibilityRole="button"
-            accessibilityLabel={`Message ${person.name}`}
-            onPress={openChat}
+            accessibilityLabel="Open your profile"
+            onPress={() => router.push("/(tabs)/profile")}
             style={{
-              width: 58,
               height: 58,
               borderRadius: radius.full,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.borderStrong,
-              opacity: opening ? 0.6 : 1,
+              backgroundColor: culture.yellow,
             }}
           >
-            <Icon name="message" size={20} color={colors.textPrimary} />
-          </PressableScale>
-
-          <PressableScale
-            accessibilityRole="button"
-            accessibilityState={{ selected: requested, disabled: requested || requesting }}
-            accessibilityLabel={
-              requested ? `Request already sent to ${person.name}` : `Connect with ${person.name}`
-            }
-            onPress={connect}
-            style={{
-              flex: 1,
-              height: 58,
-              borderRadius: radius.full,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: spacing.xs,
-              opacity: requesting ? 0.6 : 1,
-              backgroundColor: requested ? colors.surface : culture.yellow,
-              borderWidth: requested ? 1 : 0,
-              borderColor: colors.borderStrong,
-            }}
-          >
-            <Icon
-              name={requested ? "check" : "connectAdd"}
-              size={19}
-              color={requested ? colors.textPrimary : culture.ink}
-            />
-            <Text variant="label" style={requested ? undefined : { color: culture.ink }}>
-              {requested ? "Request sent" : requesting ? "Sending…" : "Connect"}
+            <Text variant="label" style={{ color: culture.ink }}>
+              View your profile
             </Text>
           </PressableScale>
-        </View>
+        ) : (
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`Message ${person.name}`}
+              disabled={opening}
+              onPress={openChat}
+              style={{
+                width: 58,
+                height: 58,
+                borderRadius: radius.full,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.borderStrong,
+                opacity: opening ? 0.6 : 1,
+              }}
+            >
+              {opening ? (
+                <Loader size={20} color={colors.textPrimary} />
+              ) : (
+                <Icon name="message" size={20} color={colors.textPrimary} />
+              )}
+            </PressableScale>
+
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityState={{
+                selected: isFriend,
+                disabled: requesting || isFriend || sentRequest || unavailable,
+              }}
+              accessibilityLabel={`${friendLabel} ${person.name}`}
+              disabled={requesting || isFriend || sentRequest || unavailable}
+              onPress={receivedRequest ? accept : connect}
+              style={{
+                flex: 1,
+                height: 58,
+                borderRadius: radius.full,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.xs,
+                opacity: requesting || unavailable ? 0.6 : 1,
+                backgroundColor:
+                  isFriend || sentRequest || unavailable ? colors.surface : culture.yellow,
+                borderWidth: isFriend || sentRequest || unavailable ? 1 : 0,
+                borderColor: colors.borderStrong,
+              }}
+            >
+              {requesting ? (
+                <Loader size={19} color={receivedRequest ? culture.ink : colors.textPrimary} />
+              ) : (
+                <Icon
+                  name={isFriend || sentRequest ? "check" : "connectAdd"}
+                  size={19}
+                  color={isFriend || sentRequest || unavailable ? colors.textPrimary : culture.ink}
+                />
+              )}
+              <Text
+                variant="label"
+                style={isFriend || sentRequest || unavailable ? undefined : { color: culture.ink }}
+              >
+                {friendLabel}
+              </Text>
+            </PressableScale>
+          </View>
+        )}
       </View>
 
       <PressableScale

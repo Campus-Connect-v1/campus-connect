@@ -1,10 +1,10 @@
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
-import { Icon, PressableScale, Text } from "@/src/components/ui";
+import { Icon, Loader, PressableScale, Text } from "@/src/components/ui";
 import type { CampusPin } from "@/src/features/campus/types";
 import { useAsync } from "@/src/hooks/useAsync";
 import { fetchBuildingFacilities, type ApiFacility } from "@/src/services/campusServices";
@@ -167,7 +167,7 @@ export function BuildingSheet({
 
         {facilities.loading ? (
           <View style={{ paddingVertical: spacing.md, alignItems: "center" }}>
-            <ActivityIndicator color={colors.onMedia} />
+            <Loader color={colors.onMedia} />
           </View>
         ) : rooms.length ? (
           <>

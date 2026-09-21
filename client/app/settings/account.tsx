@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, View } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
 
 import { SettingsRow, SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import {
@@ -10,6 +10,7 @@ import {
   EmptyState,
   Icon,
   InlineNotice,
+  Loader,
   PressableScale,
   Text,
 } from "@/src/components/ui";
@@ -150,7 +151,7 @@ export default function AccountSettingsScreen() {
                   backgroundColor: "rgba(7,18,25,0.5)",
                 }}
               >
-                <ActivityIndicator color={colors.onMedia} />
+                <Loader color={colors.onMedia} />
               </View>
             ) : null}
             {/* The badge is what makes the avatar read as tappable; an avatar

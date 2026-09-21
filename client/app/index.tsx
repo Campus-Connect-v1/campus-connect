@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 
+import { Loader } from "@/src/components/ui";
 import { BYPASS_AUTH } from "@/src/constants/env";
 import { useSession } from "@/src/services/SessionContext";
 import { useTheme } from "@/src/styles/useTheme";
@@ -37,7 +38,7 @@ export default function Index() {
           backgroundColor: colors.background,
         }}
       >
-        <ActivityIndicator color={colors.textMuted} />
+        <Loader color={colors.textMuted} size={26} />
       </View>
     );
   }

@@ -1,10 +1,10 @@
 import LottieView from "lottie-react-native";
-import { ActivityIndicator, View, useWindowDimensions } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 
 import { spacing } from "@/src/styles/theme";
-import { useTheme } from "@/src/styles/useTheme";
 
 import { Button } from "./Button";
+import { Loader } from "./Loader";
 import { Text } from "./Text";
 
 export interface EmptyStateProps {
@@ -77,10 +77,9 @@ export function EmptyState({
 }
 
 EmptyState.Loading = function EmptyStateLoading({ compact = false }: { compact?: boolean }) {
-  const { colors } = useTheme();
   return (
     <View style={{ paddingVertical: compact ? spacing.xl : spacing["3xl"], alignItems: "center" }}>
-      <ActivityIndicator color={colors.textMuted} />
+      <Loader />
     </View>
   );
 };

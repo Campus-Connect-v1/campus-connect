@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { memo } from "react";
-import { View } from "react-native";
+import { View, type GestureResponderEvent } from "react-native";
 
 import { Avatar, Media, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
 import { PollCard } from "./PollCard";
@@ -87,23 +87,42 @@ export const PostCard = memo(function PostCard({
 }: Props) {
   const { colors } = useTheme();
   const openComments = linkToDetail ? () => router.push(`/post/${post.id}`) : undefined;
+  const openAuthor = (event: GestureResponderEvent) => {
+    // The card itself opens the post. Stop that parent press so tapping the
+    // identity row has exactly one destination: the author's profile.
+    event.stopPropagation();
+    router.push({ pathname: "/person/[id]", params: { id: post.author.id } });
+  };
 
   const header = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-      <Avatar uri={post.author.avatar} size={38} />
-      <View style={{ flex: 1 }}>
-        <Text variant="label" onMedia={Boolean(post.image)}>
-          {post.author.name}
-        </Text>
-        <Text
-          variant="caption"
-          color="textMuted"
-          onMedia={Boolean(post.image)}
-          style={post.image ? { opacity: 0.85 } : undefined}
-        >
-          {post.author.hall} · {post.postedAt}
-        </Text>
-      </View>
+      <PressableScale
+        accessibilityRole="link"
+        accessibilityLabel={`View ${post.author.name}'s profile`}
+        onPress={openAuthor}
+        style={{
+          flex: 1,
+          minHeight: 44,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: spacing.sm,
+        }}
+      >
+        <Avatar uri={post.author.avatar} size={38} />
+        <View style={{ flex: 1 }}>
+          <Text variant="label" onMedia={Boolean(post.image)}>
+            {post.author.name}
+          </Text>
+          <Text
+            variant="caption"
+            color="textMuted"
+            onMedia={Boolean(post.image)}
+            style={post.image ? { opacity: 0.85 } : undefined}
+          >
+            {post.author.hall} · {post.postedAt}
+          </Text>
+        </View>
+      </PressableScale>
       <PressableScale
         accessibilityRole="button"
         accessibilityLabel={`Options for ${post.author.name}'s post`}

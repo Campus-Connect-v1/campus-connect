@@ -53,6 +53,15 @@ export interface ApiPublicUser {
   interests: string | unknown[] | null;
   social_links: string | Record<string, string> | null;
   created_at: string;
+  connection: ApiConnectionSummary | null;
+}
+
+export type ConnectionStatus = "pending" | "accepted" | "declined" | "blocked";
+
+export interface ApiConnectionSummary {
+  connection_id: string;
+  status: ConnectionStatus;
+  your_role: "requester" | "receiver";
 }
 
 export interface ApiStats {
@@ -159,9 +168,17 @@ export function deleteAccount(password: string, reason?: string) {
 }
 
 export function sendConnectionRequest(userId: string) {
-  return request(() => api.post("/user/connections/request", { recipient_id: userId }));
+  return request<{ message: string; connection_id: string }>(() =>
+    api.post("/user/connections/request", { receiver_id: userId })
+  );
 }
 
 export function cancelConnectionRequest(connectionId: string) {
   return request(() => api.delete(`/user/connections/request/${connectionId}`));
+}
+
+export function respondToConnection(connectionId: string, action: "accept" | "decline") {
+  return request<{ message: string; status: ConnectionStatus }>(() =>
+    api.post("/user/connections/respond", { connection_id: connectionId, action })
+  );
 }

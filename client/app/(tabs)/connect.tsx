@@ -1,14 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Linking,
-  RefreshControl,
-  ScrollView,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Linking, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -20,6 +13,7 @@ import { RadarView } from "@/src/components/nearby/RadarView";
 import {
   Button,
   EmptyState,
+  Loader,
   OfflineBanner,
   PeopleSkeleton,
   PressableScale,
@@ -148,7 +142,7 @@ export default function ConnectScreen() {
     return (
       <Screen>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={colors.textMuted} />
+          <Loader color={colors.textMuted} size={26} />
         </View>
       </Screen>
     );

@@ -1,9 +1,9 @@
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Keyboard, ScrollView, TextInput, View } from "react-native";
+import { Keyboard, ScrollView, TextInput, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 
-import { Icon, PressableScale, Text } from "@/src/components/ui";
+import { Icon, Loader, PressableScale, Text } from "@/src/components/ui";
 import type { CampusPin } from "@/src/features/campus/types";
 import { searchFacilities, type ApiFacility } from "@/src/services/campusServices";
 import { radius, spacing, inputTextStyle } from "@/src/styles/theme";
@@ -146,7 +146,7 @@ export function MapSearch({
           returnKeyType="search"
           style={[inputTextStyle(), { flex: 1, color: colors.textPrimary, paddingVertical: 0 }]}
         />
-        {searching ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+        {searching ? <Loader size={18} color={colors.textMuted} /> : null}
         {query ? (
           <PressableScale
             accessibilityRole="button"
