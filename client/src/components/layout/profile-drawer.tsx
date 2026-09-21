@@ -1,219 +1,136 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React from 'react';
-import {
-  Animated,
-  Image,
-  Modal,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
-// import { fetcher } from '@/services/fetcher';
+import * as Haptics from "expo-haptics";
+import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import Animated, { SlideInLeft, SlideOutLeft, FadeIn, FadeOut } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-interface ProfileDrawerProps {
+import { Avatar, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
+import { spacing } from "@/src/styles/theme";
+import { useTheme } from "@/src/styles/useTheme";
+
+export interface ProfileDrawerProps {
   isVisible: boolean;
   onClose: () => void;
-  user: {
-    name: string;
-    username: string;
-    avatar: string;
-  };
+  user: { name: string; username: string; avatar: string };
   onNavigate: (screen: string) => void;
   onLogout: () => void;
 }
 
-interface MenuItem {
-  id: string;
-  title: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-}
+const MENU: { id: string; title: string; icon: IconName }[] = [
+  { id: "home", title: "Home", icon: "home" },
+  { id: "explore", title: "Explore", icon: "compass" },
+  { id: "create", title: "Create", icon: "create" },
+  { id: "campus", title: "Campus", icon: "campus" },
+  { id: "profile", title: "Your profile", icon: "profile" },
+  { id: "messages", title: "Messages", icon: "message" },
+  { id: "saved", title: "Saved posts", icon: "save" },
+  { id: "groups", title: "Study groups", icon: "connect" },
+  { id: "events", title: "Events", icon: "events" },
+  { id: "settings", title: "Settings", icon: "settings" },
+  { id: "help", title: "Help", icon: "help" },
+];
 
-const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
+export default function ProfileDrawer({
   isVisible,
   onClose,
   user,
   onNavigate,
   onLogout,
-}) => {
-  const slideAnim = React.useRef(new Animated.Value(-300)).current;
-  const overlayOpacity = React.useRef(new Animated.Value(0)).current;
-    // const { data, error, isLoading } = useSWR('/api/v1/status/profile', fetcher);
-
-      // const profile = data?.data;
-
-  React.useEffect(() => {
-    if (isVisible) {
-      // Slide in animation
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayOpacity, {
-          toValue: 0.5,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      // Slide out animation
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: -300,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [isVisible, slideAnim, overlayOpacity]);
-
-  const menuItems: MenuItem[] = [
-    {
-      id: 'profile',
-      title: 'Profile',
-      icon: 'person-outline',
-      onPress: () => {
-        router.push('/(tabs)/profile');
-      },
-    },
-    {
-      id: 'events',
-      title: 'Events',
-      icon: 'calendar-outline',
-      onPress: () => {
-        // router.push('/screens/events/events-screen')
-        onClose();
-      },
-    },
-    {
-      id: 'contributions',
-      title: 'Contributions',
-      icon: 'extension-puzzle-outline',
-      onPress: () => {
-        onNavigate('Contributions');
-        onClose();
-      },
-    },
-    {
-      id: 'settings',
-      title: 'Settings',
-      icon: 'settings-outline',
-      onPress: () => {
-        // router.push('/(tabs)/settings');
-        onClose();
-      },
-    },
-  ];
-
-  const handleLogout = () => {
-    onClose();
-    onLogout();
-  };
-
-  const handleOverlayPress = () => {
-    onClose();
-  };
+}: ProfileDrawerProps) {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const panelWidth = Math.min(320, width * 0.82);
 
   return (
-    <Modal
-      visible={isVisible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
-      <StatusBar backgroundColor="rgba(0,0,0,0.5)" barStyle="light-content" />
-      
-      {/* Overlay */}
+    <Modal visible={isVisible} transparent animationType="none" onRequestClose={onClose}>
       <Animated.View
-        className="flex-1 bg-black"
-        style={{ opacity: overlayOpacity }}
+        entering={FadeIn.duration(180)}
+        exiting={FadeOut.duration(140)}
+        style={StyleSheet.absoluteFill}
       >
-        <TouchableOpacity
-          className="flex-1"
-          activeOpacity={1}
-          onPress={handleOverlayPress}
+        <Pressable
+          accessibilityLabel="Close menu"
+          onPress={onClose}
+          style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(7,18,25,0.45)" }]}
         />
       </Animated.View>
 
-      {/* Drawer */}
       <Animated.View
-        className="absolute top-0 left-0 h-full w-72 bg-[#002D69]"
+        entering={SlideInLeft.duration(220)}
+        exiting={SlideOutLeft.duration(180)}
         style={{
-          transform: [{ translateX: slideAnim }],
+          width: panelWidth,
+          height: "100%",
+          backgroundColor: colors.background,
+          paddingTop: insets.top + spacing.lg,
+          paddingBottom: insets.bottom + spacing.lg,
+          borderRightWidth: StyleSheet.hairlineWidth,
+          borderRightColor: colors.border,
         }}
       >
-        {/* User Profile Section */}
-        <View className="pt-16 pb-8 px-6">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <TouchableOpacity onPress={() => router.push("/(tabs)/profile")} className="w-12 h-12 rounded-full overflow-hidden mr-3">
-                <Image
-                  source={{ uri: user.avatar }}
-                  className="w-full h-full"
-                  resizeMode="cover"
-                />
-              </TouchableOpacity>
-              <View className="flex-1">
-                <Text style={{fontFamily: "Gilroy-Medium"}}  className="text-white text-lg font-semibold">
-                  {/* {profile?.fullName } */}
-                </Text>
-                <Text style={{fontFamily: "Gilroy-Regular"}} className="text-blue-200 text-lg">
-                  {/* @{profile?.userName} */}
-                </Text>
-              </View>
-            </View>
-            
-            {/* Add/Plus Icon */}
-            <TouchableOpacity className="w-8 h-8 rounded-full border border-white items-center justify-center">
-              <Ionicons name="add" size={20} color="white" />
-            </TouchableOpacity>
+        <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.lg }}>
+          <Avatar uri={user.avatar} size={56} />
+          <View>
+            <Text variant="heading">{user.name}</Text>
+            <Text variant="caption" color="textMuted">
+              {user.username}
+            </Text>
           </View>
         </View>
 
-        {/* Menu Items */}
-        <View className="flex-1 pt-4">
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              className="flex-row items-center px-6 py-4 active:bg-blue-800"
-              onPress={item.onPress}
-            >
-              <Ionicons
-                name={item.icon}
-                size={24}
-                color="white"
-                className="mr-4"
-              />
-              <Text style={{fontFamily: "Gilroy-Regular"}} className="text-white text-lg font-medium ml-4">
-                {item.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
 
-        {/* Logout Button */}
-        <View className="p-6 pb-8">
-          <TouchableOpacity
-            className="bg-yellow-500 rounded-full py-4 items-center active:bg-yellow-600"
-            onPress={handleLogout}
-          >
-            <Text style={{fontFamily: "Gilroy-Medium"}} className="text-white text-lg font-semibold">
-              Log out
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingTop: spacing.xs }}
+          showsVerticalScrollIndicator={false}
+        >
+          {MENU.map((item) => (
+            <PressableScale
+              key={item.id}
+              accessibilityRole="button"
+              onPress={() => {
+                Haptics.selectionAsync();
+                onNavigate(item.id);
+                onClose();
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
+                paddingHorizontal: spacing.lg,
+                minHeight: 48,
+              }}
+            >
+              <Icon name={item.icon} size={19} color={colors.textSecondary} />
+              <Text variant="body">{item.title}</Text>
+            </PressableScale>
+          ))}
+        </ScrollView>
+
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+
+        <PressableScale
+          accessibilityRole="button"
+          onPress={() => {
+            onLogout();
+            onClose();
+          }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.md,
+            paddingHorizontal: spacing.lg,
+            minHeight: 48,
+            marginTop: spacing.xs,
+          }}
+        >
+          <Icon name="logout" size={19} color={colors.destructive} />
+          <Text variant="body" color="destructive">
+            Log out
+          </Text>
+        </PressableScale>
       </Animated.View>
     </Modal>
   );
-};
-
-export default ProfileDrawer;
+}

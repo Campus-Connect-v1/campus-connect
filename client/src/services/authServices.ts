@@ -1,41 +1,58 @@
-import axios from "axios";
+import { api, request } from "./api";
+import { saveSession, type SessionUser } from "./session";
 import type { LoginSchema, SignupSchema } from "../schemas/authSchemas";
 
-const api = axios.create({
-  baseURL: "YOUR_API_ENDPOINT", // e.g. https://api.yourbackend.com
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
+export { EMAIL_UNVERIFIED } from "./constants";
 
-export async function signInWithEmail(data: LoginSchema) {
-  try {
-    const response = await api.post("/login", data);
-    return { success: true, data: response.data };
-  } catch (error: any) {
-    return { success: false, error: error.response?.data || error.message };
-  }
+interface AuthPayload {
+  message: string;
+  token: string;
+  user: SessionUser;
 }
 
-export async function signUpWithEmail(data: SignupSchema) {
-  try {
-    const response = await api.post("/signup", {
-      fullName: data.fullName,
-      email: data.email,
-      password: data.password,
-    });
-    return { success: true, data: response.data };
-  } catch (error: any) {
-    return { success: false, error: error.response?.data || error.message };
-  }
+/** Stores the token on success, so subsequent calls are authenticated. */
+async function authenticate(fn: () => Promise<{ data: AuthPayload }>) {
+  const result = await request<AuthPayload>(fn);
+  if (result.success) await saveSession(result.data.token, result.data.user);
+  return result;
 }
 
-// This is called from GoogleLoginButton after getting an accessToken
-export async function signInWithGoogle(accessToken: string) {
-  try {
-    const response = await api.post("/google-login", { accessToken });
-    return { success: true, data: response.data };
-  } catch (error: any) {
-    return { success: false, error: error.response?.data || error.message };
-  }
+export function signInWithEmail(data: LoginSchema) {
+  return authenticate(() => api.post<AuthPayload>("/auth/login", data));
+}
+
+export function signUpWithEmail(data: SignupSchema) {
+  // confirmPassword is a client-only field and the server's Joi schema rejects
+  // unknown keys, so it must not be sent.
+  const { confirmPassword, ...payload } = data;
+  return request<{ message: string; userId: string; emailSent: boolean }>(() =>
+    api.post("/auth/register", payload)
+  );
+}
+
+/** Registration returns 201, but the account is unusable until this succeeds. */
+export function verifyOtp(email: string, otp: string) {
+  return authenticate(() => api.post<AuthPayload>("/auth/verify-otp", { email, otp }));
+}
+
+export function resendOtp(email: string) {
+  return request<{ message: string }>(() => api.post("/auth/resend-otp", { email }));
+}
+
+export function requestPasswordReset(email: string) {
+  return request<{ message: string }>(() => api.post("/auth/forgot-password", { email }));
+}
+
+/**
+ * Completes the forgot-password flow.
+ *
+ * The token arrives by email, so the user types or pastes it; there is no deep
+ * link registered for it yet.
+ */
+export function resetPassword(token: string, password: string) {
+  return request<{ message: string }>(() => api.post("/auth/reset-password", { token, password }));
+}
+
+export function signInWithGoogle(accessToken: string) {
+  return authenticate(() => api.post<AuthPayload>("/auth/google", { accessToken }));
 }
