@@ -20,6 +20,7 @@ import eventRoutes from "./routes/event.routes.js";
 import studyGroupRoutes from "./routes/studyGroup.routes.js";
 import conversationRoutes from "./routes/conversation.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import uploadRoutes from "./routes/upload.routes.js";
 
 import connectMongoDB from "./config/mongoDB.js";
 
@@ -70,6 +71,7 @@ app.use("/api/events", eventRoutes);
 app.use("/api/study-group", studyGroupRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // ============= OPERATOR WEB APP (app/) ======================
 // Built bundle from ../app, served at /admin. Single service, so the UI and

@@ -9,6 +9,7 @@ import {
   getPostCommentsModel,
   deletePostModel,
 } from "../models/social.model.js";
+import { isOwnMediaUrl } from "../config/cloudinary.js";
 
 // Create a new post
 export const createPost = async (req, res) => {
@@ -25,6 +26,17 @@ export const createPost = async (req, res) => {
     if (!content && !media_url) {
       return res.status(400).json({
         message: "Either content or media_url is required",
+      });
+    }
+
+    // media_url was accepted as an arbitrary string, so a post could point at
+    // any URL on the internet -- a tracking pixel, or something that changes
+    // to content nobody approved after the fact. Only accept media we hold.
+    if (media_url && !isOwnMediaUrl(media_url)) {
+      return res.status(400).json({
+        message:
+          "media_url must be a Cloudinary URL from this account. Upload via " +
+          "POST /api/upload/signature first.",
       });
     }
 
