@@ -1,0 +1,84 @@
+# Render blueprint — https://render.com/docs/blueprint-spec
+#
+# Monorepo: the API lives in server/, so rootDir points there and every
+# path below is relative to it.
+#
+# Secrets use `sync: false` on purpose. Render prompts for them once and
+# stores them on the service; they are never committed here.
+
+services:
+  - type: web
+    name: campus-connect-api
+    runtime: node
+    rootDir: server
+    plan: starter          # NOT free: the free plan spins down after 15 min
+                           # idle, which drops every Socket.IO connection and
+                           # wipes the in-memory onlineUsers map in socket.js.
+    region: oregon
+    branch: main
+
+    buildCommand: npm ci
+    startCommand: npm start
+
+    # server.js exposes this and it touches neither MySQL nor Mongo, so it
+    # reports process health rather than dependency health.
+    healthCheckPath: /api/health
+
+    autoDeployTrigger: commit
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Render injects PORT. server.js reads process.env.PORT, so leaving this
+      # unset lets Render pick; pinning it would break routing.
+
+      # ---- MySQL (Hostinger) ------------------------------------------------
+      # DB_HOST must be the Remote MySQL hostname from hPanel, NOT localhost.
+      # Whitelist this service's static outbound IPs in hPanel first, or
+      # config/db.js will process.exit(1) and the service will crash-loop.
+      - key: DB_HOST
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+
+      # ---- MongoDB Atlas ----------------------------------------------------
+      # Atlas Network Access must allow this service's outbound IPs.
+      - key: MONGO_URI
+        sync: false
+
+      # ---- Auth -------------------------------------------------------------
+      - key: JWT_SECRET
+        sync: false
+
+      # ---- Mail -------------------------------------------------------------
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+
+      # ---- Client -----------------------------------------------------------
+      - key: CLIENT_URL
+        sync: false
+
+      # ---- Optional ---------------------------------------------------------
+      # config/redis.js falls back to an in-memory cache when unset.
+      - key: REDIS_URL
+        sync: false
+      # Only needed for Google sign-in (/api/auth/google).
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+
+      # ---- Logger colour names (helper/logger.js) ---------------------------
+      - key: SUCCESS
+        value: green
+      - key: ERROR
+        value: red
+      - key: WARNING
+        value: yellow
