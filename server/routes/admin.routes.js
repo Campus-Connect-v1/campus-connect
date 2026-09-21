@@ -13,6 +13,12 @@ import {
   impact,
 } from "../controllers/admin/resource.controller.js";
 import * as operators from "../controllers/admin/operators.controller.js";
+import {
+  listPacks,
+  runPack,
+  importJson,
+  setVerified,
+} from "../controllers/admin/seed.controller.js";
 import { requireOperator, requirePermission } from "../middleware/adminAuth.js";
 
 const router = express.Router();
@@ -44,8 +50,15 @@ router.post("/operators", requirePermission("manageOperators"), operators.create
 router.patch("/operators/:id", requirePermission("manageOperators"), operators.update);
 router.delete("/operators/:id", requirePermission("manageOperators"), operators.remove);
 
-// Generic resources. Declared last so /operators above is not swallowed by
-// the :resource wildcard.
+// Populating the database: curated packs, pasted JSON, and bulk approval.
+// All declared before the :resource wildcard so they are not swallowed by it.
+router.get("/seed/packs", requirePermission("read"), listPacks);
+router.post("/seed/packs/:pack", requirePermission("write"), runPack);
+router.post("/seed/import/:resource", requirePermission("write"), importJson);
+router.post("/seed/verify", requirePermission("write"), setVerified);
+
+// Generic resources. Declared last so /operators and /seed above are not
+// swallowed by the :resource wildcard.
 router.get("/resources", requirePermission("read"), listResourceTypes);
 router.get("/:resource", requirePermission("read"), list);
 router.get("/:resource/:id", requirePermission("read"), getOne);

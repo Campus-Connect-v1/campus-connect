@@ -1,0 +1,389 @@
+[
+  {
+    "name": "Academic City University College",
+    "domain": "acity.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Akrofi-Christaller Institute",
+    "domain": "acighana.org",
+    "city": "Akropong",
+    "state": "Eastern",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "All Nations University",
+    "domain": "anu.edu.gh",
+    "city": "Koforidua",
+    "state": "Eastern",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Ashesi University",
+    "domain": "ashesi.edu.gh",
+    "city": "Berekuso",
+    "state": "Eastern",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Catholic University of Ghana",
+    "domain": "cug.edu.gh",
+    "city": "Sunyani",
+    "state": "Bono",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Central University",
+    "domain": "central.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Christian Service University",
+    "domain": "csuc.edu.gh",
+    "city": "Kumasi",
+    "state": "Ashanti",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Garden City University College",
+    "domain": "gcuc.edu.gh",
+    "city": "Kumasi",
+    "state": "Ashanti",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Ghana Baptist University College",
+    "domain": "gbuc.edu.gh",
+    "city": "Kumasi",
+    "state": "Ashanti",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Islamic University College, Ghana",
+    "domain": "iug.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "KAAF University College",
+    "domain": "kaafuni.edu.gh",
+    "city": "Gomoa Fetteh",
+    "state": "Central",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Knutsford University College",
+    "domain": "knutsford.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Lancaster University Ghana",
+    "domain": "lancaster.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Methodist University Ghana",
+    "domain": "mug.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Pentecost University",
+    "domain": "pentvars.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Presbyterian University, Ghana",
+    "domain": "presbyuniversity.edu.gh",
+    "city": "Abetifi",
+    "state": "Eastern",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Regent University College of Science and Technology",
+    "domain": "regent.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Valley View University",
+    "domain": "vvu.edu.gh",
+    "city": "Oyibi",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Wisconsin International University College",
+    "domain": "wiuc-ghana.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "Zenith University College",
+    "domain": "zuc.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "private"
+  },
+  {
+    "name": "CK Tedam University for Technology and Applied Sciences",
+    "domain": "cktutas.edu.gh",
+    "city": "Navrongo",
+    "state": "Upper East",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "Ghana Communication Technology University",
+    "domain": "gctu.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "Ghana Institute of Management and Public Administration",
+    "domain": "gimpa.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "Kwame Nkrumah University of Science and Technology",
+    "domain": "knust.edu.gh",
+    "city": "Kumasi",
+    "state": "Ashanti",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "Simon Diedong Dombo University for Business and Integrated Development Studies",
+    "domain": "ubids.edu.gh",
+    "city": "Wa",
+    "state": "Upper West",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "University for Development Studies",
+    "domain": "uds.edu.gh",
+    "city": "Tamale",
+    "state": "Northern",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "University of Cape Coast",
+    "domain": "ucc.edu.gh",
+    "city": "Cape Coast",
+    "state": "Central",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "University of Education, Winneba",
+    "domain": "uew.edu.gh",
+    "city": "Winneba",
+    "state": "Central",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "University of Energy and Natural Resources",
+    "domain": "uenr.edu.gh",
+    "city": "Sunyani",
+    "state": "Bono",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "University of Environment and Sustainable Development",
+    "domain": "uesd.edu.gh",
+    "city": "Somanya",
+    "state": "Eastern",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "University of Ghana",
+    "domain": "ug.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "University of Health and Allied Sciences",
+    "domain": "uhas.edu.gh",
+    "city": "Ho",
+    "state": "Volta",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "University of Mines and Technology",
+    "domain": "umat.edu.gh",
+    "city": "Tarkwa",
+    "state": "Western",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "University of Professional Studies, Accra",
+    "domain": "upsa.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "public"
+  },
+  {
+    "name": "Accra Technical University",
+    "domain": "atu.edu.gh",
+    "city": "Accra",
+    "state": "Greater Accra",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "technical"
+  },
+  {
+    "name": "Bolgatanga Technical University",
+    "domain": "btu.edu.gh",
+    "city": "Bolgatanga",
+    "state": "Upper East",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "technical"
+  },
+  {
+    "name": "Cape Coast Technical University",
+    "domain": "cctu.edu.gh",
+    "city": "Cape Coast",
+    "state": "Central",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "technical"
+  },
+  {
+    "name": "Ho Technical University",
+    "domain": "htu.edu.gh",
+    "city": "Ho",
+    "state": "Volta",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "technical"
+  },
+  {
+    "name": "Koforidua Technical University",
+    "domain": "ktu.edu.gh",
+    "city": "Koforidua",
+    "state": "Eastern",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "technical"
+  },
+  {
+    "name": "Kumasi Technical University",
+    "domain": "kstu.edu.gh",
+    "city": "Kumasi",
+    "state": "Ashanti",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "technical"
+  },
+  {
+    "name": "Sunyani Technical University",
+    "domain": "stu.edu.gh",
+    "city": "Sunyani",
+    "state": "Bono",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "technical"
+  },
+  {
+    "name": "Takoradi Technical University",
+    "domain": "ttu.edu.gh",
+    "city": "Takoradi",
+    "state": "Western",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "technical"
+  },
+  {
+    "name": "Tamale Technical University",
+    "domain": "tatu.edu.gh",
+    "city": "Tamale",
+    "state": "Northern",
+    "country": "Ghana",
+    "is_verified": 0,
+    "_kind": "technical"
+  }
+]

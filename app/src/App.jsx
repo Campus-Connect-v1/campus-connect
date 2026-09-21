@@ -5,6 +5,8 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Resource from "./pages/Resource.jsx";
 import Operators from "./pages/Operators.jsx";
 import Activity from "./pages/Activity.jsx";
+import Populate from "./pages/Populate.jsx";
+import Approvals from "./pages/Approvals.jsx";
 
 const CAMPUS = [
   ["universities", "Universities"],
@@ -50,6 +52,10 @@ export default function App() {
           <NavLink key={key} to={`/r/${key}`} className="nav-item">{label}</NavLink>
         ))}
 
+        <div className="nav-group">Data</div>
+        <NavLink to="/approvals" className="nav-item">Approvals</NavLink>
+        <NavLink to="/populate" className="nav-item">Populate</NavLink>
+
         <div className="nav-group">System</div>
         <NavLink to="/activity" className="nav-item">Activity</NavLink>
         {/* Only owners can reach the operators API, so hide what would 403. */}
@@ -79,6 +85,8 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/r/:resource" element={<Resource />} />
             <Route path="/activity" element={<Activity />} />
+            <Route path="/approvals" element={<Approvals />} />
+            <Route path="/populate" element={<Populate />} />
             <Route
               path="/operators"
               element={
