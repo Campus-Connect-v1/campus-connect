@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
+import compression from "compression";
 import http from "http";
 import path from "node:path";
 import fs from "node:fs";
@@ -53,6 +54,7 @@ console.log(COLORS[process.env.SUCCESS], "NODE_ENV:", process.env.NODE_ENV);
 // rate limiting is effectively disabled. 1 = trust exactly one hop.
 app.set("trust proxy", 1);
 
+app.use(compression());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -95,9 +97,12 @@ if (fs.existsSync(path.join(adminDist, "index.html"))) {
     express.static(adminDist, {
       index: false,
       setHeaders: (res, filePath) => {
-        if (filePath.endsWith("index.html")) {
-          res.setHeader("Cache-Control", "no-store");
-        }
+        res.setHeader(
+          "Cache-Control",
+          filePath.endsWith("index.html")
+            ? "no-store"
+            : "public, max-age=31536000, immutable"
+        );
       },
     })
   );
