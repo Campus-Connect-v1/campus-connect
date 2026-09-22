@@ -286,22 +286,34 @@ export const addCommentModel = async (commentData) => {
 };
 
 // Get comments for a post
-export const getPostCommentsModel = async (postId, limit = 50, offset = 0) => {
+export const getPostCommentsModel = async (postId, limit = 50, offset = 0, viewerId = null) => {
   try {
+    // Like counts are aggregated in one grouped join rather than a correlated
+    // subquery per row: at 50 comments the latter is 50 extra index lookups
+    // for a number the client needs on every single row.
     const query = `
-      SELECT 
+      SELECT
         pc.*,
         u.first_name,
         u.last_name,
-        u.profile_picture_url
+        u.profile_picture_url,
+        COALESCE(cl.like_count, 0) AS like_count,
+        CASE WHEN mine.user_id IS NULL THEN 0 ELSE 1 END AS has_liked
       FROM post_comments pc
       JOIN users u ON pc.user_id = u.user_id
+      LEFT JOIN (
+        SELECT comment_id, COUNT(*) AS like_count
+        FROM comment_likes
+        GROUP BY comment_id
+      ) cl ON cl.comment_id = pc.comment_id
+      LEFT JOIN comment_likes mine
+        ON mine.comment_id = pc.comment_id AND mine.user_id = ?
       WHERE pc.post_id = ? AND pc.is_active = 1
       ORDER BY pc.created_at ASC
       LIMIT ? OFFSET ?
     `;
 
-    const [rows] = await db.execute(query, [postId, limit, offset]);
+    const [rows] = await db.execute(query, [viewerId, postId, limit, offset]);
     return rows;
   } catch (error) {
     throw new Error(`Database error in getPostComments: ${error.message}`);
@@ -463,5 +475,197 @@ export const getPostAuthorModel = async (postId) => {
   } catch (error) {
     console.error("getPostAuthor failed:", error.message);
     return null;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Comment likes
+// ---------------------------------------------------------------------------
+
+/**
+ * Like a comment. The comment must still be active — liking one that was just
+ * deleted would leave a row pointing at something the feed no longer renders.
+ * Returns the comment's post so the caller can broadcast to the right room.
+ */
+export const likeCommentModel = async (commentId, userId) => {
+  try {
+    const [[comment]] = await db.execute(
+      `SELECT comment_id, post_id, user_id
+       FROM post_comments
+       WHERE comment_id = ? AND is_active = 1`,
+      [commentId]
+    );
+
+    if (!comment) throw new Error("Comment not found");
+
+    const likeId = `clike_${uuidv4()}`;
+    await db.execute(
+      `INSERT INTO comment_likes (like_id, comment_id, user_id) VALUES (?, ?, ?)`,
+      [likeId, commentId, userId]
+    );
+
+    return {
+      like_id: likeId,
+      comment_id: commentId,
+      post_id: comment.post_id,
+      comment_author_id: comment.user_id,
+    };
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") throw new Error("Comment already liked");
+    if (error.message.includes("not found")) throw error;
+    throw new Error(`Database error in likeComment: ${error.message}`);
+  }
+};
+
+export const unlikeCommentModel = async (commentId, userId) => {
+  try {
+    const [[comment]] = await db.execute(
+      `SELECT post_id FROM post_comments WHERE comment_id = ?`,
+      [commentId]
+    );
+
+    const [result] = await db.execute(
+      `DELETE FROM comment_likes WHERE comment_id = ? AND user_id = ?`,
+      [commentId, userId]
+    );
+
+    if (result.affectedRows === 0) throw new Error("Like not found");
+
+    return { success: true, post_id: comment?.post_id ?? null };
+  } catch (error) {
+    if (error.message.includes("not found")) throw error;
+    throw new Error(`Database error in unlikeComment: ${error.message}`);
+  }
+};
+
+/** Current like total for one comment, plus whether this viewer has liked it. */
+export const getCommentLikeStateModel = async (commentId, userId) => {
+  try {
+    const [[row]] = await db.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM comment_likes WHERE comment_id = ?) AS like_count,
+         (SELECT COUNT(*) FROM comment_likes WHERE comment_id = ? AND user_id = ?) AS liked`,
+      [commentId, commentId, userId]
+    );
+    return {
+      like_count: Number(row?.like_count ?? 0),
+      has_liked: Number(row?.liked ?? 0) > 0,
+    };
+  } catch (error) {
+    console.error("getCommentLikeState failed:", error.message);
+    return { like_count: null, has_liked: false };
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Saved posts (bookmarks)
+// ---------------------------------------------------------------------------
+
+/**
+ * Save a post. Idempotent by design: the client's bookmark button is a toggle
+ * and a retry after a dropped response must not be an error, so a duplicate
+ * returns the existing row rather than raising.
+ */
+export const savePostModel = async (postId, userId) => {
+  try {
+    const [[post]] = await db.execute(
+      `SELECT post_id FROM posts WHERE post_id = ? AND is_active = 1`,
+      [postId]
+    );
+    if (!post) throw new Error("Post not found");
+
+    const savedId = `saved_${uuidv4()}`;
+    await db.execute(
+      `INSERT INTO saved_posts (saved_id, post_id, user_id) VALUES (?, ?, ?)`,
+      [savedId, postId, userId]
+    );
+
+    return { saved_id: savedId, post_id: postId };
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") return { post_id: postId, already_saved: true };
+    if (error.message.includes("not found")) throw error;
+    throw new Error(`Database error in savePost: ${error.message}`);
+  }
+};
+
+/** Unsave. Also idempotent -- un-saving something already gone is a no-op. */
+export const unsavePostModel = async (postId, userId) => {
+  try {
+    await db.execute(`DELETE FROM saved_posts WHERE post_id = ? AND user_id = ?`, [
+      postId,
+      userId,
+    ]);
+    return { success: true };
+  } catch (error) {
+    throw new Error(`Database error in unsavePost: ${error.message}`);
+  }
+};
+
+/**
+ * Just the ids, for hydrating the bookmark state of a feed in one request.
+ * The saved *screen* needs whole posts, but every other screen only needs to
+ * know which of the rows it is already showing are saved.
+ */
+export const getSavedPostIdsModel = async (userId) => {
+  try {
+    const [rows] = await db.execute(
+      `SELECT sp.post_id
+       FROM saved_posts sp
+       JOIN posts p ON p.post_id = sp.post_id AND p.is_active = 1
+       WHERE sp.user_id = ?
+       ORDER BY sp.created_at DESC`,
+      [userId]
+    );
+    return rows.map((row) => row.post_id);
+  } catch (error) {
+    throw new Error(`Database error in getSavedPostIds: ${error.message}`);
+  }
+};
+
+/**
+ * The saved posts themselves, shaped like the feed so the same card component
+ * renders them without a second adapter.
+ */
+export const getSavedPostsModel = async (userId, limit = 50, offset = 0) => {
+  try {
+    const [rows] = await db.execute(
+      `SELECT
+         p.post_id, p.content, p.media_url, p.media_type, p.visibility,
+         p.created_at, p.expires_at,
+         u.user_id AS author_id, u.first_name, u.last_name,
+         u.profile_picture_url, u.profile_headline,
+         (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id) AS like_count,
+         (SELECT COUNT(*) FROM post_comments WHERE post_id = p.post_id AND is_active = 1) AS comment_count,
+         (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id AND user_id = ?) AS has_liked
+       FROM saved_posts sp
+       JOIN posts p ON p.post_id = sp.post_id AND p.is_active = 1
+       JOIN users u ON u.user_id = p.user_id
+       WHERE sp.user_id = ?
+       ORDER BY sp.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [userId, userId, limit, offset]
+    );
+
+    return rows.map((row) => ({
+      post_id: row.post_id,
+      content: row.content,
+      media_url: row.media_url,
+      media_type: row.media_type,
+      poll_id: null,
+      visibility: row.visibility,
+      created_at: row.created_at,
+      expires_at: row.expires_at,
+      author: {
+        user_id: row.author_id,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        profile_picture_url: row.profile_picture_url,
+        profile_headline: row.profile_headline,
+      },
+      stats: { like_count: Number(row.like_count), comment_count: Number(row.comment_count) },
+      user_actions: { has_liked: Number(row.has_liked) > 0, has_saved: true },
+    }));
+  } catch (error) {
+    throw new Error(`Database error in getSavedPosts: ${error.message}`);
   }
 };

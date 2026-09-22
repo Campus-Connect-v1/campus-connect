@@ -12,6 +12,12 @@ import {
   updatePost,
   updateComment,
   deleteComment,
+  likeComment,
+  unlikeComment,
+  savePost,
+  unsavePost,
+  getSavedPostIds,
+  getSavedPosts,
 } from "../controllers/social.controller.js";
 import authenticate from "../middleware/auth.js";
 
@@ -44,6 +50,24 @@ router.post("/posts", createPost);
  *     summary: Get feed posts from connections
  */
 router.get("/posts/feed", getFeedPosts);
+
+/**
+ * @swagger
+ * /social/posts/saved:
+ *   get:
+ *     tags: [Social]
+ *     summary: Saved posts for the current user
+ */
+router.get("/posts/saved", getSavedPosts);
+
+/**
+ * @swagger
+ * /social/posts/saved/ids:
+ *   get:
+ *     tags: [Social]
+ *     summary: Ids of saved posts, for hydrating bookmark state
+ */
+router.get("/posts/saved/ids", getSavedPostIds);
 
 /**
  * @swagger
@@ -125,5 +149,41 @@ router.patch("/posts/:post_id/comments/:comment_id", updateComment);
  *     summary: Delete a comment (comment author or post author)
  */
 router.delete("/posts/:post_id/comments/:comment_id", deleteComment);
+
+/**
+ * @swagger
+ * /social/comments/{comment_id}/like:
+ *   post:
+ *     tags: [Social]
+ *     summary: Like a comment
+ */
+router.post("/comments/:comment_id/like", likeComment);
+
+/**
+ * @swagger
+ * /social/comments/{comment_id}/like:
+ *   delete:
+ *     tags: [Social]
+ *     summary: Unlike a comment
+ */
+router.delete("/comments/:comment_id/like", unlikeComment);
+
+/**
+ * @swagger
+ * /social/posts/{post_id}/save:
+ *   post:
+ *     tags: [Social]
+ *     summary: Save (bookmark) a post
+ */
+router.post("/posts/:post_id/save", savePost);
+
+/**
+ * @swagger
+ * /social/posts/{post_id}/save:
+ *   delete:
+ *     tags: [Social]
+ *     summary: Remove a bookmark
+ */
+router.delete("/posts/:post_id/save", unsavePost);
 
 export default router;

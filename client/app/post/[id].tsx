@@ -19,7 +19,14 @@ import {
 } from "@/src/components/ui";
 import { adaptPost } from "@/src/features/feed/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
-import { addComment, fetchComments, type ApiComment } from "@/src/services/commentServices";
+import { usePostRealtime } from "@/src/hooks/usePostRealtime";
+import {
+  addComment,
+  fetchComments,
+  likeComment,
+  unlikeComment,
+  type ApiComment,
+} from "@/src/services/commentServices";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
 import { fetchPost, likePost, unlikePost } from "@/src/services/socialServices";
@@ -35,7 +42,18 @@ function since(iso: string) {
   return `${Math.round(hours / 24)}d`;
 }
 
-function CommentRow({ comment }: { comment: ApiComment }) {
+function CommentRow({
+  comment,
+  liked,
+  likeCount,
+  onToggleLike,
+}: {
+  comment: ApiComment;
+  liked: boolean;
+  likeCount: number;
+  onToggleLike: (commentId: string) => void;
+}) {
+  const { colors } = useTheme();
   const name = [comment.author.first_name, comment.author.last_name].filter(Boolean).join(" ");
   // A reply is inset rather than given its own card, so a thread reads as one
   // conversation instead of a stack of boxes.
@@ -61,6 +79,21 @@ function CommentRow({ comment }: { comment: ApiComment }) {
         </View>
         <Text variant="body">{comment.content}</Text>
       </View>
+
+      <PressableScale
+        onPress={() => onToggleLike(comment.comment_id)}
+        accessibilityRole="button"
+        accessibilityLabel={`${liked ? "Unlike" : "Like"} comment by ${name}`}
+        hitSlop={8}
+        style={{ alignItems: "center", gap: 2, paddingTop: 2 }}
+      >
+        <Icon name="like" size={15} color={liked ? colors.accent : colors.textMuted} />
+        {likeCount > 0 ? (
+          <Text variant="micro" color="textMuted">
+            {likeCount}
+          </Text>
+        ) : null}
+      </PressableScale>
     </View>
   );
 }
@@ -77,7 +110,22 @@ export default function PostCommentsScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extra, setExtra] = useState<ApiComment[]>([]);
-  const extraCount = extra.length;
+  // Comments edited or removed by someone else while this screen is open.
+  // Held apart from the fetched list, which useAsync owns and will not mutate.
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  // Authoritative totals pushed by the server; they supersede the counts that
+  // came with the post, which go stale the moment anyone else acts on it.
+  const [liveCounts, setLiveCounts] = useState<{
+    like_count: number | null;
+    comment_count: number | null;
+  } | null>(null);
+  const [goneMessage, setGoneMessage] = useState<string | null>(null);
+  // Overrides on top of whatever the fetched comment carried: our own taps
+  // (optimistic) and other people's, pushed over the socket.
+  const [commentLikes, setCommentLikes] = useState<
+    Record<string, { liked?: boolean; count?: number }>
+  >({});
 
   const post = useAsync(
     useCallback(() => fetchPost(id), [id]),
@@ -94,14 +142,56 @@ export default function PostCommentsScreen() {
   const [likeOverride, setLikeOverride] = useState<{ liked: boolean; likes: number } | null>(null);
   const [options, setOptions] = useState(false);
 
+  usePostRealtime(id, {
+    onCounts: setLiveCounts,
+    // Appending rather than refetching keeps the reader's scroll position.
+    // Guarded by id because the server also echoes to us if we never sent a
+    // socket id, and a double-add is far worse than a missed one.
+    onCommentAdded: (payload) => {
+      const incoming = payload.comment;
+      if (!incoming) return;
+      setExtra((current) =>
+        current.some((c) => c.comment_id === incoming.comment_id)
+          ? current
+          : [...current, incoming as ApiComment]
+      );
+    },
+    onCommentUpdated: (payload) => {
+      if (!payload.comment_id || payload.content === undefined) return;
+      setEdits((current) => ({ ...current, [payload.comment_id!]: payload.content! }));
+    },
+    onCommentDeleted: (payload) => {
+      if (!payload.comment_id) return;
+      setRemoved((current) => new Set(current).add(payload.comment_id!));
+    },
+    // Someone else liked a comment. Only the count moves: "liked" is this
+    // viewers own state and no one else can change it.
+    onCommentLikeChanged: (payload) => {
+      if (!payload.comment_id || typeof payload.like_count !== "number") return;
+      setCommentLikes((current) => ({
+        ...current,
+        [payload.comment_id!]: {
+          ...current[payload.comment_id!],
+          count: payload.like_count!,
+        },
+      }));
+    },
+    onPostUpdated: () => post.reload(),
+    // The author deleted it out from under us. Say so rather than leaving a
+    // post on screen that no longer exists and whose actions would all 404.
+    onPostDeleted: () => setGoneMessage("This post was deleted by its author."),
+  });
+
   const adapted = post.data ? adaptPost(post.data) : null;
   const display = adapted
     ? {
         ...adapted,
         saved: saved.isSaved(adapted.id),
         liked: likeOverride?.liked ?? adapted.liked,
-        likes: likeOverride?.likes ?? adapted.likes,
-        comments: adapted.comments + extraCount,
+        // A like of our own wins over the broadcast total: ours is optimistic
+        // and immediate, and the next fetch reconciles the two anyway.
+        likes: likeOverride?.likes ?? liveCounts?.like_count ?? adapted.likes,
+        comments: liveCounts?.comment_count ?? adapted.comments + extra.length,
       }
     : null;
 
@@ -113,9 +203,45 @@ export default function PostCommentsScreen() {
     (wasLiked ? unlikePost : likePost)(adapted.id);
   };
 
+  const toggleCommentLike = (commentId: string) => {
+    const source = all.find((c) => c.comment_id === commentId);
+    const override = commentLikes[commentId];
+    const wasLiked = override?.liked ?? Boolean(source?.has_liked);
+    const currentCount = override?.count ?? Number(source?.like_count ?? 0);
+
+    setCommentLikes((current) => ({
+      ...current,
+      [commentId]: { liked: !wasLiked, count: Math.max(0, currentCount + (wasLiked ? -1 : 1)) },
+    }));
+
+    void (wasLiked ? unlikeComment : likeComment)(commentId).then((result) => {
+      // Revert on failure; the server total wins when it succeeds, since two
+      // devices tapping at once would otherwise both show their own guess.
+      if (!result.success) {
+        setCommentLikes((current) => ({
+          ...current,
+          [commentId]: { liked: wasLiked, count: currentCount },
+        }));
+        return;
+      }
+      const confirmed = result.data?.like;
+      if (!confirmed) return;
+      setCommentLikes((current) => ({
+        ...current,
+        [commentId]: { liked: confirmed.has_liked, count: confirmed.like_count },
+      }));
+    });
+  };
+
   // Locally added comments are appended rather than triggering a refetch, so
   // the list does not jump and lose the user's scroll position mid-thread.
-  const all = [...(comments.data ?? []), ...extra];
+  const all = [...(comments.data ?? []), ...extra]
+    .filter((comment) => !removed.has(comment.comment_id))
+    .map((comment) =>
+      edits[comment.comment_id] !== undefined
+        ? { ...comment, content: edits[comment.comment_id] }
+        : comment
+    );
 
   const send = async () => {
     const content = draft.trim();
@@ -203,10 +329,21 @@ export default function PostCommentsScreen() {
               />
             )
           }
-          renderItem={({ item }) => <CommentRow comment={item} />}
+          renderItem={({ item }) => (
+            <CommentRow
+              comment={item}
+              liked={commentLikes[item.comment_id]?.liked ?? Boolean(item.has_liked)}
+              likeCount={commentLikes[item.comment_id]?.count ?? Number(item.like_count ?? 0)}
+              onToggleLike={toggleCommentLike}
+            />
+          )}
         />
 
-        {error ? (
+        {goneMessage ? (
+          <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.xs }}>
+            <InlineNotice message={goneMessage} />
+          </View>
+        ) : error ? (
           <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.xs }}>
             <InlineNotice message={error} />
           </View>

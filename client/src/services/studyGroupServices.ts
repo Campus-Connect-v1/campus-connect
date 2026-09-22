@@ -78,3 +78,12 @@ export function updateStudyGroup(
 ) {
   return request<{ success: boolean }>(() => api.put(`/study-group/${groupId}`, patch));
 }
+
+/**
+ * Creator only — admins may update a group but not remove it, so anyone else
+ * gets a 403. Soft-deletes server-side: the group leaves every listing but
+ * its members, meetings and notifications are left intact.
+ */
+export function deleteStudyGroup(groupId: string) {
+  return request<{ success: boolean }>(() => api.delete(`/study-group/${groupId}`));
+}

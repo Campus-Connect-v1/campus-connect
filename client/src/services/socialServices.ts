@@ -71,3 +71,35 @@ export function createPost(content: string, mediaUrl?: string) {
 export function deletePost(postId: string) {
   return request(() => api.delete(`/social/posts/${postId}`));
 }
+
+export function updatePost(postId: string, content: string) {
+  return request<{ post: { post_id: string; content: string } }>(() =>
+    api.patch(`/social/posts/${postId}`, { content })
+  );
+}
+
+// --- Saved posts (bookmarks) ----------------------------------------------
+
+export function savePost(postId: string) {
+  return request(() => api.post(`/social/posts/${postId}/save`));
+}
+
+export function unsavePost(postId: string) {
+  return request(() => api.delete(`/social/posts/${postId}/save`));
+}
+
+/** Ids only — enough to render the bookmark state of a whole feed. */
+export async function fetchSavedPostIds() {
+  const result = await request<{ count: number; post_ids?: string[] }>(() =>
+    api.get("/social/posts/saved/ids")
+  );
+  return result.success ? { ...result, data: result.data.post_ids ?? [] } : result;
+}
+
+/** The saved posts themselves, already shaped like the feed. */
+export async function fetchSavedPosts(limit = 50, offset = 0) {
+  const result = await request<{ count: number; posts?: ApiPost[] }>(() =>
+    api.get("/social/posts/saved", { params: { limit, offset } })
+  );
+  return result.success ? { ...result, data: result.data.posts ?? [] } : result;
+}
