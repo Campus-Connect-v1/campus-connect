@@ -11,10 +11,15 @@ import {
 export const createPostModel = async (postData) => {
   try {
     const postId = `post_${uuidv4()}`;
+    // Every optional column defaults to null, not undefined. mysql2's execute()
+    // refuses an undefined bind outright -- "Bind parameters must not contain
+    // undefined" -- so a text-only post, which simply has no media_url key in
+    // the request body, failed with a 500 before it ever reached the database.
+    // createStoryModel already does this; posts were the outlier.
     const {
       user_id,
-      content,
-      media_url,
+      content = null,
+      media_url = null,
       media_type = "text",
       visibility = "connections",
       expires_at = null,

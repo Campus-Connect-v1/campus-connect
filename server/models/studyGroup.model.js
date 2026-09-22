@@ -69,17 +69,23 @@ export class StudyGroup {
 
   // Create new study group
   static async create(groupData) {
+    // Same reasoning as createPostModel: mysql2 rejects an undefined bind, so
+    // every optional column has to land as an explicit null when the caller
+    // omits it rather than being passed straight through.
     const {
       group_id,
       university_id,
       group_name,
-      description,
-      course_code,
-      course_name,
-      group_type,
-      max_members,
-      meeting_frequency,
-      preferred_location_type,
+      description = null,
+      course_code = null,
+      course_name = null,
+      // These mirror the column defaults exactly. Binding null instead would
+      // override them, since the columns are nullable -- a group created
+      // without a type would be NULL rather than 'public'.
+      group_type = "public",
+      max_members = 20,
+      meeting_frequency = "weekly",
+      preferred_location_type = "campus",
       created_by,
     } = groupData;
 
