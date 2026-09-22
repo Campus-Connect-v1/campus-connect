@@ -1,6 +1,8 @@
 # Campus Connect API Documentation
 
-**Base URL:** `http://localhost:8000/api`
+**Local server:** `http://localhost:8000`
+
+All endpoint paths below are complete and include the `/api` prefix.
 
 ---
 
@@ -8,7 +10,7 @@
 
 ### 1. Register User
 
-**POST** `/auth/register`
+**POST** `/api/auth/register`
 
 Register a new student account.
 
@@ -51,7 +53,7 @@ Content-Type: application/json
 
 ### 2. Login User
 
-**POST** `/auth/login`
+**POST** `/api/auth/login`
 
 Authenticate user and get JWT token.
 
@@ -96,7 +98,7 @@ Content-Type: application/json
 
 ### 3. Verify OTP
 
-**POST** `/auth/verify-otp`
+**POST** `/api/auth/verify-otp`
 
 Verify email with OTP sent during registration.
 
@@ -133,7 +135,7 @@ Content-Type: application/json
 
 ### 4. Resend OTP
 
-**POST** `/auth/resend-otp`
+**POST** `/api/auth/resend-otp`
 
 Request a new OTP for email verification.
 
@@ -170,7 +172,7 @@ Content-Type: application/json
 
 ### 5. Forgot Password
 
-**POST** `/auth/forgot-password`
+**POST** `/api/auth/forgot-password`
 
 Request password reset link.
 
@@ -203,7 +205,7 @@ Content-Type: application/json
 
 ### 6. Reset Password
 
-**POST** `/auth/reset-password`
+**POST** `/api/auth/reset-password`
 
 Reset password using token from email.
 
@@ -244,7 +246,7 @@ Content-Type: application/json
 
 ### 7. Health Check
 
-**GET** `/health`
+**GET** `/api/health`
 
 Check if API is running.
 
@@ -298,13 +300,13 @@ PORT=8000
 
 | Method | Endpoint                | Description            | Auth Required |
 | ------ | ----------------------- | ---------------------- | ------------- |
-| POST   | `/auth/register`        | Register new user      | No            |
-| POST   | `/auth/login`           | User login             | No            |
-| POST   | `/auth/verify-otp`      | Verify email OTP       | No            |
-| POST   | `/auth/resend-otp`      | Resend OTP             | No            |
-| POST   | `/auth/forgot-password` | Request password reset | No            |
-| POST   | `/auth/reset-password`  | Reset password         | No            |
-| GET    | `/health`               | API health check       | No            |
+| POST   | `/api/auth/register`        | Register new user      | No            |
+| POST   | `/api/auth/login`           | User login             | No            |
+| POST   | `/api/auth/verify-otp`      | Verify email OTP       | No            |
+| POST   | `/api/auth/resend-otp`      | Resend OTP             | No            |
+| POST   | `/api/auth/forgot-password` | Request password reset | No            |
+| POST   | `/api/auth/reset-password`  | Reset password         | No            |
+| GET    | `/api/health`               | API health check       | No            |
 
 ---
 
@@ -333,7 +335,7 @@ Authorization: Bearer <your_jwt_token>
 
 ### 1️⃣ Get User Profile
 
-**GET** `/api/users/profile`
+**GET** `/api/user/profile`
 Retrieve the authenticated user’s complete profile, including interests, privacy preferences, and linked social accounts.
 
 **Response:**
@@ -347,12 +349,36 @@ Retrieve the authenticated user’s complete profile, including interests, priva
     "first_name": "John",
     "last_name": "Doe",
     "profile_picture_url": "https://example.com/profile.jpg",
+    "profile_headline": "AI Research Assistant",
     "phone_number": "+1234567890",
+    "linkedin_url": "https://linkedin.com/in/johndoe",
+    "website_url": "https://johndoe.dev",
     "program": "Computer Science",
     "bio": "Passionate about AI and machine learning",
     "year_of_study": "3",
     "graduation_year": 2025,
-    "interests": ["AI", "Basketball", "Photography"],
+    "interests": [
+      {
+        "interest_id": "interest_123",
+        "interest_type": "academic",
+        "interest_name": "Artificial Intelligence",
+        "name": "Artificial Intelligence",
+        "skill_level": "intermediate",
+        "created_at": "2026-09-21T18:00:00.000Z"
+      }
+    ],
+    "courses": [
+      {
+        "user_course_id": 12,
+        "course_code": "CS101",
+        "course_name": "Introduction to Computer Science",
+        "department_id": "dept_cs",
+        "semester": "Fall",
+        "academic_year": 2024,
+        "is_current": 1,
+        "created_at": "2026-09-21T18:00:00.000Z"
+      }
+    ],
     "social_links": {
       "linkedin": "https://linkedin.com/in/johndoe",
       "github": "https://github.com/johndoe"
@@ -369,7 +395,7 @@ Retrieve the authenticated user’s complete profile, including interests, priva
 
 ### 2️ Update User Profile
 
-**PUT** `/api/users/profile`
+**PUT** `/api/user/profile`
 Update profile details such as name, program, or bio.
 
 **Request Body:**
@@ -397,7 +423,7 @@ Update profile details such as name, program, or bio.
 
 ### 3️Delete User Profile (Soft Delete)
 
-**DELETE** `/api/users/profile`
+**DELETE** `/api/user/profile`
 Soft-delete the user’s profile (with 30-day recovery option).
 
 **Request Body (optional):**
@@ -405,7 +431,7 @@ Soft-delete the user’s profile (with 30-day recovery option).
 ```json
 {
   "password": "user_password",
-  "reason": "Graduated and leaving campus"
+  "deletion_reason": "Graduated and leaving campus"
 }
 ```
 
@@ -413,8 +439,9 @@ Soft-delete the user’s profile (with 30-day recovery option).
 
 ```json
 {
-  "message": "Profile deactivated. Account scheduled for deletion in 30 days.",
-  "recovery_available": true
+  "message": "Account successfully deleted",
+  "details": "Your profile has been deactivated and all personal data has been archived. You can recover your account within 30 days by contacting support.",
+  "deletion_timestamp": "2026-09-21T18:00:00.000Z"
 }
 ```
 
@@ -422,7 +449,7 @@ Soft-delete the user’s profile (with 30-day recovery option).
 
 ### 4️ Get User Statistics
 
-**GET** `/api/users/stats`
+**GET** `/api/user/stats`
 Fetch user engagement metrics (connections, groups, events, etc.).
 
 **Response:**
@@ -445,7 +472,7 @@ Fetch user engagement metrics (connections, groups, events, etc.).
 
 ### 5️Get User Connections
 
-**GET** `/api/users/connections`
+**GET** `/api/user/connections`
 Retrieve all user connections with optional filters.
 
 **Query Params:**
@@ -475,7 +502,7 @@ Retrieve all user connections with optional filters.
         "shared_courses": "CS106",
         "created_at": "2025-10-17T21:14:45.000Z",
         "updated_at": "2025-10-17T21:14:45.000Z",
-        "user": {
+        "receiver": {
           "id": "user_11",
           "first_name": "James",
           "last_name": "Taylor",
@@ -496,7 +523,7 @@ Retrieve all user connections with optional filters.
         "shared_courses": null,
         "created_at": "2025-10-17T21:14:45.000Z",
         "updated_at": "2025-10-17T21:14:45.000Z",
-        "user": {
+        "receiver": {
           "id": "user_10",
           "first_name": "Karen",
           "last_name": "Anderson",
@@ -518,7 +545,7 @@ Retrieve all user connections with optional filters.
 
 ### 6️ Get Connections by Status
 
-**GET** `/api/users/connections/:status`
+**GET** `/api/user/connections/:status`
 Retrieve user connections filtered by a specific status (e.g., `accepted`).
 
 ```json
@@ -536,7 +563,7 @@ Retrieve user connections filtered by a specific status (e.g., `accepted`).
         "shared_courses": "CS106",
         "created_at": "2025-10-17T21:14:45.000Z",
         "updated_at": "2025-10-17T21:14:45.000Z",
-        "user": {
+        "receiver": {
           "id": "user_11",
           "first_name": "James",
           "last_name": "Taylor",
@@ -556,7 +583,7 @@ Retrieve user connections filtered by a specific status (e.g., `accepted`).
 
 ### 7️Send Connection Request
 
-**POST** `/api/users/connections/request`
+**POST** `/api/user/connections/request`
 Send a connection request to another user.
 
 **Request Body:**
@@ -573,14 +600,14 @@ Send a connection request to another user.
 
 ### 8️Cancel Connection Request
 
-**DELETE** `/api/users/connections/request/:connection_id`
+**DELETE** `/api/user/connections/request/:connection_id`
 Cancel a pending connection request.
 
 ---
 
 ### 9️Respond to Connection Request
 
-**POST** `/api/users/connections/respond`
+**POST** `/api/user/connections/respond`
 Accept or decline a pending request.
 
 **Request Body:**
@@ -596,9 +623,18 @@ Accept or decline a pending request.
 
 ## 🎯 Interests Management
 
+### 🔹 List Interests
+
+**GET** `/api/user/interests`
+
+Returns `{ "count": 1, "interests": [...] }` using the same interest object
+shape shown in the profile response.
+
+---
+
 ### 🔹 Add Interest
 
-**POST** `/api/users/interests`
+**POST** `/api/user/interests`
 Add an interest to the user’s profile.
 
 **Request Body:**
@@ -615,14 +651,14 @@ Add an interest to the user’s profile.
 
 ### 🔹 Update Interest
 
-**PUT** `/api/users/interests/:interest_id`
+**PUT** `/api/user/interests/:interest_id`
 Modify an existing interest entry.
 
 **Request Body:**
 
 ```json
 {
-  "interest_type": "personal",
+  "interest_type": "hobby",
   "interest_name": "Photography",
   "skill_level": "advanced"
 }
@@ -632,16 +668,25 @@ Modify an existing interest entry.
 
 ### 🔹 Remove Interest
 
-**DELETE** `/api/users/interests/:interestId`
+**DELETE** `/api/user/interests/:interestId`
 Remove an interest from the profile.
 
 ---
 
 ## Course Management
 
+### 🔹 List Courses
+
+**GET** `/api/user/courses`
+
+Returns `{ "count": 1, "courses": [...] }` using the same course object shape
+shown in the profile response.
+
+---
+
 ### 🔹 Add Course
 
-**POST** `/api/users/courses`
+**POST** `/api/user/courses`
 Attach a course to the user profile.
 
 **Request Body:**
@@ -652,7 +697,7 @@ Attach a course to the user profile.
   "course_name": "Introduction to Computer Science",
   "department_id": "dept_cs",
   "semester": "Fall 2024",
-  "academic_year": "2024/2025",
+  "academic_year": 2024,
   "is_current": true
 }
 ```
@@ -661,7 +706,7 @@ Attach a course to the user profile.
 
 ### 🔹 Remove Course
 
-**DELETE** `/api/users/courses/:courseId`
+**DELETE** `/api/user/courses/:courseId`
 Remove a course from the profile.
 
 ---
@@ -670,7 +715,7 @@ Remove a course from the profile.
 
 ### 🔹 Search Users
 
-**GET** `/api/users/search`
+**GET** `/api/user/search`
 Search for users across name, program, or university.
 
 **Query Params:**
@@ -702,7 +747,7 @@ Search for users across name, program, or university.
 
 ### 🔹 Connection Recommendations
 
-**GET** `/api/users/recommendations`
+**GET** `/api/user/recommendations`
 Retrieve suggested users based on shared interests, mutual courses, and mutual connections.
 
 **Query Params:**
@@ -713,48 +758,116 @@ Retrieve suggested users based on shared interests, mutual courses, and mutual c
 
 ### 🔹 Get Public User Profile
 
-**GET** `/api/users/:userId`
+**GET** `/api/user/:userId`
 Retrieve a public profile of another user.
-**Authentication:** Not required.
+**Authentication:** Required.
 
 ---
 
 ## Testing Flow (Recommended)
 
-| Step | Action                        | Endpoint                          |
-| ---- | ----------------------------- | --------------------------------- |
-| 1    | Register / Login → Obtain JWT | `/api/auth/login`                 |
-| 2    | Fetch Profile                 | `GET /users/profile`              |
-| 3    | Update Profile                | `PUT /users/profile`              |
-| 4    | Add Interests                 | `POST /users/interests`           |
-| 5    | Add Courses                   | `POST /users/courses`             |
-| 6    | Search Users                  | `GET /users/search`               |
-| 7    | Send Connection Request       | `POST /users/connections/request` |
-| 8    | View Stats                    | `GET /users/stats`                |
+| Step | Action                        | Endpoint                             |
+| ---- | ----------------------------- | ------------------------------------ |
+| 1    | Register / Login → Obtain JWT | `/api/auth/login`                    |
+| 2    | Fetch Profile                 | `GET /api/user/profile`              |
+| 3    | Update Profile                | `PUT /api/user/profile`              |
+| 4    | Add Interests                 | `POST /api/user/interests`           |
+| 5    | Add Courses                   | `POST /api/user/courses`             |
+| 6    | Search Users                  | `GET /api/user/search`               |
+| 7    | Send Connection Request       | `POST /api/user/connections/request` |
+| 8    | View Stats                    | `GET /api/user/stats`                |
 
 ---
 
 ## 📘 Endpoint Summary
 
-| #   | Method | Endpoint                                        | Description                           |
-| --- | ------ | ----------------------------------------------- | ------------------------------------- |
-| 1   | GET    | `/api/users/profile`                            | Get user profile                      |
-| 2   | PUT    | `/api/users/profile`                            | Update profile                        |
-| 3   | DELETE | `/api/users/profile`                            | Soft delete profile (30-day recovery) |
-| 4   | GET    | `/api/users/stats`                              | Retrieve user statistics              |
-| 5   | GET    | `/api/users/connections`                        | Get all connections                   |
-| 6   | GET    | `/api/users/connections/:status`                | Get connections by status             |
-| 7   | POST   | `/api/users/connections/request`                | Send connection request               |
-| 8   | DELETE | `/api/users/connections/request/:connection_id` | Cancel connection request             |
-| 9   | POST   | `/api/users/connections/respond`                | Respond to connection request         |
-| 10  | POST   | `/api/users/interests`                          | Add interest                          |
-| 11  | PUT    | `/api/users/interests/:interest_id`             | Update interest                       |
-| 12  | DELETE | `/api/users/interests/:interestId`              | Remove interest                       |
-| 13  | POST   | `/api/users/courses`                            | Add course                            |
-| 14  | DELETE | `/api/users/courses/:courseId`                  | Remove course                         |
-| 15  | GET    | `/api/users/search`                             | Search for users                      |
-| 16  | GET    | `/api/users/recommendations`                    | Get recommendations                   |
-| 17  | GET    | `/api/users/:userId`                            | Get public user profile               |
+| #   | Method | Endpoint                                       | Description                           |
+| --- | ------ | ---------------------------------------------- | ------------------------------------- |
+| 1   | GET    | `/api/user/profile`                            | Get user profile                      |
+| 2   | PUT    | `/api/user/profile`                            | Update profile                        |
+| 3   | DELETE | `/api/user/profile`                            | Soft delete profile (30-day recovery) |
+| 4   | GET    | `/api/user/stats`                              | Retrieve user statistics              |
+| 5   | GET    | `/api/user/connections`                        | Get all connections                   |
+| 6   | GET    | `/api/user/connections/:status`                | Get connections by status             |
+| 7   | POST   | `/api/user/connections/request`                | Send connection request               |
+| 8   | DELETE | `/api/user/connections/request/:connection_id` | Cancel connection request             |
+| 9   | POST   | `/api/user/connections/respond`                | Respond to connection request         |
+| 10  | GET    | `/api/user/interests`                          | List interests                        |
+| 11  | POST   | `/api/user/interests`                          | Add interest                          |
+| 12  | PUT    | `/api/user/interests/:interest_id`             | Update interest                       |
+| 13  | DELETE | `/api/user/interests/:interestId`              | Remove interest                       |
+| 14  | GET    | `/api/user/courses`                            | List courses                          |
+| 15  | POST   | `/api/user/courses`                            | Add course                            |
+| 16  | DELETE | `/api/user/courses/:courseId`                  | Remove course                         |
+| 17  | GET    | `/api/user/search`                             | Search for users                      |
+| 18  | GET    | `/api/user/recommendations`                    | Get recommendations                   |
+| 19  | GET    | `/api/user/:userId`                            | Get public user profile               |
+
+---
+
+# Messaging and Device Notifications
+
+All routes below require `Authorization: Bearer <token>`.
+
+## Message history
+
+**GET** `/api/conversations/:conversationId/messages?limit=50&before=<ISO timestamp>`
+
+The caller must be a participant. Messages are returned oldest-to-newest within
+the page so they can be appended directly to a chat thread.
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "68d0...",
+      "senderId": {
+        "_id": "user_1",
+        "username": "John Doe",
+        "email": "john@example.edu"
+      },
+      "receiverId": {
+        "_id": "user_2",
+        "username": "Jane Doe",
+        "email": "jane@example.edu"
+      },
+      "content": "Hello",
+      "status": "sent",
+      "createdAt": "2026-09-21T18:00:00.000Z",
+      "updatedAt": "2026-09-21T18:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "hasMore": false,
+    "oldest": "2026-09-21T18:00:00.000Z"
+  }
+}
+```
+
+## Register a push token
+
+**POST** `/api/notifications/push-tokens`
+
+```json
+{
+  "token": "ExpoPushToken[...]",
+  "platform": "ios",
+  "device_id": "optional-stable-device-id"
+}
+```
+
+`platform` is one of `ios`, `android`, `web`, or `unknown`.
+
+## Unregister a push token
+
+**DELETE** `/api/notifications/push-tokens`
+
+```json
+{
+  "token": "ExpoPushToken[...]"
+}
+```
 
 ---
 
@@ -815,6 +928,7 @@ Content-Type: application/json
     "content": "Studying for finals! 📚",
     "media_url": "https://example.com/study.jpg",
     "media_type": "image",
+    "poll_id": null,
     "visibility": "connections",
     "expires_at": "2024-12-20T23:59:59Z",
     "created_at": "2024-01-18T14:30:00.000Z"
@@ -859,6 +973,7 @@ GET /api/social/posts/feed?limit=10&offset=0
       "content": "Studying for finals! 📚",
       "media_url": "https://example.com/study.jpg",
       "media_type": "image",
+      "poll_id": null,
       "visibility": "connections",
       "created_at": "2024-01-18T14:30:00.000Z",
       "expires_at": "2024-12-20T23:59:59Z",
@@ -1197,7 +1312,7 @@ All endpoints use appropriate HTTP status codes:
 ---
 
 ```markdown
-# `GET /api/universities/domains`
+# `GET /api/university/domains`
 
 ## 📘 Overview
 
@@ -1210,7 +1325,7 @@ Used primarily for populating dropdowns or university selection menus during sig
 
 | Method  | Endpoint                    | Description                                       |
 | ------- | --------------------------- | ------------------------------------------------- |
-| **GET** | `/api/universities/domains` | Fetch university domain information and metadata. |
+| **GET** | `/api/university/domains` | Fetch university domain information and metadata. |
 ```
 
 ---
@@ -1236,7 +1351,7 @@ Content-Type: application/json
 
 ```
 
-GET /api/universities/domains?search=tech
+GET /api/university/domains?search=tech
 
 ```
 

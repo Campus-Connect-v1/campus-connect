@@ -304,6 +304,12 @@ export const addComment = async (req, res) => {
     };
 
     const comment = await addCommentModel(commentData);
+    const [[commenter]] = await db.execute(
+      `SELECT first_name, last_name, profile_picture_url
+       FROM users
+       WHERE user_id = ?`,
+      [userId]
+    );
 
     const commentAuthor = await postAuthorToNotify(post_id, userId);
     if (commentAuthor) {
@@ -325,6 +331,12 @@ export const addComment = async (req, res) => {
         content: comment.content,
         parent_comment_id: comment.parent_comment_id,
         created_at: comment.created_at,
+        author: {
+          user_id: userId,
+          first_name: commenter?.first_name ?? "",
+          last_name: commenter?.last_name ?? null,
+          profile_picture_url: commenter?.profile_picture_url ?? null,
+        },
       },
     });
   } catch (error) {
