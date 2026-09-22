@@ -281,17 +281,21 @@ export default function ConnectScreen() {
         <View style={{ flex: 1 }}>
           <CampusMap
             pins={pins}
+            people={people}
             selectedId={pin?.id}
             focusId={pin?.id}
             onSelect={setPin}
+            onSelectPerson={(person) => router.push(`/person/${person.user_id}`)}
             hue={HUE}
           />
 
           <MapSearch
             universityId={universityId}
             pins={pins}
+            people={people}
             top={insets.top + spacing.xs}
             onSelect={setPin}
+            onSelectPerson={(person) => router.push(`/person/${person.user_id}`)}
           />
 
           <PressableScale

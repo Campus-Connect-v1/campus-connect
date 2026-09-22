@@ -3,13 +3,26 @@ import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 
-import { FormDateTime, FormField } from "@/src/components/forms/FormControls";
+import { FormChoice, FormDateTime, FormField } from "@/src/components/forms/FormControls";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
-import { Button, EmptyState, InlineNotice, Text } from "@/src/components/ui";
+import { Button, EmptyState, InlineNotice, PressableScale, Text } from "@/src/components/ui";
+import {
+  PROFILE_INTERESTS,
+  STUDY_YEARS,
+  type ProfileInterestOption,
+  type StudyYear,
+} from "@/src/features/profile/setup";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSession } from "@/src/services/SessionContext";
-import { fetchProfile, updateProfile, type ApiProfile } from "@/src/services/userServices";
-import { spacing } from "@/src/styles/theme";
+import {
+  addInterest,
+  fetchProfile,
+  removeInterest,
+  updateProfile,
+  type ApiProfile,
+} from "@/src/services/userServices";
+import { culture, radius, spacing } from "@/src/styles/theme";
+import { useTheme } from "@/src/styles/useTheme";
 
 /**
  * Mirrors the server's Joi rules so a bad value is caught next to its field
@@ -32,6 +45,7 @@ type Errors = Partial<Record<string, string>>;
 
 export default function EditProfileScreen() {
   const { refresh } = useSession();
+  const { colors } = useTheme();
 
   /**
    * Re-read the private profile when this screen opens. It now returns every
@@ -47,6 +61,8 @@ export default function EditProfileScreen() {
   const [headline, setHeadline] = useState("");
   const [bio, setBio] = useState("");
   const [program, setProgram] = useState("");
+  const [year, setYear] = useState<StudyYear | "">("");
+  const [selectedInterests, setSelectedInterests] = useState<Set<string>>(new Set());
   const [gradYear, setGradYear] = useState("");
   const [birthday, setBirthday] = useState<Date | null>(null);
   const [phone, setPhone] = useState("");
@@ -67,6 +83,18 @@ export default function EditProfileScreen() {
     setHeadline(row.profile_headline ?? "");
     setBio(row.bio ?? "");
     setProgram(row.program ?? "");
+    setYear(row.year_of_study ?? "");
+    const canonicalNames = new Map(
+      PROFILE_INTERESTS.map((interest) => [interest.name.toLowerCase(), interest.name])
+    );
+    setSelectedInterests(
+      new Set(
+        (row.interests ?? []).map(
+          (interest) =>
+            canonicalNames.get(interest.interest_name.toLowerCase()) ?? interest.interest_name
+        )
+      )
+    );
     setGradYear(row.graduation_year ? String(row.graduation_year) : "");
     setBirthday(row.date_of_birth ? new Date(row.date_of_birth) : null);
     setPhone(row.phone_number ?? "");
@@ -75,6 +103,23 @@ export default function EditProfileScreen() {
   }, [record.data]);
 
   const today = useMemo(() => new Date(), []);
+  const interestOptions = useMemo(() => {
+    const known = new Set(PROFILE_INTERESTS.map((interest) => interest.name.toLowerCase()));
+    const custom = (record.data?.interests ?? [])
+      .filter((interest) => !known.has(interest.interest_name.toLowerCase()))
+      .map((interest) => ({ name: interest.interest_name, type: interest.interest_type }));
+    return [...PROFILE_INTERESTS, ...custom] as ProfileInterestOption[];
+  }, [record.data?.interests]);
+
+  const toggleInterest = (name: string) => {
+    Haptics.selectionAsync();
+    setSelectedInterests((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else if (next.size < 6) next.add(name);
+      return next;
+    });
+  };
 
   if (record.loading) {
     return (
@@ -155,17 +200,52 @@ export default function EditProfileScreen() {
     put("website_url", website);
     if (gradYear.trim()) patch.graduation_year = Number(gradYear);
     if (birthday) patch.date_of_birth = birthday.toISOString().slice(0, 10);
+    if (year) patch.year_of_study = year;
 
     const result = await updateProfile(patch as Partial<ApiProfile>);
-    setSaving(false);
 
     if (!result.success) {
+      setSaving(false);
       setFormError(result.error);
+      return;
+    }
+
+    const existing = record.data?.interests ?? [];
+    const selectedKeys = new Set(
+      Array.from(selectedInterests, (interest) => interest.toLowerCase())
+    );
+    const existingKeys = new Set(
+      existing.map((interest) => interest.interest_name.toLowerCase())
+    );
+    const interestResults = await Promise.all([
+      ...existing
+        .filter((interest) => !selectedKeys.has(interest.interest_name.toLowerCase()))
+        .map((interest) => removeInterest(interest.interest_id)),
+      ...Array.from(selectedInterests)
+        .filter((name) => !existingKeys.has(name.toLowerCase()))
+        .map((name) => {
+          const option = interestOptions.find(
+            (interest) => interest.name.toLowerCase() === name.toLowerCase()
+          );
+          return addInterest({
+            interest_name: name,
+            interest_type: option?.type ?? "hobby",
+            skill_level: "beginner",
+          });
+        }),
+    ]);
+    const interestFailure = interestResults.find((interestResult) => !interestResult.success);
+
+    if (interestFailure && !interestFailure.success) {
+      setSaving(false);
+      setFormError(`Your main details were saved, but interests could not be fully updated. ${interestFailure.error}`);
+      await Promise.all([record.reload(), refresh()]);
       return;
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await refresh();
+    setSaving(false);
     router.back();
   };
 
@@ -234,6 +314,57 @@ export default function EditProfileScreen() {
             autoCorrect={false}
           />
 
+          <FormChoice
+            label="Year of study"
+            value={year}
+            options={STUDY_YEARS}
+            onChange={setYear}
+          />
+
+          <View style={{ gap: spacing.sm }}>
+            <View style={{ gap: spacing["2xs"] }}>
+              <Text variant="micro" color="textMuted">
+                INTERESTS
+              </Text>
+              <Text variant="caption" color="textSecondary">
+                Choose up to six. These shape who and what Campus Connect recommends.
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+              {interestOptions.map((interest) => {
+                const selected = selectedInterests.has(interest.name);
+                const disabled = !selected && selectedInterests.size >= 6;
+                return (
+                  <PressableScale
+                    key={interest.name}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selected, disabled }}
+                    disabled={disabled}
+                    onPress={() => toggleInterest(interest.name)}
+                    style={{
+                      minHeight: 44,
+                      justifyContent: "center",
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radius.full,
+                      borderWidth: 1,
+                      borderColor: selected ? culture.violet : colors.border,
+                      backgroundColor: selected ? culture.violet : colors.surface,
+                      opacity: disabled ? 0.45 : 1,
+                    }}
+                  >
+                    <Text
+                      variant="label"
+                      style={selected ? { color: culture.warmWhite } : undefined}
+                    >
+                      {selected ? "✓ " : ""}
+                      {interest.name}
+                    </Text>
+                  </PressableScale>
+                );
+              })}
+            </View>
+          </View>
+
           <FormField
             label="Graduation year"
             placeholder={String(GRAD_MAX)}
@@ -293,8 +424,7 @@ export default function EditProfileScreen() {
           <Button label="Save changes" loading={saving} onPress={save} />
 
           <Text variant="caption" color="textMuted">
-            Interests and courses are synced with your profile and will be editable from their own
-            sections.
+            Your courses stay synced with your campus records.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

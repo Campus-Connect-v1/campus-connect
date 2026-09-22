@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
@@ -133,6 +133,13 @@ export default function StoryViewerScreen() {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const started = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      setPaused(false);
+      return () => setPaused(true);
+    }, [])
+  );
 
   useEffect(() => {
     if (started.current || stories.length === 0) return;
@@ -292,15 +299,30 @@ export default function StoryViewerScreen() {
         />
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          <Avatar uri={group.author.profile_picture_url ?? undefined} size={34} />
-          <View style={{ flex: 1 }}>
-            <Text variant="label" onMedia>
-              {isOwn ? "Your story" : authorName}
-            </Text>
-            <Text variant="caption" onMedia style={{ opacity: 0.8 }}>
-              {current ? timeAgo(current.created_at) : ""}
-            </Text>
-          </View>
+          <PressableScale
+            accessibilityRole="link"
+            accessibilityLabel={isOwn ? "Open your profile" : `Open ${authorName}'s profile`}
+            onPress={() => {
+              router.push(isOwn ? "/(tabs)/profile" : `/person/${group.author.user_id}`);
+            }}
+            style={{
+              flex: 1,
+              minHeight: 44,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm,
+            }}
+          >
+            <Avatar uri={group.author.profile_picture_url ?? undefined} size={34} />
+            <View style={{ flex: 1 }}>
+              <Text variant="label" onMedia>
+                {isOwn ? "Your story" : authorName}
+              </Text>
+              <Text variant="caption" onMedia style={{ opacity: 0.8 }}>
+                {current ? timeAgo(current.created_at) : ""}
+              </Text>
+            </View>
+          </PressableScale>
 
           {isOwn && current ? (
             <PressableScale

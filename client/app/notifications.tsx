@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import { useCallback, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import { FlatList, RefreshControl, View } from "react-native";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
@@ -21,7 +21,12 @@ import {
   fetchNotifications,
   type ApiNotification,
 } from "@/src/services/notificationServices";
-import { respondToConnection } from "@/src/services/userServices";
+import {
+  fetchConnections,
+  respondToConnection,
+  type ConnectionStatus,
+} from "@/src/services/userServices";
+import type { Result } from "@/src/services/api";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -77,6 +82,37 @@ function destinationFor(notification: ApiNotification) {
 type ResponseState =
   | { status: "idle" | "accepting" | "declining" | "accepted" | "declined" }
   | { status: "error"; message: string };
+
+interface NotificationFeed {
+  notifications: ApiNotification[];
+  connectionStatuses: Record<string, ConnectionStatus>;
+}
+
+/**
+ * A notification is historical, while its connection is live state. Loading
+ * both prevents an old request notification from growing Accept/Decline
+ * buttons again after a refresh or after the app is reopened.
+ */
+async function fetchNotificationFeed(): Promise<Result<NotificationFeed>> {
+  const notificationResult = await fetchNotifications(30, 0);
+  if (!notificationResult.success) return notificationResult;
+
+  const connectionResult = await fetchConnections();
+  const connectionStatuses: Record<string, ConnectionStatus> = {};
+
+  if (connectionResult.success) {
+    Object.values(connectionResult.data)
+      .flat()
+      .forEach((connection) => {
+        connectionStatuses[connection.connection_id] = connection.status;
+      });
+  }
+
+  return {
+    success: true,
+    data: { notifications: notificationResult.data, connectionStatuses },
+  };
+}
 
 function Row({
   notification,
@@ -255,11 +291,24 @@ export default function NotificationsScreen() {
   const [responses, setResponses] = useState<Record<string, ResponseState>>({});
 
   const feed = useAsync(
-    useCallback(() => fetchNotifications(30, 0), []),
+    useCallback(() => fetchNotificationFeed(), []),
     []
   );
+  const refreshFeed = useRef(feed.refresh);
+  const hasFocused = useRef(false);
+  refreshFeed.current = feed.refresh;
 
-  const notifications = (feed.data ?? []).map((n) =>
+  // Stack screens remain mounted while a profile is open. Re-read connection
+  // state when the user comes back so a request accepted on that profile does
+  // not keep stale action buttons here.
+  useFocusEffect(
+    useCallback(() => {
+      if (hasFocused.current) void refreshFeed.current();
+      else hasFocused.current = true;
+    }, [])
+  );
+
+  const notifications = (feed.data?.notifications ?? []).map((n) =>
     readIds.has(n.notification_id) ? { ...n, is_read: true } : n
   );
   const unread = notifications.filter((n) => !n.is_read).length;
@@ -359,14 +408,28 @@ export default function NotificationsScreen() {
             />
           )
         }
-        renderItem={({ item }) => (
-          <Row
-            notification={item}
-            response={responses[item.notification_id] ?? { status: "idle" }}
-            onPress={() => open(item)}
-            onRespond={(action) => respond(item, action)}
-          />
-        )}
+        renderItem={({ item }) => {
+          const persistedStatus = item.resource_id
+            ? feed.data?.connectionStatuses[item.resource_id]
+            : undefined;
+          const persistedResponse: ResponseState =
+            persistedStatus === "accepted" || persistedStatus === "declined"
+              ? { status: persistedStatus }
+              : { status: "idle" };
+          const response =
+            persistedStatus === "accepted" || persistedStatus === "declined"
+              ? persistedResponse
+              : (responses[item.notification_id] ?? persistedResponse);
+
+          return (
+            <Row
+              notification={item}
+              response={response}
+              onPress={() => open(item)}
+              onRespond={(action) => respond(item, action)}
+            />
+          );
+        }}
       />
     </SettingsShell>
   );

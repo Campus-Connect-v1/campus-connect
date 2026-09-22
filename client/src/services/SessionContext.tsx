@@ -13,8 +13,10 @@ import { fetchUniversityById, type UniversityOption } from "./universityServices
 import { fetchProfile, fetchStats, type ApiProfile, type ApiStats } from "./userServices";
 import {
   clearSession,
+  getSetupCompleted,
   getUser,
   restoreSession,
+  saveSetupCompleted,
   setOnSessionExpired,
   type SessionUser,
 } from "./session";
@@ -37,7 +39,12 @@ interface SessionValue {
   booting: boolean;
   loadingProfile: boolean;
   profileError: string | null;
-  refresh: () => Promise<void>;
+  /** True after an incomplete user chooses "Skip for now" in this session. */
+  setupDismissed: boolean;
+  setupCompleted: boolean;
+  dismissSetup: () => void;
+  completeSetup: () => Promise<void>;
+  refresh: () => Promise<{ profile: ApiProfile | null; setupCompleted: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -60,13 +67,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [booting, setBooting] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [setupDismissed, setSetupDismissed] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState(false);
 
   const load = useCallback(async () => {
     if (!getUser()) {
       setProfile(null);
       setStats(null);
       setUniversity(null);
-      return;
+      return null;
     }
     setLoadingProfile(true);
     setProfileError(null);
@@ -86,19 +95,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (statsResult.success) setStats(statsResult.data);
 
     setLoadingProfile(false);
+    return profileResult.success ? profileResult.data : null;
   }, []);
 
   const refresh = useCallback(async () => {
-    setUser(getUser());
-    await load();
+    const currentUser = getUser();
+    setUser(currentUser);
+    const [nextProfile, completed] = await Promise.all([
+      load(),
+      getSetupCompleted(currentUser?.id),
+    ]);
+    setSetupCompleted(completed);
+    return { profile: nextProfile, setupCompleted: completed };
   }, [load]);
 
   useEffect(() => {
     (async () => {
       await restoreSession();
-      setUser(getUser());
-      setBooting(false);
+      const currentUser = getUser();
+      setUser(currentUser);
+      setSetupCompleted(await getSetupCompleted(currentUser?.id));
       await load();
+      setBooting(false);
     })();
   }, [load]);
 
@@ -108,6 +126,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setProfile(null);
     setStats(null);
     setUniversity(null);
+    setSetupDismissed(false);
+    setSetupCompleted(false);
     router.replace("/auth");
   }, []);
 
@@ -119,9 +139,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setStats(null);
       setUniversity(null);
+      setSetupDismissed(false);
+      setSetupCompleted(false);
       router.replace("/auth");
     });
     return () => setOnSessionExpired(null);
+  }, []);
+
+  const completeSetup = useCallback(async () => {
+    await saveSetupCompleted(getUser()?.id);
+    setSetupCompleted(true);
+    setSetupDismissed(true);
   }, []);
 
   const value = useMemo(
@@ -133,10 +161,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       booting,
       loadingProfile,
       profileError,
+      setupDismissed,
+      setupCompleted,
+      dismissSetup: () => setSetupDismissed(true),
+      completeSetup,
       refresh,
       signOut,
     }),
-    [user, profile, stats, university, booting, loadingProfile, profileError, refresh, signOut]
+    [
+      user,
+      profile,
+      stats,
+      university,
+      booting,
+      loadingProfile,
+      profileError,
+      setupDismissed,
+      setupCompleted,
+      completeSetup,
+      refresh,
+      signOut,
+    ]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
