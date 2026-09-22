@@ -78,7 +78,30 @@ const decodeFeedCursor = (cursor) => {
   }
 };
 
-export const getFeedPostsModel = async (userId, limit = 20, offset = 0, cursor = null) => {
+/**
+ * How the feed decides what is eligible.
+ *
+ * "following" — posts from people you follow, plus your connections and your
+ * own. This is the timeline proper.
+ *
+ * "discovery" — every public post from your university. Used when you follow
+ * too few people for a graph query to fill a screen, because an empty feed is
+ * the worst possible first impression and a new account has no graph yet.
+ *
+ * Before this, the clause was simply `OR p.visibility = 'public'` with no
+ * graph term at all: every public post by every account in the database was in
+ * everyone's feed. That is a firehose, and it works only while the database is
+ * small enough that the firehose and a timeline look the same.
+ */
+export const FEED_MODES = { FOLLOWING: "following", DISCOVERY: "discovery" };
+
+export const getFeedPostsModel = async (
+  userId,
+  limit = 20,
+  offset = 0,
+  cursor = null,
+  mode = FEED_MODES.FOLLOWING
+) => {
   const safeLimit = Number.isInteger(parseInt(limit)) ? parseInt(limit) : 20;
   const safeOffset = Number.isInteger(parseInt(offset)) ? parseInt(offset) : 0;
   const after = decodeFeedCursor(cursor);
@@ -120,7 +143,23 @@ export const getFeedPostsModel = async (userId, limit = 20, offset = 0, cursor =
         AND (p.expires_at IS NULL OR p.expires_at > NOW())
         AND (
           p.user_id = ?
-          OR p.visibility = 'public'
+          OR (
+            -- Public posts are visible to anyone; the graph decides whether
+            -- they are RELEVANT. Two different questions that were previously
+            -- answered by the same clause.
+            p.visibility = 'public'
+            AND (
+              ${mode === FEED_MODES.DISCOVERY
+                  // Campus-wide, not world-wide. A student with no graph yet
+                  // should meet their own university, not every account on the
+                  // platform -- that is a firehose wearing a different hat.
+                  ? "u.university_id = (SELECT university_id FROM users WHERE user_id = ?)"
+                  : `EXISTS (
+                SELECT 1 FROM follows f
+                WHERE f.follower_id = ? AND f.following_id = p.user_id
+              )`}
+            )
+          )
           OR (
             p.visibility = 'connections'
             AND EXISTS (
@@ -170,7 +209,12 @@ export const getFeedPostsModel = async (userId, limit = 20, offset = 0, cursor =
 
     // Five binds, all the same viewer: preference score, own posts, both sides
     // of the connections test, and the hidden-posts filter.
-    const viewerBinds = [userId, userId, userId, userId, userId];
+    // Bind order tracks the clause above: preference score, own posts, the
+    // follows test (absent in discovery, where the branch is a literal), both
+    // sides of the connections test, then the hidden-posts filter.
+    // Both modes take six binds; only the third differs in meaning -- the
+    // viewer's university in discovery, the viewer's follow edge otherwise.
+    const viewerBinds = [userId, userId, userId, userId, userId, userId];
     const cursorBinds = after
       ? [after.s, after.s, after.t, after.s, after.t, after.i]
       : [];

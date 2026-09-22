@@ -13,6 +13,7 @@ import {
   deleteCommentModel,
   getPostCountsModel,
   encodeFeedCursor,
+  FEED_MODES,
   likeCommentModel,
   unlikeCommentModel,
   getCommentLikeStateModel,
@@ -26,6 +27,7 @@ import { notify, notifyMany } from "../models/notification.model.js";
 import { getConnectionUserIds } from "../models/user.model.js";
 import { db } from "../config/db.js";
 import { emitToPostExcept } from "../realtime.js";
+import { getFollowingCountModel } from "../models/follow.model.js";
 
 /**
  * The socket that issued this request, if any.
@@ -150,7 +152,34 @@ export const getFeedPosts = async (req, res) => {
     // single request ask for the whole table.
     const pageSize = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
 
-    const posts = await getFeedPostsModel(userId, pageSize, parseInt(offset), cursor);
+    /**
+     * Which timeline to serve.
+     *
+     * An account that follows almost nobody would get an empty or near-empty
+     * page from a graph query, which is the worst possible first impression
+     * and exactly the moment someone decides whether the app is worth keeping.
+     * Below the threshold we fall back to campus-wide discovery so there is
+     * always something to read, and the suggestions rail has a chance to turn
+     * a reader into a follower.
+     *
+     * The client can force either mode; ?mode=discovery is how an explore
+     * surface asks for the campus rather than the graph.
+     */
+    const MIN_FOLLOWS_FOR_GRAPH_FEED = 3;
+    const requested = String(req.query.mode || "").toLowerCase();
+
+    let mode;
+    if (requested === FEED_MODES.DISCOVERY || requested === FEED_MODES.FOLLOWING) {
+      mode = requested;
+    } else {
+      const followingCount = await getFollowingCountModel(userId);
+      mode =
+        followingCount >= MIN_FOLLOWS_FOR_GRAPH_FEED
+          ? FEED_MODES.FOLLOWING
+          : FEED_MODES.DISCOVERY;
+    }
+
+    const posts = await getFeedPostsModel(userId, pageSize, parseInt(offset), cursor, mode);
 
     // A short page means the end of the feed; sending no cursor is how the
     // client knows to stop asking rather than looping on an empty response.
@@ -160,6 +189,9 @@ export const getFeedPosts = async (req, res) => {
     res.status(200).json({
       message: "Feed posts retrieved successfully",
       count: posts.length,
+      // Surfaced so the client can label the feed honestly -- "From your
+      // campus" reads very differently from "From people you follow".
+      mode,
       next_cursor: nextCursor,
       has_more: Boolean(nextCursor),
       posts: posts.map((post) => ({
