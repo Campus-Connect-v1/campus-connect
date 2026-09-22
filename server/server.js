@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
+import helmet from "helmet";
 import morgan from "morgan";
 import http from "http";
 import path from "node:path";
@@ -10,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { swaggerDocs } from "./utils/swagger.js";
 import { COLORS } from "./helper/logger.js";
 import { corsOptions } from "./config/cors.js";
+import { requestContext, errorLogger } from "./middleware/observability.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
@@ -53,9 +55,28 @@ console.log(COLORS[process.env.SUCCESS], "NODE_ENV:", process.env.NODE_ENV);
 // rate limiting is effectively disabled. 1 = trust exactly one hop.
 app.set("trust proxy", 1);
 
-app.use(express.urlencoded({ extended: true }));
+// Security headers. The API serves JSON to a native client and an /admin page,
+// never third-party frames, so the defaults are right except CSP: helmet's
+// default policy blocks the Swagger UI and the admin bundle, both of which are
+// served from here.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// Every request gets an id, echoed back as X-Request-Id, so a client error
+// report can be tied to a server log line.
+app.use(requestContext);
+
+// Bodies are JSON metadata only -- media goes straight to Cloudinary using a
+// signature this server issues, so nothing large is ever posted here. Without
+// a limit, express-json defaults to 100kb for JSON but urlencoded is
+// unbounded, which is a free memory-pressure lever for anyone who finds it.
+app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: "64kb" }));
 
 // ============= MORGAN ======================
 if (process.env.NODE_ENV === "development") {
@@ -141,13 +162,11 @@ app.use((req, res, next) => {
 });
 
 // =========================Error handling middleware
-app.use((error, req, res, next) => {
-  console.error(COLORS[process.env.ERROR], "Unhandled error:", error);
-  res.status(500).json({
-    message: "Internal server error",
-    error: process.env.NODE_ENV === "development" ? error.message : undefined,
-  });
-});
+// Replaces a handler that logged the raw error and returned a bare 500. This
+// one emits one structured JSON line carrying the request id, route and user,
+// returns that id to the caller so a bug report is traceable, and gives body
+// parser failures their proper 413/400 instead of a generic 500.
+app.use(errorLogger);
 
 app.get("/", (req, res) => res.send("Campus Connect API running..."));
 
