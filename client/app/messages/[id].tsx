@@ -6,7 +6,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { EmptyState, Icon, InlineNotice, PressableScale, Text } from "@/src/components/ui";
-import { getSocket, sendMessage, type SocketMessage } from "@/src/services/socket";
+import { fetchConversationMessages } from "@/src/services/conversationServices";
+import { useSession } from "@/src/services/SessionContext";
+import { getSocket, markMessageRead, sendMessage, type SocketMessage } from "@/src/services/socket";
 import { culture, inputTextStyle, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -60,7 +62,8 @@ function Bubble({ message }: { message: ChatMessage }) {
 export default function ChatScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { participantId, name } = useLocalSearchParams<{
+  const { user } = useSession();
+  const { id, participantId, name } = useLocalSearchParams<{
     id: string;
     participantId: string;
     name?: string;
@@ -71,6 +74,8 @@ export default function ChatScreen() {
   const [draft, setDraft] = useState("");
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const append = useCallback((incoming: SocketMessage, mine: boolean) => {
     setMessages((current) => {
@@ -88,6 +93,57 @@ export default function ChatScreen() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    const loadHistory = async () => {
+      if (!id) {
+        setHistoryError("This conversation is missing its ID.");
+        setHistoryLoading(false);
+        return;
+      }
+
+      setHistoryLoading(true);
+      setHistoryError(null);
+      const result = await fetchConversationMessages(id, 100);
+      if (!active) return;
+
+      if (!result.success) {
+        setHistoryError(result.error);
+        setHistoryLoading(false);
+        return;
+      }
+
+      const history = result.data.messages.map((message) => ({
+        id: message._id,
+        content: message.content,
+        mine: message.senderId._id === user?.id,
+        at: message.createdAt,
+      }));
+
+      // A live message can arrive while history is loading. Merge by id rather
+      // than replacing state so neither source can erase the other.
+      setMessages((current) => {
+        const merged = new Map([...history, ...current].map((message) => [message.id, message]));
+        return [...merged.values()].sort(
+          (left, right) => new Date(left.at).getTime() - new Date(right.at).getTime()
+        );
+      });
+
+      result.data.messages.forEach((message) => {
+        if (message.receiverId._id === user?.id && message.status !== "read") {
+          markMessageRead(message._id);
+        }
+      });
+      setHistoryLoading(false);
+    };
+
+    loadHistory();
+    return () => {
+      active = false;
+    };
+  }, [id, user?.id]);
+
+  useEffect(() => {
     const socket = getSocket();
     if (!socket) {
       setError("You are signed out. Sign in again to send messages.");
@@ -102,6 +158,7 @@ export default function ChatScreen() {
     const onReceive = (incoming: SocketMessage) => {
       if (incoming.senderId?._id !== participantId) return;
       append(incoming, false);
+      markMessageRead(incoming._id);
     };
     const onSent = (incoming: SocketMessage) => append(incoming, true);
     const onError = (message: string) => setError(message);
@@ -149,9 +206,6 @@ export default function ChatScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={insets.top + 56}
       >
-        {/* The API has no endpoint that returns message history, so this
-            thread starts empty and fills as messages arrive. See
-            BACKEND-REQUEST-message-history.md. */}
         <FlatList
           ref={listRef}
           data={messages}
@@ -166,10 +220,16 @@ export default function ChatScreen() {
             justifyContent: "flex-end",
           }}
           ListEmptyComponent={
-            <EmptyState
-              title={`Say hello to ${name || "them"}`}
-              body="Earlier messages are not loaded yet, so this thread starts here."
-            />
+            historyLoading ? (
+              <EmptyState.Loading />
+            ) : historyError ? (
+              <EmptyState tone="error" title="Could not load messages" body={historyError} />
+            ) : (
+              <EmptyState
+                title={`Say hello to ${name || "them"}`}
+                body="There are no messages in this conversation yet."
+              />
+            )
           }
           renderItem={({ item }) => <Bubble message={item} />}
         />

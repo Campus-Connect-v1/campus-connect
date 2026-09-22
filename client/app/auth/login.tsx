@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
@@ -16,6 +16,7 @@ import { useTheme } from "@/src/styles/useTheme";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { email: verifiedEmail } = useLocalSearchParams<{ email?: string }>();
   const { colors } = useTheme();
   const { refresh } = useSession();
   const [submitting, setSubmitting] = useState(false);
@@ -27,7 +28,7 @@ export default function LoginScreen() {
     formState: { errors },
   } = useForm<LoginSchema>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: verifiedEmail ?? "", password: "" },
   });
 
   const onSubmit = async (data: LoginSchema) => {

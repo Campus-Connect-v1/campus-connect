@@ -6,6 +6,12 @@ export interface UniversityOption {
   university_id: string; // matches the server's /^uni_\d+$/
   logo_url: string | null;
   location: string;
+  colors: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    text: string;
+  };
 }
 
 /**

@@ -35,9 +35,11 @@ function handleFrom(email: string | null | undefined, id: string) {
   return local && local.length > 1 ? local.toLowerCase() : id.slice(0, 8);
 }
 
-function yearLabel(year: number | null | undefined) {
+function yearLabel(year: ApiProfile["year_of_study"]) {
   if (!year) return null;
-  return `Level ${year * 100}`;
+  if (year === "graduate") return "Graduate";
+  if (year === "5+") return "Level 500+";
+  return `Level ${Number(year) * 100}`;
 }
 
 /** The signed-in user's own record (GET /user/profile). */
@@ -52,20 +54,13 @@ export function adaptProfile(profile: ApiProfile): DisplayProfile {
     programme: profile.program,
     year: yearLabel(profile.year_of_study),
     university: null, // /user/profile returns university_id only, never its name.
-    // `interests` is a JSON column; the server parses it but the rows in it may
-    // be objects or bare strings depending on how they were written.
-    interests: (profile.interests ?? [])
-      .map((item) => (typeof item === "string" ? item : ((item as { name?: string })?.name ?? "")))
-      .filter(Boolean),
+    interests: (profile.interests ?? []).map((item) => item.interest_name).filter(Boolean),
     age: ageFrom(profile.date_of_birth),
   };
 }
 
 /** Somebody else's record (GET /user/:userId), which joins the university. */
 export function adaptPublicUser(user: ApiPublicUser): DisplayProfile {
-  const raw = user.interests as unknown;
-  const parsed = typeof raw === "string" ? safeParse(raw) : Array.isArray(raw) ? raw : [];
-
   return {
     id: user.user_id,
     name: [user.first_name, user.last_name].filter(Boolean).join(" ").trim(),
@@ -76,19 +71,7 @@ export function adaptPublicUser(user: ApiPublicUser): DisplayProfile {
     programme: user.program,
     year: yearLabel(user.year_of_study),
     university: user.university_name,
-    interests: parsed
-      .map((item) => (typeof item === "string" ? item : ((item as { name?: string })?.name ?? "")))
-      .filter(Boolean),
+    interests: (user.interests ?? []).map((item) => item.interest_name).filter(Boolean),
     age: ageFrom(user.date_of_birth),
   };
-}
-
-// The public endpoint returns `interests` straight from the column, unparsed.
-function safeParse(value: string): unknown[] {
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }

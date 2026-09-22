@@ -8,7 +8,7 @@ import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { Button, EmptyState, InlineNotice, Text } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSession } from "@/src/services/SessionContext";
-import { fetchUserById, updateProfile, type ApiProfile } from "@/src/services/userServices";
+import { fetchProfile, updateProfile, type ApiProfile } from "@/src/services/userServices";
 import { spacing } from "@/src/styles/theme";
 
 /**
@@ -31,26 +31,15 @@ function isUrl(value: string) {
 type Errors = Partial<Record<string, string>>;
 
 export default function EditProfileScreen() {
-  const { profile, user, refresh } = useSession();
+  const { refresh } = useSession();
 
   /**
-   * Seeded from GET /user/:userId, not from the session profile.
-   *
-   * GET /user/profile does NOT return profile_headline, linkedin_url or
-   * website_url, even though PUT accepts all three — so seeding from it would
-   * show those fields blank on every visit and look like the save failed.
-   * The public endpoint returns the whole row and does not filter for self.
+   * Re-read the private profile when this screen opens. It now returns every
+   * editable field, so the editor no longer depends on the public-user route.
    */
-  const ownId = profile?.id ?? user?.id;
   const record = useAsync(
-    useCallback(
-      () =>
-        ownId
-          ? fetchUserById(ownId)
-          : Promise.resolve({ success: false as const, error: "Not signed in" }),
-      [ownId]
-    ),
-    [ownId]
+    useCallback(() => fetchProfile(), []),
+    []
   );
 
   const [firstName, setFirstName] = useState("");
@@ -304,8 +293,8 @@ export default function EditProfileScreen() {
           <Button label="Save changes" loading={saving} onPress={save} />
 
           <Text variant="caption" color="textMuted">
-            Your year of study, interests and courses are not editable yet. They need server changes
-            first.
+            Interests and courses are synced with your profile and will be editable from their own
+            sections.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

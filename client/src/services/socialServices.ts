@@ -3,18 +3,14 @@ import { api, request } from "./api";
 /** Exactly the shape GET /social/posts/feed returns. */
 export interface ApiPost {
   post_id: string;
-  content: string;
+  content: string | null;
   media_url: string | null;
   media_type: string | null;
-  /**
-   * Set only when media_type is "poll".
-   *
-   * OPTIONAL because the feed does not return it yet — see
-   * BACKEND-REQUEST-poll-id-in-feed.md at the repo root. Until that ships a
-   * poll post arrives as ordinary text and the poll card does not render.
-   */
-  poll_id?: string | null;
+  /** Non-null only when media_type is "poll". */
+  poll_id: string | null;
+  visibility: "public" | "connections" | "private";
   created_at: string;
+  expires_at: string | null;
   author: {
     user_id: string;
     first_name: string;
@@ -25,6 +21,14 @@ export interface ApiPost {
   stats: { like_count: number; comment_count: number };
   user_actions: { has_liked: boolean };
 }
+
+type ApiCreatedPost = Pick<
+  ApiPost,
+  "post_id" | "content" | "media_url" | "media_type" | "poll_id" | "created_at"
+> & {
+  visibility: string;
+  expires_at: string | null;
+};
 
 export async function fetchFeed(limit = 20, offset = 0) {
   const result = await request<{ count: number; posts?: ApiPost[] }>(() =>
@@ -55,7 +59,7 @@ export function unlikePost(postId: string) {
 }
 
 export function createPost(content: string, mediaUrl?: string) {
-  return request<{ post: ApiPost }>(() =>
+  return request<{ post: ApiCreatedPost }>(() =>
     api.post("/social/posts", {
       content,
       media_url: mediaUrl,

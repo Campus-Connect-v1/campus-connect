@@ -25,6 +25,13 @@ export default function ResetPasswordScreen() {
   const submit = async () => {
     if (!token.trim()) return setError("Paste the code from your email.");
     if (password.length < 8) return setError("Use at least 8 characters.");
+    if (password.length > 128) return setError("Use no more than 128 characters.");
+    if (!/[a-z]/.test(password)) return setError("Include a lowercase letter.");
+    if (!/[A-Z]/.test(password)) return setError("Include an uppercase letter.");
+    if (!/\d/.test(password)) return setError("Include a number.");
+    if (!/[@$!%*?&]/.test(password)) {
+      return setError("Include a special character: @ $ ! % * ? or &.");
+    }
     if (password !== confirm) return setError("Those two passwords do not match.");
 
     setBusy(true);
