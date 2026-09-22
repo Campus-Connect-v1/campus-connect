@@ -33,7 +33,7 @@ export function adaptPost(post: ApiPost): FeedPost {
       hall: post.author.profile_headline ?? "",
     },
     postedAt: since(post.created_at),
-    caption: post.content,
+    caption: post.content ?? "",
     image: post.media_url ?? undefined,
     pollId: post.poll_id ?? undefined,
     likes: post.stats.like_count,

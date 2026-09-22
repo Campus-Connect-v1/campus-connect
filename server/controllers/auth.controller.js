@@ -8,8 +8,6 @@ import {
   updateUserPassword,
   createOTP,
   verifyOTP as verifyOTPModel,
-  deleteOTP,
-  markEmailAsVerified,
   findUniversityByDomain,
   findUserById,
   findUserByProvider,
@@ -190,9 +188,6 @@ export const verifyOTP = async (req, res) => {
     if (error) return handleValidationError(error, res);
 
     const { email, otp } = req.body;
-    console.log("OTP Verification Debug:");
-    console.log("Email:", email);
-    console.log("OTP:", otp);
 
     // Verify OTP
     const isValidOTP = await verifyOTPModel(email, otp);
@@ -203,12 +198,6 @@ export const verifyOTP = async (req, res) => {
           "Please request a new OTP if this one has expired or Check the email typed, but the email should be stored on frontend and used as a part of the request not that the user will retype the eamil.",
       });
     }
-
-    // Mark email as verified
-    // await markEmailAsVerified(email);
-
-    // Delete used OTP
-    // await deleteOTP(email);
 
     try {
       const user = await findUserByEmail(email);

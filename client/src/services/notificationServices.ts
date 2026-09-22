@@ -59,3 +59,21 @@ export function deleteNotification(notificationId: string) {
 export function clearNotifications() {
   return request(() => api.delete("/notifications"));
 }
+
+export type PushPlatform = "ios" | "android" | "web" | "unknown";
+
+export function registerPushToken(token: string, platform: PushPlatform, deviceId?: string) {
+  return request<{ message: string }>(() =>
+    api.post("/notifications/push-tokens", {
+      token,
+      platform,
+      device_id: deviceId ?? null,
+    })
+  );
+}
+
+export function unregisterPushToken(token: string) {
+  return request<{ message: string }>(() =>
+    api.delete("/notifications/push-tokens", { data: { token } })
+  );
+}

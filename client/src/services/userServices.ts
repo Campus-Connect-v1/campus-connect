@@ -5,23 +5,46 @@ import { api, request } from "./api";
  *
  * Field names mirror the server's `user` object exactly. It is NOT the same
  * shape as GET /user/:userId (see `ApiPublicUser`): the private view returns
- * parsed `interests`/`social_links` and omits `profile_headline`, while the
- * public view returns the university join and keeps those columns raw.
+ * `interests` and `courses` come from their normalized profile tables.
  */
+export interface ApiInterest {
+  interest_id: string;
+  interest_type: "academic" | "hobby" | "career" | "sports" | "arts";
+  interest_name: string;
+  name?: string;
+  skill_level: "beginner" | "intermediate" | "advanced" | "expert";
+  created_at?: string;
+}
+
+export interface ApiCourse {
+  user_course_id: number;
+  course_code: string;
+  course_name: string;
+  department_id: string | null;
+  semester: string | null;
+  academic_year: number | null;
+  is_current: boolean | number;
+  created_at?: string;
+}
+
 export interface ApiProfile {
   id: string;
   email: string;
   first_name: string;
   last_name: string | null;
   profile_picture_url: string | null;
+  profile_headline: string | null;
   phone_number: string | null;
+  linkedin_url: string | null;
+  website_url: string | null;
   program: string | null;
   bio: string | null;
   date_of_birth: string | null;
   gender: string | null;
-  year_of_study: number | null;
+  year_of_study: "1" | "2" | "3" | "4" | "5+" | "graduate" | null;
   graduation_year: number | null;
-  interests: string[];
+  interests: ApiInterest[];
+  courses: ApiCourse[];
   social_links: Record<string, string>;
   privacy_settings: Record<string, unknown>;
   is_profile_complete: boolean | number;
@@ -43,14 +66,13 @@ export interface ApiPublicUser {
   bio: string | null;
   program: string | null;
   graduation_year: number | null;
-  year_of_study: number | null;
+  year_of_study: ApiProfile["year_of_study"];
   phone_number: string | null;
   linkedin_url: string | null;
   website_url: string | null;
   university_name: string | null;
   university_domain: string | null;
-  /** Straight from the JSON column — the public endpoint does NOT parse it. */
-  interests: string | unknown[] | null;
+  interests: ApiInterest[];
   social_links: string | Record<string, string> | null;
   created_at: string;
   connection: ApiConnectionSummary | null;
@@ -79,7 +101,7 @@ export interface ApiUserCard {
   profile_picture_url: string | null;
   profile_headline?: string | null;
   program: string | null;
-  year_of_study?: number | null;
+  year_of_study?: ApiProfile["year_of_study"];
   graduation_year?: number | null;
   university_id?: string;
   bio?: string | null;
@@ -124,10 +146,18 @@ export function updateProfile(patch: Partial<ApiProfile>) {
  * habit. Same for `recommendations` below.
  */
 export async function searchUsers(query: string) {
-  const result = await request<{ users?: ApiUserCard[] }>(() =>
+  const result = await request<{ users?: (Omit<ApiUserCard, "user_id"> & { id: string })[] }>(() =>
     api.get("/user/search", { params: { q: query } })
   );
-  return result.success ? { ...result, data: result.data.users ?? [] } : result;
+  return result.success
+    ? {
+        ...result,
+        data: (result.data.users ?? []).map(({ id, ...user }) => ({
+          ...user,
+          user_id: id,
+        })),
+      }
+    : result;
 }
 
 export async function fetchRecommendations(limit = 10) {
@@ -139,12 +169,21 @@ export async function fetchRecommendations(limit = 10) {
 
 export interface ApiConnection {
   connection_id: string;
-  user_id: string;
-  first_name: string;
-  last_name: string | null;
-  profile_picture_url: string | null;
-  program?: string | null;
-  status?: string;
+  status: ConnectionStatus;
+  connection_note: string | null;
+  shared_courses: string | null;
+  created_at: string;
+  updated_at: string;
+  receiver: {
+    id: string;
+    first_name: string;
+    last_name: string | null;
+    profile_picture_url: string | null;
+    profile_headline: string | null;
+    program: string | null;
+  };
+  your_role: "requester" | "receiver";
+  is_pending_action: boolean;
 }
 
 /** Returns connections grouped by status (`accepted`, `pending`, `sent`). */
@@ -181,4 +220,46 @@ export function respondToConnection(connectionId: string, action: "accept" | "de
   return request<{ message: string; status: ConnectionStatus }>(() =>
     api.post("/user/connections/respond", { connection_id: connectionId, action })
   );
+}
+
+export async function fetchInterests() {
+  const result = await request<{ interests?: ApiInterest[] }>(() => api.get("/user/interests"));
+  return result.success ? { ...result, data: result.data.interests ?? [] } : result;
+}
+
+export function addInterest(
+  interest: Pick<ApiInterest, "interest_type" | "interest_name" | "skill_level">
+) {
+  return request<{ message: string; interest: ApiInterest }>(() =>
+    api.post("/user/interests", interest)
+  );
+}
+
+export function updateInterest(
+  interestId: string,
+  patch: Partial<Pick<ApiInterest, "interest_type" | "interest_name" | "skill_level">>
+) {
+  return request<{ message: string; interest: ApiInterest }>(() =>
+    api.put(`/user/interests/${interestId}`, patch)
+  );
+}
+
+export function removeInterest(interestId: string) {
+  return request(() => api.delete(`/user/interests/${interestId}`));
+}
+
+export async function fetchCourses() {
+  const result = await request<{ courses?: ApiCourse[] }>(() => api.get("/user/courses"));
+  return result.success ? { ...result, data: result.data.courses ?? [] } : result;
+}
+
+export function addCourse(
+  course: Pick<ApiCourse, "course_code" | "course_name"> &
+    Partial<Pick<ApiCourse, "department_id" | "semester" | "academic_year" | "is_current">>
+) {
+  return request<{ message: string; course: ApiCourse }>(() => api.post("/user/courses", course));
+}
+
+export function removeCourse(courseId: number) {
+  return request(() => api.delete(`/user/courses/${courseId}`));
 }

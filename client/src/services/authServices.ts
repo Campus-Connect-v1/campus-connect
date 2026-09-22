@@ -32,7 +32,9 @@ export function signUpWithEmail(data: SignupSchema) {
 
 /** Registration returns 201, but the account is unusable until this succeeds. */
 export function verifyOtp(email: string, otp: string) {
-  return authenticate(() => api.post<AuthPayload>("/auth/verify-otp", { email, otp }));
+  return request<{ message: string; emailVerified: boolean }>(() =>
+    api.post("/auth/verify-otp", { email, otp })
+  );
 }
 
 export function resendOtp(email: string) {
@@ -50,7 +52,13 @@ export function requestPasswordReset(email: string) {
  * link registered for it yet.
  */
 export function resetPassword(token: string, password: string) {
-  return request<{ message: string }>(() => api.post("/auth/reset-password", { token, password }));
+  return request<{ message: string; passwordUpdated: boolean }>(() =>
+    api.post("/auth/reset-password", {
+      token,
+      password,
+      confirmPassword: password,
+    })
+  );
 }
 
 export function signInWithGoogle(accessToken: string) {

@@ -6,7 +6,6 @@ import { KeyboardAvoidingView, Platform, Pressable, TextInput, View } from "reac
 import { AuthShell } from "@/src/components/auth/AuthShell";
 import { Button, PressableScale, Text, Icon } from "@/src/components/ui";
 import { resendOtp, verifyOtp } from "@/src/services/authServices";
-import { useSession } from "@/src/services/SessionContext";
 import { radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -16,7 +15,6 @@ const RESEND_SECONDS = 45;
 export default function VerifyScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { refresh } = useSession();
   const { email } = useLocalSearchParams<{ email: string }>();
   const inputRef = useRef<TextInput>(null);
 
@@ -39,12 +37,11 @@ export default function VerifyScreen() {
     const result = await verifyOtp(email, value);
 
     if (result.success) {
-      // Verifying signs the user in, so the context must pick up the new
-      // account before the tabs mount against it.
-      await refresh();
       setSubmitting(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(tabs)/home");
+      // Verification confirms the email only; the API deliberately returns
+      // no JWT here. Send the user through login to establish a real session.
+      router.replace({ pathname: "/auth/login", params: { email } });
       return;
     }
     setSubmitting(false);
