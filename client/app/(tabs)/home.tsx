@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
 import { PostOptionsSheet } from "@/src/components/feed/PostOptionsSheet";
@@ -36,7 +37,7 @@ import { fetchUniversityById } from "@/src/services/universityServices";
 import { useUnread } from "@/src/services/UnreadContext";
 import { fetchStoryFeed } from "@/src/services/storyServices";
 import { fetchRecommendations, type ApiUserCard } from "@/src/services/userServices";
-import { TAB_BAR_CLEARANCE } from "@/src/styles/layout";
+import { TAB_BAR_CLEARANCE, tabBarTop } from "@/src/styles/layout";
 import { culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -279,6 +280,7 @@ export default function HomeScreen() {
 
   // Local copy so a like reflects on the row immediately; the server is told
   // after.
+  const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   useEffect(() => {
     if (feed.data) setPosts(feed.data.map(adaptPost));
@@ -556,6 +558,37 @@ export default function HomeScreen() {
           </Animated.View>
         )}
       />
+
+      {/*
+        Composing is the one thing someone opens this screen to do that the
+        feed itself cannot offer. It sits above the tab bar rather than inside
+        it because the tab bar is a navigation row -- an action wedged in
+        between destinations reads as a sixth place to go.
+      */}
+      <PressableScale
+        accessibilityRole="button"
+        accessibilityLabel="Write a post"
+        onPress={() => router.push("/compose/post")}
+        style={{
+          position: "absolute",
+          right: spacing.lg,
+          bottom: tabBarTop(insets.bottom) + spacing.md,
+          width: 56,
+          height: 56,
+          borderRadius: radius.full,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.accent,
+          // Lifted off the feed so it stays legible over a photo post.
+          shadowColor: "#000",
+          shadowOpacity: 0.22,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 6,
+        }}
+      >
+        <Icon name="add" size={26} color={colors.accentFg} />
+      </PressableScale>
     </Screen>
   );
 }

@@ -36,37 +36,51 @@ export function StoryRail({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
       ListHeaderComponent={
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel={own ? "Your story" : "Add to your story"}
-          onPress={() =>
-            own ? router.push(`/stories/${own.author.user_id}`) : router.push("/stories/compose")
-          }
-          style={{ alignItems: "center", width: 64, gap: spacing["2xs"] }}
-        >
-          <View
-            style={{
-              width: 62,
-              height: 62,
-              borderRadius: radius.full,
-              borderWidth: own && !own.all_viewed ? 2 : 1.5,
-              borderStyle: own ? "solid" : "dashed",
-              borderColor: own && !own.all_viewed ? culture.lime : colors.borderStrong,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+        // Two targets, not one. The ring opens your story; the + badge starts
+        // a new one. They were a single pressable, so tapping + played back
+        // what you already posted -- the opposite of what a + means.
+        <View style={{ alignItems: "center", width: 64, gap: spacing["2xs"] }}>
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={own ? "Your story" : "Add to your story"}
+            onPress={() =>
+              own ? router.push(`/stories/${own.author.user_id}`) : router.push("/stories/compose")
+            }
+            style={{ alignItems: "center", gap: spacing["2xs"] }}
           >
-            {ownAvatar || own ? (
-              <Avatar uri={ownAvatar ?? own?.author.profile_picture_url ?? undefined} size={54} />
-            ) : (
-              <Icon name="add" size={22} color={colors.textSecondary} />
-            )}
-          </View>
-
-          {/* The add badge stays available even when you already have a story,
-              because posting a second one is the common case. */}
-          {own ? (
             <View
+              style={{
+                width: 62,
+                height: 62,
+                borderRadius: radius.full,
+                borderWidth: own && !own.all_viewed ? 2 : 1.5,
+                borderStyle: own ? "solid" : "dashed",
+                borderColor: own && !own.all_viewed ? culture.lime : colors.borderStrong,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {ownAvatar || own ? (
+                <Avatar uri={ownAvatar ?? own?.author.profile_picture_url ?? undefined} size={54} />
+              ) : (
+                <Icon name="add" size={22} color={colors.textSecondary} />
+              )}
+            </View>
+
+            <Text variant="caption" color="textMuted" numberOfLines={1}>
+              {own ? "You" : "Add"}
+            </Text>
+          </PressableScale>
+
+          {/* Only shown once you already have a story: without one the whole
+              ring is already the add affordance, and two + targets stacked on
+              each other would be a coin toss for the user. */}
+          {own ? (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel="Add to your story"
+              onPress={() => router.push("/stories/compose")}
+              hitSlop={10}
               style={{
                 position: "absolute",
                 right: 2,
@@ -82,13 +96,9 @@ export function StoryRail({
               }}
             >
               <Icon name="add" size={11} color={colors.accentFg} />
-            </View>
+            </PressableScale>
           ) : null}
-
-          <Text variant="caption" color="textMuted" numberOfLines={1}>
-            {own ? "You" : "Add"}
-          </Text>
-        </PressableScale>
+        </View>
       }
       renderItem={({ item, index }) => (
         <PressableScale
