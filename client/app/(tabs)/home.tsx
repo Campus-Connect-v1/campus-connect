@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
 import { PostOptionsSheet } from "@/src/components/feed/PostOptionsSheet";
@@ -31,11 +32,12 @@ import { fetchEvents } from "@/src/services/eventServices";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
 import { fetchFeed, likePost, unlikePost } from "@/src/services/socialServices";
+import { useFeedRealtime } from "@/src/hooks/useFeedRealtime";
 import { fetchUniversityById } from "@/src/services/universityServices";
-import { fetchUnreadCount } from "@/src/services/notificationServices";
+import { useUnread } from "@/src/services/UnreadContext";
 import { fetchStoryFeed } from "@/src/services/storyServices";
 import { fetchRecommendations, type ApiUserCard } from "@/src/services/userServices";
-import { TAB_BAR_CLEARANCE } from "@/src/styles/layout";
+import { TAB_BAR_CLEARANCE, tabBarTop } from "@/src/styles/layout";
 import { culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -245,10 +247,11 @@ export default function HomeScreen() {
     []
   );
 
-  const unread = useAsync(
-    useCallback(() => fetchUnreadCount(), []),
-    []
-  );
+  // Shared, socket-fed count rather than a one-shot fetch: this was
+  // useAsync(fetchUnreadCount) and so only ever reflected the moment the
+  // screen mounted, which meant the badge sat stale while notifications
+  // arrived in the background.
+  const unread = useUnread();
 
   const universityId = profile?.university_id ?? user?.university_id;
   const events = useAsync(
@@ -277,6 +280,7 @@ export default function HomeScreen() {
 
   // Local copy so a like reflects on the row immediately; the server is told
   // after.
+  const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   useEffect(() => {
     if (feed.data) setPosts(feed.data.map(adaptPost));
@@ -295,6 +299,39 @@ export default function HomeScreen() {
     // the next refresh, which beats blocking the tap on a round trip.
     (wasLiked ? unlikePost : likePost)(id);
   }, []);
+
+  // Other people's activity on the posts currently listed. Counts arrive as
+  // absolute totals, so they are applied rather than added to -- a client that
+  // was backgrounded through an event would otherwise drift with no way to
+  // notice. Our own actions are excluded server-side by the x-socket-id
+  // header, so nothing here fights the optimistic update in toggleLike.
+  useFeedRealtime(
+    useMemo(() => posts.map((post) => post.id), [posts]),
+    {
+      onCounts: (postId, counts) =>
+        setPosts((current) =>
+          current.map((post) =>
+            post.id === postId
+              ? {
+                  ...post,
+                  likes: counts.like_count ?? post.likes,
+                  comments: counts.comment_count ?? post.comments,
+                }
+              : post
+          )
+        ),
+      // The author removed it. Dropping the row is better than leaving one
+      // whose every action would 404.
+      onPostDeleted: (postId) =>
+        setPosts((current) => current.filter((post) => post.id !== postId)),
+      onPostUpdated: (postId, content) =>
+        setPosts((current) =>
+          current.map((post) =>
+            post.id === postId && content !== undefined ? { ...post, body: content } : post
+          )
+        ),
+    }
+  );
 
   const toggleSave = saved.toggle;
 
@@ -402,13 +439,13 @@ export default function HomeScreen() {
               <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel={
-                  unread.data ? `Notifications, ${unread.data} unread` : "Notifications"
+                  unread.count ? `Notifications, ${unread.count} unread` : "Notifications"
                 }
                 onPress={() => router.push("/notifications")}
                 style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
               >
                 <Icon name="notification" size={21} color={colors.textPrimary} />
-                {unread.data ? (
+                {unread.count ? (
                   <View
                     style={{
                       position: "absolute",
@@ -433,7 +470,7 @@ export default function HomeScreen() {
                         lineHeight: 11,
                       }}
                     >
-                      {unread.data > 9 ? "9+" : unread.data}
+                      {unread.count > 9 ? "9+" : unread.count}
                     </Text>
                   </View>
                 ) : null}
@@ -521,6 +558,37 @@ export default function HomeScreen() {
           </Animated.View>
         )}
       />
+
+      {/*
+        Composing is the one thing someone opens this screen to do that the
+        feed itself cannot offer. It sits above the tab bar rather than inside
+        it because the tab bar is a navigation row -- an action wedged in
+        between destinations reads as a sixth place to go.
+      */}
+      <PressableScale
+        accessibilityRole="button"
+        accessibilityLabel="Write a post"
+        onPress={() => router.push("/compose/post")}
+        style={{
+          position: "absolute",
+          right: spacing.lg,
+          bottom: tabBarTop(insets.bottom) + spacing.md,
+          width: 56,
+          height: 56,
+          borderRadius: radius.full,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.accent,
+          // Lifted off the feed so it stays legible over a photo post.
+          shadowColor: "#000",
+          shadowOpacity: 0.22,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 6,
+        }}
+      >
+        <Icon name="add" size={26} color={colors.accentFg} />
+      </PressableScale>
     </Screen>
   );
 }
