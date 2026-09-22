@@ -148,6 +148,25 @@ export class StudyGroup {
   }
 
   // Get group members
+  /**
+   * Soft-delete a group.
+   *
+   * is_active = 0 rather than a row delete, matching posts and comments:
+   * study_group_members, meetings and any notification that references the
+   * group would otherwise be cascaded away, and findAll already filters on
+   * is_active so the group disappears from every listing regardless.
+   */
+  static async softDelete(groupId) {
+    const [result] = await db.execute(
+      `UPDATE study_groups
+       SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+       WHERE group_id = ? AND is_active = 1`,
+      [groupId]
+    );
+
+    return result.affectedRows > 0;
+  }
+
   static async getMembers(groupId) {
     const query = `
       SELECT gm.*, u.first_name, u.last_name, u.profile_picture_url, u.program

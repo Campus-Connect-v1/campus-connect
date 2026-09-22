@@ -5,6 +5,7 @@ import Conversation from "./models/conversation.model.js"; // NEW
 import { findByEmail, findById } from "./models/user.model.js";
 import { verifySocketToken } from "./middleware/verifySocketToken.js";
 import { isOriginAllowed } from "./config/cors.js";
+import { registerRealtime, userRoom, postRoom } from "./realtime.js";
 
 export default function socketServer(httpServer) {
   const io = new Server(httpServer, {
@@ -20,6 +21,10 @@ export default function socketServer(httpServer) {
     },
   });
 
+  // Controllers and models emit through realtime.js rather than importing this
+  // module, which would be circular. Register before any listener is attached.
+  registerRealtime(io);
+
   io.use(verifySocketToken);
 
   const onlineUsers = new Map(); // userId -> socket.id
@@ -28,6 +33,9 @@ export default function socketServer(httpServer) {
     const userId = socket.user?.id;
     if (userId) {
       onlineUsers.set(userId, socket.id);
+      // onlineUsers keeps one socket per user, so a second device evicts the
+      // first. The room holds every live socket; new emits address the room.
+      socket.join(userRoom(userId));
       console.log(`✅ User connected: ${userId} (${socket.id})`);
     }
 
@@ -188,6 +196,29 @@ export default function socketServer(httpServer) {
         socket.emit("conversations_error", "Failed to get conversations");
       }
     });
+
+    // ---- Post rooms ---------------------------------------------------
+    //
+    // A client opening a post subscribes to it; likes and comments from other
+    // people then arrive live. Writes still go over HTTP -- the REST handlers
+    // own validation, ownership checks and notifications, and duplicating that
+    // logic in a socket handler is how the two drift apart. These events are
+    // subscription only, so there is nothing here to authorise beyond the
+    // handshake: post visibility is already enforced by GET /social/posts/:id.
+
+    socket.on("join_post", (postId) => {
+      if (typeof postId !== "string" || !postId) return;
+      socket.join(postRoom(postId));
+    });
+
+    socket.on("leave_post", (postId) => {
+      if (typeof postId !== "string" || !postId) return;
+      socket.leave(postRoom(postId));
+    });
+
+    // Lets the client tell the REST API which socket it is, so its own writes
+    // are not echoed back at it. Sent as the x-socket-id header on requests.
+    socket.on("whoami", () => socket.emit("socket_id", socket.id));
 
     socket.on("disconnect", () => {
       if (userId) onlineUsers.delete(userId);
