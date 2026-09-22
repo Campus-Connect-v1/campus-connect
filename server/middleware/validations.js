@@ -223,6 +223,7 @@ export const updateProfileValidation = createValidationMiddleware(
       .messages({
         "any.only": "Invalid privacy setting",
       }),
+    is_profile_complete: Joi.boolean().optional(),
   })
 );
 

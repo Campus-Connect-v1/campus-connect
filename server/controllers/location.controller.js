@@ -45,8 +45,12 @@ export const getNearbyProfiles = async (req, res) => {
         accuracy: nearbyUser?.accuracy || 50,
         last_seen: profile.last_seen || nearbyUser?.last_seen || new Date(),
         coordinates: nearbyUser?.coordinates || null,
-        latitude: nearbyUser?.coordinates[0] || null, // need not be ...coordinates[0] as it is a 2D array in the locationService. TODO in prod
-        longitude: nearbyUser?.coordinates[1] || null,
+        // GeoJSON stores [longitude, latitude]. Prefer the named values from
+        // the aggregation and only fall back to the correctly ordered tuple.
+        latitude:
+          nearbyUser?.latitude ?? nearbyUser?.coordinates?.[1] ?? null,
+        longitude:
+          nearbyUser?.longitude ?? nearbyUser?.coordinates?.[0] ?? null,
       };
     });
 

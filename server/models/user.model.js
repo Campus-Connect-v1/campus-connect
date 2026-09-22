@@ -122,6 +122,7 @@ export const updateUserProfileModel = async (userId, updateData) => {
       "notification_push",
       "privacy_profile",
       "year_of_study",
+      "is_profile_complete",
     ];
 
     const updates = {};
@@ -262,8 +263,8 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
     // sanitize limit safely
     const safeLimit = Math.min(parseInt(limit, 10) || 10, 50);
 
-    // Placeholder order matters: shared courses, shared groups, then the three
-    // occurrences in the mutual-connections block, then the caller themselves.
+    // Placeholder order matters: shared interests, courses, groups, then the
+    // three mutual-connections occurrences, then the caller themselves.
     const query = `
       SELECT
         u2.user_id,
@@ -274,6 +275,7 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
         u2.program,
         u2.graduation_year,
         (
+          COALESCE(shared_interests.score, 0) * 2 +
           COALESCE(shared_courses.score, 0) +
           COALESCE(shared_groups.score, 0) +
           COALESCE(mutuals.score, 0) +
@@ -285,7 +287,23 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
         ON u2.university_id = u1.university_id
        AND u2.user_id <> u1.user_id
        AND u2.is_active = 1
-       AND u2.privacy_profile IN ('public', 'university')
+       -- New accounts default to friends. They still need to appear as a
+       -- lightweight discovery card so the first-run matching flow can work;
+       -- private is the explicit opt-out from discovery.
+       AND u2.privacy_profile <> 'private'
+
+      -- Interests are the strongest first-run signal: a new account has no
+      -- friends, groups or courses yet, but it has just told us what it likes.
+      LEFT JOIN (
+        SELECT ui2.user_id, COUNT(*) AS score
+        FROM user_interests ui1
+        JOIN user_interests ui2
+          ON LOWER(ui2.interest_name) = LOWER(ui1.interest_name)
+         AND ui2.user_id <> ui1.user_id
+        WHERE ui1.user_id = ?
+        GROUP BY ui2.user_id
+      ) AS shared_interests
+        ON shared_interests.user_id = u2.user_id
 
       -- Courses the caller currently takes, and who else currently takes them.
       LEFT JOIN (
@@ -348,6 +366,7 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
     `;
 
     const [rows] = await db.execute(query, [
+      userId, // shared_interests
       userId, // shared_courses
       userId, // shared_groups
       userId, // mutuals: normalise direction
