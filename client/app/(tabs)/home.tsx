@@ -31,8 +31,9 @@ import { fetchEvents } from "@/src/services/eventServices";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
 import { fetchFeed, likePost, unlikePost } from "@/src/services/socialServices";
+import { useFeedRealtime } from "@/src/hooks/useFeedRealtime";
 import { fetchUniversityById } from "@/src/services/universityServices";
-import { fetchUnreadCount } from "@/src/services/notificationServices";
+import { useUnread } from "@/src/services/UnreadContext";
 import { fetchStoryFeed } from "@/src/services/storyServices";
 import { fetchRecommendations, type ApiUserCard } from "@/src/services/userServices";
 import { TAB_BAR_CLEARANCE } from "@/src/styles/layout";
@@ -245,10 +246,11 @@ export default function HomeScreen() {
     []
   );
 
-  const unread = useAsync(
-    useCallback(() => fetchUnreadCount(), []),
-    []
-  );
+  // Shared, socket-fed count rather than a one-shot fetch: this was
+  // useAsync(fetchUnreadCount) and so only ever reflected the moment the
+  // screen mounted, which meant the badge sat stale while notifications
+  // arrived in the background.
+  const unread = useUnread();
 
   const universityId = profile?.university_id ?? user?.university_id;
   const events = useAsync(
@@ -295,6 +297,39 @@ export default function HomeScreen() {
     // the next refresh, which beats blocking the tap on a round trip.
     (wasLiked ? unlikePost : likePost)(id);
   }, []);
+
+  // Other people's activity on the posts currently listed. Counts arrive as
+  // absolute totals, so they are applied rather than added to -- a client that
+  // was backgrounded through an event would otherwise drift with no way to
+  // notice. Our own actions are excluded server-side by the x-socket-id
+  // header, so nothing here fights the optimistic update in toggleLike.
+  useFeedRealtime(
+    useMemo(() => posts.map((post) => post.id), [posts]),
+    {
+      onCounts: (postId, counts) =>
+        setPosts((current) =>
+          current.map((post) =>
+            post.id === postId
+              ? {
+                  ...post,
+                  likes: counts.like_count ?? post.likes,
+                  comments: counts.comment_count ?? post.comments,
+                }
+              : post
+          )
+        ),
+      // The author removed it. Dropping the row is better than leaving one
+      // whose every action would 404.
+      onPostDeleted: (postId) =>
+        setPosts((current) => current.filter((post) => post.id !== postId)),
+      onPostUpdated: (postId, content) =>
+        setPosts((current) =>
+          current.map((post) =>
+            post.id === postId && content !== undefined ? { ...post, body: content } : post
+          )
+        ),
+    }
+  );
 
   const toggleSave = saved.toggle;
 
@@ -402,13 +437,13 @@ export default function HomeScreen() {
               <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel={
-                  unread.data ? `Notifications, ${unread.data} unread` : "Notifications"
+                  unread.count ? `Notifications, ${unread.count} unread` : "Notifications"
                 }
                 onPress={() => router.push("/notifications")}
                 style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
               >
                 <Icon name="notification" size={21} color={colors.textPrimary} />
-                {unread.data ? (
+                {unread.count ? (
                   <View
                     style={{
                       position: "absolute",
@@ -433,7 +468,7 @@ export default function HomeScreen() {
                         lineHeight: 11,
                       }}
                     >
-                      {unread.data > 9 ? "9+" : unread.data}
+                      {unread.count > 9 ? "9+" : unread.count}
                     </Text>
                   </View>
                 ) : null}

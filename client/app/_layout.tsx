@@ -9,6 +9,7 @@ import { NetworkProvider } from "@/src/services/NetworkContext";
 import { PreferencesProvider, usePreferences } from "@/src/services/PreferencesContext";
 import { SavedPostsProvider } from "@/src/services/SavedPostsContext";
 import { SessionProvider } from "@/src/services/SessionContext";
+import { UnreadProvider } from "@/src/services/UnreadContext";
 import { ThemeScheme } from "@/src/styles/ThemeScheme";
 
 import "./globals.css";
@@ -60,9 +61,13 @@ export default function RootLayout() {
           <NetworkProvider>
             <SessionProvider>
               <SavedPostsProvider>
-                <Themed>
-                  <Stack screenOptions={{ headerShown: false }} />
-                </Themed>
+                {/* Inside SessionProvider: it reads the token and opens its
+                    subscription against the signed-in user's socket. */}
+                <UnreadProvider>
+                  <Themed>
+                    <Stack screenOptions={{ headerShown: false }} />
+                  </Themed>
+                </UnreadProvider>
               </SavedPostsProvider>
             </SessionProvider>
           </NetworkProvider>

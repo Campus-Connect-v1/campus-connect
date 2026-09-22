@@ -28,6 +28,7 @@ import {
 } from "@/src/services/userServices";
 import type { Result } from "@/src/services/api";
 import { onNotification } from "@/src/services/socket";
+import { useUnread } from "@/src/services/UnreadContext";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -288,6 +289,7 @@ function Row({
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
+  const unreadBadge = useUnread();
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [responses, setResponses] = useState<Record<string, ResponseState>>({});
 
@@ -339,7 +341,7 @@ export default function NotificationsScreen() {
   const open = (notification: ApiNotification) => {
     if (!notification.is_read) {
       setReadIds((current) => new Set(current).add(notification.notification_id));
-      markNotificationRead(notification.notification_id);
+      void markNotificationRead(notification.notification_id).then(() => unreadBadge.refresh());
     }
 
     const destination = destinationFor(notification);
@@ -349,6 +351,7 @@ export default function NotificationsScreen() {
   const markAll = async () => {
     Haptics.selectionAsync();
     setReadIds(new Set(notifications.map((n) => n.notification_id)));
+    unreadBadge.clear();
     await markAllNotificationsRead();
   };
 
@@ -374,7 +377,7 @@ export default function NotificationsScreen() {
       [id]: { status: action === "accept" ? "accepted" : "declined" },
     }));
     setReadIds((currentIds) => new Set(currentIds).add(id));
-    markNotificationRead(id);
+    void markNotificationRead(id).then(() => unreadBadge.refresh());
 
     if (action === "accept") {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
