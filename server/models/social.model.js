@@ -328,3 +328,140 @@ export const deletePostModel = async (postId, userId) => {
     throw new Error(`Database error in deletePost: ${error.message}`);
   }
 };
+
+// ---------------------------------------------------------------------------
+// Edits and comment removal
+//
+// Everything below soft-deletes (is_active = 0) to match deletePostModel: the
+// feed, the counts and the moderation queue all filter on is_active, and a hard
+// DELETE would cascade comments and likes out from under a post someone has
+// merely tidied up.
+// ---------------------------------------------------------------------------
+
+/**
+ * Edit a post's text. Ownership is part of the WHERE clause rather than a
+ * separate SELECT, so a concurrent delete cannot slip between the check and
+ * the write. Media is deliberately not editable -- the upload signature is
+ * issued against a specific asset, so swapping it needs a new post.
+ */
+export const updatePostModel = async (postId, userId, content) => {
+  try {
+    const query = `
+      UPDATE posts
+      SET content = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE post_id = ? AND user_id = ? AND is_active = 1
+    `;
+
+    const [result] = await db.execute(query, [content, postId, userId]);
+
+    if (result.affectedRows === 0) {
+      throw new Error("Post not found or access denied");
+    }
+
+    return { post_id: postId, content };
+  } catch (error) {
+    throw new Error(`Database error in updatePost: ${error.message}`);
+  }
+};
+
+/** Edit one's own comment. Same ownership-in-WHERE reasoning as above. */
+export const updateCommentModel = async (commentId, userId, content) => {
+  try {
+    const query = `
+      UPDATE post_comments
+      SET content = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE comment_id = ? AND user_id = ? AND is_active = 1
+    `;
+
+    const [result] = await db.execute(query, [content, commentId, userId]);
+
+    if (result.affectedRows === 0) {
+      throw new Error("Comment not found or access denied");
+    }
+
+    return { comment_id: commentId, content };
+  } catch (error) {
+    throw new Error(`Database error in updateComment: ${error.message}`);
+  }
+};
+
+/**
+ * Remove a comment. Either the comment's author or the post's author may do
+ * this -- letting someone clear a reply from their own post is the whole point
+ * of a delete on a social feed, and it saves a round trip to the report queue
+ * for something they can resolve themselves.
+ *
+ * Replies are cascaded: orphaned children would otherwise render under a
+ * comment that is no longer there.
+ */
+export const deleteCommentModel = async (commentId, userId) => {
+  try {
+    const query = `
+      UPDATE post_comments c
+      JOIN posts p ON p.post_id = c.post_id
+      SET c.is_active = 0, c.updated_at = CURRENT_TIMESTAMP
+      WHERE c.comment_id = ?
+        AND c.is_active = 1
+        AND (c.user_id = ? OR p.user_id = ?)
+    `;
+
+    const [result] = await db.execute(query, [commentId, userId, userId]);
+
+    if (result.affectedRows === 0) {
+      throw new Error("Comment not found or access denied");
+    }
+
+    await db.execute(
+      `UPDATE post_comments
+       SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+       WHERE parent_comment_id = ? AND is_active = 1`,
+      [commentId]
+    );
+
+    return { success: true };
+  } catch (error) {
+    throw new Error(`Database error in deleteComment: ${error.message}`);
+  }
+};
+
+/**
+ * Current like and comment totals for a post.
+ *
+ * Realtime events carry the authoritative count rather than a delta: a client
+ * that missed a frame while backgrounded would otherwise drift, and there is
+ * no way for it to notice. One round trip, two scalar subqueries.
+ */
+export const getPostCountsModel = async (postId) => {
+  try {
+    const [[counts]] = await db.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM post_likes WHERE post_id = ?) AS like_count,
+         (SELECT COUNT(*) FROM post_comments WHERE post_id = ? AND is_active = 1) AS comment_count`,
+      [postId, postId]
+    );
+
+    return {
+      like_count: Number(counts?.like_count ?? 0),
+      comment_count: Number(counts?.comment_count ?? 0),
+    };
+  } catch (error) {
+    // Counts are cosmetic: a failure here must not sink the action that
+    // triggered the emit.
+    console.error("getPostCounts failed:", error.message);
+    return { like_count: null, comment_count: null };
+  }
+};
+
+/** The author of a post, for ownership checks that need the id itself. */
+export const getPostAuthorModel = async (postId) => {
+  try {
+    const [[row]] = await db.execute(
+      `SELECT user_id FROM posts WHERE post_id = ? AND is_active = 1`,
+      [postId]
+    );
+    return row?.user_id ?? null;
+  } catch (error) {
+    console.error("getPostAuthor failed:", error.message);
+    return null;
+  }
+};

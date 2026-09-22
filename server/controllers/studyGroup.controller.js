@@ -177,6 +177,51 @@ export const studyGroupController = {
   },
 
   // Join study group
+  deleteStudyGroup: async (req, res) => {
+    try {
+      const { groupId } = req.params;
+
+      const group = await StudyGroup.findById(groupId);
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: "Study group not found",
+        });
+      }
+
+      // Stricter than updateStudyGroup, which also allows admins: editing a
+      // group is recoverable, removing it for every member is not.
+      const members = await StudyGroup.getMembers(groupId);
+      const userMember = members.find((m) => m.user_id === req.user.id);
+
+      if (!userMember || userMember.role !== "creator") {
+        return res.status(403).json({
+          success: false,
+          message: "Only the group creator can delete this study group",
+        });
+      }
+
+      const deleted = await StudyGroup.softDelete(groupId);
+      if (!deleted) {
+        return res.status(404).json({
+          success: false,
+          message: "Study group not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Study group deleted successfully",
+      });
+    } catch (error) {
+      console.error("Delete study group error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to delete study group",
+      });
+    }
+  },
+
   joinStudyGroup: async (req, res) => {
     try {
       const { groupId } = req.params;

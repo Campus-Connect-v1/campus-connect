@@ -9,6 +9,9 @@ import {
   addComment,
   getPostComments,
   deletePost,
+  updatePost,
+  updateComment,
+  deleteComment,
 } from "../controllers/social.controller.js";
 import authenticate from "../middleware/auth.js";
 
@@ -62,6 +65,15 @@ router.delete("/posts/:post_id", deletePost);
 
 /**
  * @swagger
+ * /social/posts/{post_id}:
+ *   patch:
+ *     tags: [Social]
+ *     summary: Edit a post's text (author only)
+ */
+router.patch("/posts/:post_id", updatePost);
+
+/**
+ * @swagger
  * /social/posts/{post_id}/like:
  *   post:
  *     tags: [Social]
@@ -95,5 +107,23 @@ router.post("/posts/:post_id/comments", addComment);
  *     summary: Get post comments
  */
 router.get("/posts/:post_id/comments", getPostComments);
+
+/**
+ * @swagger
+ * /social/posts/{post_id}/comments/{comment_id}:
+ *   patch:
+ *     tags: [Social]
+ *     summary: Edit a comment (author only)
+ */
+router.patch("/posts/:post_id/comments/:comment_id", updateComment);
+
+/**
+ * @swagger
+ * /social/posts/{post_id}/comments/{comment_id}:
+ *   delete:
+ *     tags: [Social]
+ *     summary: Delete a comment (comment author or post author)
+ */
+router.delete("/posts/:post_id/comments/:comment_id", deleteComment);
 
 export default router;
