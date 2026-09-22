@@ -1,8 +1,9 @@
+import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -11,15 +12,17 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import BottomModal from "@/src/components/ui/BottomModal";
 import { Avatar, EmptyState, Icon, PressableScale, Text } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSession } from "@/src/services/SessionContext";
 import {
-  deleteStory,
   fetchStoryFeed,
+  fetchStoryViewers,
   viewStory,
   type ApiStory,
   type ApiStoryGroup,
+  type ApiStoryViewer,
 } from "@/src/services/storyServices";
 import { culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
@@ -111,7 +114,6 @@ function VideoStory({ uri, paused }: { uri: string; paused: boolean }) {
 export default function StoryViewerScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { user } = useSession();
 
@@ -142,10 +144,29 @@ export default function StoryViewerScreen() {
   }, [stories]);
 
   const current: ApiStory | undefined = stories[index];
+  const isOwn = group?.author.user_id === user?.id;
 
   useEffect(() => {
     if (current) viewStory(current.story_id);
   }, [current]);
+
+  // Who viewed this story is the author's own metric — only fetched for
+  // stories that belong to the signed-in user, one call per story shown.
+  const [viewers, setViewers] = useState<ApiStoryViewer[] | null>(null);
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const viewersSheetRef = useRef<BottomSheet>(null);
+
+  useEffect(() => {
+    setViewers(null);
+    if (!current || !isOwn) return;
+    let cancelled = false;
+    fetchStoryViewers(current.story_id).then((result) => {
+      if (!cancelled && result.success) setViewers(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [current, isOwn]);
 
   const advance = useCallback(() => {
     setIndex((i) => {
@@ -177,7 +198,6 @@ export default function StoryViewerScreen() {
   // The author picked this colour, so the text follows it rather than assuming
   // a dark ground: white on lime is 1.12:1 and cannot be read at all.
   const textStoryBackground = current?.background_color ?? culture.violet;
-  const isOwn = group.author.user_id === user?.id;
   const authorName = [group.author.first_name, group.author.last_name].filter(Boolean).join(" ");
 
   return (
@@ -252,18 +272,20 @@ export default function StoryViewerScreen() {
         )}
       </View>
 
-      {/* Tap zones: left third goes back, the rest advances. Holding pauses,
-          which is the gesture every story UI has trained people to expect. */}
+      {/* Tap zones: the left half of the screen goes back, the right half
+          advances — no dead zone in the middle. Holding anywhere pauses. */}
       <View style={[StyleSheet.absoluteFill, { flexDirection: "row" }]} pointerEvents="box-none">
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Previous story"
           onPress={back}
           onLongPress={() => setPaused(true)}
           onPressOut={() => setPaused(false)}
           delayLongPress={180}
-          style={{ width: width / 3 }}
+          style={{ flex: 1 }}
         />
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Next story"
           onPress={advance}
           onLongPress={() => setPaused(true)}
@@ -302,20 +324,6 @@ export default function StoryViewerScreen() {
             </Text>
           </View>
 
-          {isOwn && current ? (
-            <PressableScale
-              accessibilityRole="button"
-              accessibilityLabel="Delete this story"
-              onPress={async () => {
-                await deleteStory(current.story_id);
-                router.back();
-              }}
-              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
-            >
-              <Icon name="alert" size={19} color={colors.onMedia} />
-            </PressableScale>
-          ) : null}
-
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Close stories"
@@ -326,6 +334,86 @@ export default function StoryViewerScreen() {
           </PressableScale>
         </View>
       </View>
+
+      {isOwn && current ? (
+        <View
+          style={{
+            position: "absolute",
+            left: spacing.md,
+            right: spacing.md,
+            bottom: insets.bottom + spacing.md,
+            alignItems: "center",
+          }}
+          pointerEvents="box-none"
+        >
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={
+              viewers === null
+                ? "See who viewed this story"
+                : `Seen by ${viewers.length} ${viewers.length === 1 ? "person" : "people"}`
+            }
+            onPress={() => setViewersOpen(true)}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing["2xs"],
+              paddingVertical: spacing.xs,
+              paddingHorizontal: spacing.sm,
+              borderRadius: radius.full,
+              backgroundColor: "rgba(0,0,0,0.35)",
+            }}
+          >
+            <Icon name="visible" size={16} color={colors.onMedia} />
+            <Text variant="caption" onMedia>
+              {viewers === null
+                ? "Seen by…"
+                : viewers.length === 0
+                  ? "No views yet"
+                  : `Seen by ${viewers.length}`}
+            </Text>
+          </PressableScale>
+        </View>
+      ) : null}
+
+      <BottomModal
+        ref={viewersSheetRef}
+        state={viewersOpen}
+        snapPoints={["50%"]}
+        onChange={(i) => setViewersOpen(i >= 0)}
+      >
+        <Text variant="heading" style={{ marginBottom: spacing.sm }}>
+          {viewers?.length === 1 ? "1 view" : `${viewers?.length ?? 0} views`}
+        </Text>
+        <BottomSheetFlatList
+          data={viewers ?? []}
+          keyExtractor={(item) => item.user_id}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <Text variant="body" color="textMuted">
+              No one has viewed this story yet.
+            </Text>
+          }
+          renderItem={({ item }) => (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.sm,
+                paddingVertical: spacing.sm,
+              }}
+            >
+              <Avatar uri={item.profile_picture_url ?? undefined} size={40} />
+              <Text variant="body" style={{ flex: 1 }} numberOfLines={1}>
+                {[item.first_name, item.last_name].filter(Boolean).join(" ")}
+              </Text>
+              <Text variant="caption" color="textMuted">
+                {timeAgo(item.viewed_at)}
+              </Text>
+            </View>
+          )}
+        />
+      </BottomModal>
     </View>
   );
 }

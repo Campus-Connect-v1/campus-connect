@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { FlatList, View } from "react-native";
+import { FlatList, Pressable, View } from "react-native";
 
 import { Avatar, Icon, PressableScale, Text } from "@/src/components/ui";
 import type { ApiStoryGroup } from "@/src/services/storyServices";
@@ -64,9 +64,15 @@ export function StoryRail({
           </View>
 
           {/* The add badge stays available even when you already have a story,
-              because posting a second one is the common case. */}
+              because posting a second one is the common case. Its own
+              Pressable, hitSlop-padded, so it reaches compose even though the
+              circle beneath it opens your existing story. */}
           {own ? (
-            <View
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add to your story"
+              onPress={() => router.push("/stories/compose")}
+              hitSlop={10}
               style={{
                 position: "absolute",
                 right: 2,
@@ -82,7 +88,7 @@ export function StoryRail({
               }}
             >
               <Icon name="add" size={11} color={colors.accentFg} />
-            </View>
+            </Pressable>
           ) : null}
 
           <Text variant="caption" color="textMuted" numberOfLines={1}>
