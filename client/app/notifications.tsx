@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, RefreshControl, View } from "react-native";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
@@ -27,6 +27,7 @@ import {
   type ConnectionStatus,
 } from "@/src/services/userServices";
 import type { Result } from "@/src/services/api";
+import { onNotification } from "@/src/services/socket";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -297,6 +298,28 @@ export default function NotificationsScreen() {
   const refreshFeed = useRef(feed.refresh);
   const hasFocused = useRef(false);
   refreshFeed.current = feed.refresh;
+
+  // A notification arriving over the socket refreshes the list rather than
+  // being prepended: notifyMany's payload carries no notification_id (the
+  // server sends a bare signal precisely because the client refetches), so
+  // there is no safe key to render a row from or to de-duplicate against.
+  //
+  // Debounced because a fan-out — an event announcement to a whole group —
+  // lands as a burst of frames, and one refetch per frame would hammer the
+  // API to display the same list.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const unsubscribe = onNotification(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void refreshFeed.current(), 400);
+    });
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+  }, []);
 
   // Stack screens remain mounted while a profile is open. Re-read connection
   // state when the user comes back so a request accepted on that profile does

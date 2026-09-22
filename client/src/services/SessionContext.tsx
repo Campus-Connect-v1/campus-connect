@@ -1,4 +1,6 @@
 import { router } from "expo-router";
+
+import { disconnectSocket, getSocket } from "./socket";
 import {
   createContext,
   useCallback,
@@ -120,8 +122,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     })();
   }, [load]);
 
+  // Open the shared socket for the whole signed-in session, not just while a
+  // message thread is on screen. Notifications and post rooms are delivered
+  // over the same connection, so leaving it to the DM screen meant a user who
+  // never opened a conversation received no live updates anywhere.
+  //
+  // getSocket() is idempotent and returns null without a token, so this is
+  // safe to run on every user change.
+  useEffect(() => {
+    if (!user) return;
+    getSocket();
+  }, [user]);
+
   const signOut = useCallback(async () => {
     await clearSession();
+    // Before clearing local state: the socket authenticates with the token
+    // this is about to drop, and it must not stay open as the previous user.
+    disconnectSocket();
     setUser(null);
     setProfile(null);
     setStats(null);
@@ -135,6 +152,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // A 401 from anywhere drops the local copies too, otherwise the next screen
     // renders the expired account's details while routing to sign-in.
     setOnSessionExpired(() => {
+      // The socket authenticated with the now-expired token; leaving it open
+      // would keep pushing the previous session's events at the sign-in screen.
+      disconnectSocket();
       setUser(null);
       setProfile(null);
       setStats(null);

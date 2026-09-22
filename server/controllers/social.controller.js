@@ -12,6 +12,13 @@ import {
   updateCommentModel,
   deleteCommentModel,
   getPostCountsModel,
+  likeCommentModel,
+  unlikeCommentModel,
+  getCommentLikeStateModel,
+  savePostModel,
+  unsavePostModel,
+  getSavedPostIdsModel,
+  getSavedPostsModel,
 } from "../models/social.model.js";
 import { isOwnMediaUrl } from "../config/cloudinary.js";
 import { notify } from "../models/notification.model.js";
@@ -415,7 +422,8 @@ export const getPostComments = async (req, res) => {
     const comments = await getPostCommentsModel(
       post_id,
       parseInt(limit),
-      parseInt(offset)
+      parseInt(offset),
+      req.user.id
     );
 
     res.status(200).json({
@@ -426,6 +434,10 @@ export const getPostComments = async (req, res) => {
         content: comment.content,
         parent_comment_id: comment.parent_comment_id,
         created_at: comment.created_at,
+        // Booleans rather than MySQL's 1/0, so the client can use the value
+        // directly instead of every call site remembering to coerce it.
+        like_count: Number(comment.like_count ?? 0),
+        has_liked: Number(comment.has_liked ?? 0) > 0,
         author: {
           user_id: comment.user_id,
           first_name: comment.first_name,
@@ -592,6 +604,163 @@ export const deleteComment = async (req, res) => {
 
     res.status(500).json({
       message: "Failed to delete comment",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Comment likes
+// ---------------------------------------------------------------------------
+
+export const likeComment = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { comment_id } = req.params;
+
+    const like = await likeCommentModel(comment_id, userId);
+    const state = await getCommentLikeStateModel(comment_id, userId);
+
+    // Room is the post, not the comment: a viewer is subscribed to the post
+    // they have open, and every comment on it rides the same subscription.
+    emitToPostExcept(like.post_id, originSocket(req), "comment:liked", {
+      post_id: like.post_id,
+      comment_id,
+      like_count: state.like_count,
+      user_id: userId,
+    });
+
+    if (like.comment_author_id) {
+      notify({
+        userId: like.comment_author_id,
+        actorId: userId,
+        type: "post_like",
+        resourceType: "post",
+        resourceId: like.post_id,
+        title: `${await actorName(userId)} liked your comment`,
+      });
+    }
+
+    res.status(201).json({
+      message: "Comment liked successfully",
+      like: { comment_id, like_count: state.like_count, has_liked: true },
+    });
+  } catch (error) {
+    console.error("Like comment error:", error);
+
+    if (error.message.includes("already liked")) {
+      return res.status(409).json({ message: "Comment already liked" });
+    }
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    res.status(500).json({
+      message: "Failed to like comment",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+export const unlikeComment = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { comment_id } = req.params;
+
+    const result = await unlikeCommentModel(comment_id, userId);
+    const state = await getCommentLikeStateModel(comment_id, userId);
+
+    if (result.post_id) {
+      emitToPostExcept(result.post_id, originSocket(req), "comment:unliked", {
+        post_id: result.post_id,
+        comment_id,
+        like_count: state.like_count,
+        user_id: userId,
+      });
+    }
+
+    res.status(200).json({
+      message: "Comment unliked successfully",
+      like: { comment_id, like_count: state.like_count, has_liked: false },
+    });
+  } catch (error) {
+    console.error("Unlike comment error:", error);
+
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ message: "Like not found" });
+    }
+
+    res.status(500).json({
+      message: "Failed to unlike comment",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Saved posts
+// ---------------------------------------------------------------------------
+
+export const savePost = async (req, res) => {
+  try {
+    const { post_id } = req.params;
+    const saved = await savePostModel(post_id, req.user.id);
+    res.status(201).json({ message: "Post saved", saved });
+  } catch (error) {
+    console.error("Save post error:", error);
+
+    if (error.message.includes("not found")) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    res.status(500).json({
+      message: "Failed to save post",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+export const unsavePost = async (req, res) => {
+  try {
+    const { post_id } = req.params;
+    await unsavePostModel(post_id, req.user.id);
+    res.status(200).json({ message: "Post unsaved" });
+  } catch (error) {
+    console.error("Unsave post error:", error);
+    res.status(500).json({
+      message: "Failed to unsave post",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+/** Ids only — for hydrating bookmark state across a feed in one request. */
+export const getSavedPostIds = async (req, res) => {
+  try {
+    const postIds = await getSavedPostIdsModel(req.user.id);
+    res.status(200).json({ count: postIds.length, post_ids: postIds });
+  } catch (error) {
+    console.error("Get saved post ids error:", error);
+    res.status(500).json({
+      message: "Failed to load saved posts",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+export const getSavedPosts = async (req, res) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+    const posts = await getSavedPostsModel(
+      req.user.id,
+      parseInt(limit, 10) || 50,
+      parseInt(offset, 10) || 0
+    );
+    res.status(200).json({ count: posts.length, posts });
+  } catch (error) {
+    console.error("Get saved posts error:", error);
+    res.status(500).json({
+      message: "Failed to load saved posts",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }

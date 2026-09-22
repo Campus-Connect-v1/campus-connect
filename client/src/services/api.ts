@@ -2,6 +2,7 @@ import axios, { AxiosError, type AxiosInstance } from "axios";
 
 import { API_URL } from "../constants/env";
 import { getToken, notifySessionExpired } from "./session";
+import { getSocketId } from "./socket";
 
 export type Result<T> =
   { success: true; data: T } | { success: false; error: string; status?: number };
@@ -23,6 +24,13 @@ export const api: AxiosInstance = axios.create({
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  // Lets the server leave this client out of the broadcast for its own write.
+  // We already have the authoritative result in the response and have usually
+  // applied it optimistically, so the echo would only make counters flicker.
+  const socketId = getSocketId();
+  if (socketId) config.headers["x-socket-id"] = socketId;
+
   return config;
 });
 
