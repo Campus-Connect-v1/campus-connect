@@ -182,6 +182,15 @@ router.put("/:groupId", studyGroupController.updateStudyGroup);
  *       400:
  *         description: Cannot join group (already member, full, etc.)
  */
+/**
+ * @swagger
+ * /studygroups/{groupId}:
+ *   delete:
+ *     tags: [StudyGroups]
+ *     summary: Delete a study group (creator only)
+ */
+router.delete("/:groupId", studyGroupController.deleteStudyGroup);
+
 router.post("/:groupId/join", studyGroupController.joinStudyGroup);
 
 /**

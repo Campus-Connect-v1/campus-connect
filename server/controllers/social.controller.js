@@ -8,10 +8,49 @@ import {
   addCommentModel,
   getPostCommentsModel,
   deletePostModel,
+  updatePostModel,
+  updateCommentModel,
+  deleteCommentModel,
+  getPostCountsModel,
 } from "../models/social.model.js";
 import { isOwnMediaUrl } from "../config/cloudinary.js";
 import { notify } from "../models/notification.model.js";
 import { db } from "../config/db.js";
+import { emitToPostExcept } from "../realtime.js";
+
+/**
+ * The socket that issued this request, if any.
+ *
+ * The client sends its own socket id so its writes are not echoed back to it:
+ * it already has the authoritative result in the HTTP response and has usually
+ * applied it optimistically, so replaying the frame makes counters flicker.
+ * Absent header means "echo to everyone", which is correct for a plain HTTP
+ * client with no socket at all.
+ */
+const originSocket = (req) => req.headers["x-socket-id"] || null;
+
+/**
+ * Broadcast a change to everyone viewing the post, carrying fresh totals.
+ *
+ * Counts are re-read rather than incremented client-side: a client that was
+ * backgrounded through a frame would otherwise drift with no way to notice.
+ * Fire-and-forget -- the caller has already responded, and a realtime failure
+ * must not alter the outcome of the request.
+ */
+const broadcastPost = (req, postId, event, payload = {}) => {
+  void (async () => {
+    try {
+      const counts = await getPostCountsModel(postId);
+      emitToPostExcept(postId, originSocket(req), event, {
+        post_id: postId,
+        ...counts,
+        ...payload,
+      });
+    } catch (error) {
+      console.error(`broadcastPost(${event}) failed:`, error.message);
+    }
+  })();
+};
 
 // Create a new post
 export const createPost = async (req, res) => {
@@ -223,6 +262,8 @@ export const likePost = async (req, res) => {
       });
     }
 
+    broadcastPost(req, post_id, "post:liked", { user_id: userId });
+
     res.status(201).json({
       message: "Post liked successfully",
       like: {
@@ -263,6 +304,8 @@ export const unlikePost = async (req, res) => {
     const { post_id } = req.params;
 
     await unlikePostModel(post_id, userId);
+
+    broadcastPost(req, post_id, "post:unliked", { user_id: userId });
 
     res.status(200).json({
       message: "Post unliked successfully",
@@ -323,6 +366,21 @@ export const addComment = async (req, res) => {
         body: String(content || "").slice(0, 140),
       });
     }
+
+    broadcastPost(req, post_id, "comment:added", {
+      comment: {
+        comment_id: comment.comment_id,
+        content: comment.content,
+        parent_comment_id: comment.parent_comment_id,
+        created_at: comment.created_at,
+        author: {
+          user_id: userId,
+          first_name: commenter?.first_name ?? "",
+          last_name: commenter?.last_name ?? null,
+          profile_picture_url: commenter?.profile_picture_url ?? null,
+        },
+      },
+    });
 
     res.status(201).json({
       message: "Comment added successfully",
@@ -393,6 +451,8 @@ export const deletePost = async (req, res) => {
 
     await deletePostModel(post_id, userId);
 
+    broadcastPost(req, post_id, "post:deleted", { user_id: userId });
+
     res.status(200).json({
       message: "Post deleted successfully",
     });
@@ -407,6 +467,131 @@ export const deletePost = async (req, res) => {
 
     res.status(500).json({
       message: "Failed to delete post",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Edits and comment removal
+// ---------------------------------------------------------------------------
+
+// Matches the column type (posts.content / post_comments.content are TEXT) and
+// the limit the compose screens already enforce client-side.
+const CONTENT_MAX = 5000;
+
+const readContent = (req, res) => {
+  const { content } = req.body;
+
+  if (typeof content !== "string" || content.trim() === "") {
+    res.status(400).json({ message: "Content is required" });
+    return null;
+  }
+
+  const trimmed = content.trim();
+  if (trimmed.length > CONTENT_MAX) {
+    res.status(400).json({
+      message: `Content must be ${CONTENT_MAX} characters or fewer`,
+    });
+    return null;
+  }
+
+  return trimmed;
+};
+
+// Edit a post
+export const updatePost = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { post_id } = req.params;
+
+    const content = readContent(req, res);
+    if (content === null) return;
+
+    await updatePostModel(post_id, userId, content);
+
+    broadcastPost(req, post_id, "post:updated", { content, user_id: userId });
+
+    res.status(200).json({
+      message: "Post updated successfully",
+      post: { post_id, content },
+    });
+  } catch (error) {
+    console.error("Update post error:", error);
+
+    if (error.message.includes("not found") || error.message.includes("denied")) {
+      return res.status(404).json({ message: "Post not found or access denied" });
+    }
+
+    res.status(500).json({
+      message: "Failed to update post",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Edit a comment
+export const updateComment = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { post_id, comment_id } = req.params;
+
+    const content = readContent(req, res);
+    if (content === null) return;
+
+    await updateCommentModel(comment_id, userId, content);
+
+    broadcastPost(req, post_id, "comment:updated", {
+      comment_id,
+      content,
+      user_id: userId,
+    });
+
+    res.status(200).json({
+      message: "Comment updated successfully",
+      comment: { comment_id, content },
+    });
+  } catch (error) {
+    console.error("Update comment error:", error);
+
+    if (error.message.includes("not found") || error.message.includes("denied")) {
+      return res
+        .status(404)
+        .json({ message: "Comment not found or access denied" });
+    }
+
+    res.status(500).json({
+      message: "Failed to update comment",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Delete a comment (author of the comment, or author of the post)
+export const deleteComment = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { post_id, comment_id } = req.params;
+
+    await deleteCommentModel(comment_id, userId);
+
+    broadcastPost(req, post_id, "comment:deleted", {
+      comment_id,
+      user_id: userId,
+    });
+
+    res.status(200).json({ message: "Comment deleted successfully" });
+  } catch (error) {
+    console.error("Delete comment error:", error);
+
+    if (error.message.includes("not found") || error.message.includes("denied")) {
+      return res
+        .status(404)
+        .json({ message: "Comment not found or access denied" });
+    }
+
+    res.status(500).json({
+      message: "Failed to delete comment",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }

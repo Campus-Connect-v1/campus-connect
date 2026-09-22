@@ -1,6 +1,7 @@
 // models/notification.model.js
 import { v4 as uuidv4 } from "uuid";
 import { db } from "../config/db.js";
+import { emitToUser } from "../realtime.js";
 
 // How long two identical unread notifications are treated as the same event.
 // Sized for double-taps and retried requests, not for genuine repeat activity.
@@ -227,6 +228,12 @@ export const notify = async ({
       is_read: 0,
     };
 
+    // In-app realtime. Emitting here rather than at each call site means every
+    // notification type -- likes, comments, connections, RSVPs, announcements --
+    // becomes live at once, and any type added later is live for free.
+    // emitToUser never throws and no-ops when no socket server is running.
+    emitToUser(userId, "notification:new", notification);
+
     // Delivery is deliberately detached from the request path. The in-app row
     // is authoritative; a third-party transport failure must never turn the
     // user's successful action into a 500.
@@ -313,6 +320,21 @@ export const notifyMany = async (
     }
 
     if (inserted > 0) {
+      // One frame per recipient. Row ids are not read back -- the client
+      // refetches the list on receipt -- so the payload stays a bare signal.
+      for (const recipientId of recipients) {
+        emitToUser(recipientId, "notification:new", {
+          user_id: recipientId,
+          actor_id: actorId,
+          type,
+          resource_type: resourceType,
+          resource_id: resourceId,
+          title: safeTitle,
+          body: safeBody,
+          is_read: 0,
+        });
+      }
+
       void deliverPushMany(recipients, {
         type,
         resourceType,

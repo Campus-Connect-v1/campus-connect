@@ -882,11 +882,23 @@ export const deleteProfileModel = async (
   try {
     await db.beginTransaction();
 
-    // 1. Archive the user data with expiration date
+    // 1. Archive the user data.
+    //
+    // The trailing values must line up with user_archive's own columns, which
+    // are the 35 columns of `users` followed by archived_at (36) then
+    // deletion_reason (37) -- in that order. This previously supplied three
+    // values (reason, timestamp, and an expiry) in the wrong order, so every
+    // delete died on "Column count doesn't match value count" and rolled the
+    // whole transaction back. There is no expires_at column and no need for
+    // one: recoverProfileModel derives the 30-day window from archived_at.
+    //
+    // SELECT * carries new columns across automatically, which is why it is
+    // kept -- but it means a column added to `users` must also be added to
+    // `user_archive` in the same position, ahead of these two.
     const [archiveResult] = await db.execute(
-      `INSERT INTO user_archive 
-       SELECT *, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 DAY)
-       FROM users 
+      `INSERT INTO user_archive
+       SELECT *, CURRENT_TIMESTAMP, ?
+       FROM users
        WHERE user_id = ?`,
       [deletionReason, userId]
     );
