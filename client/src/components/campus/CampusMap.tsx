@@ -3,14 +3,17 @@ import { useEffect, useMemo, useRef } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 
-import { Text } from "@/src/components/ui";
+import { Avatar, Text } from "@/src/components/ui";
 import { CAMPUS_CENTER, DARK_MAP_STYLE, type CampusPin } from "@/src/features/campus/types";
+import type { NearbyProfile } from "@/src/services/geolocation";
 import { SECTION_HUE, culture, radius, spacing } from "@/src/styles/theme";
 
 interface Props {
   pins: CampusPin[];
   selectedId?: string | null;
   onSelect: (pin: CampusPin) => void;
+  people?: NearbyProfile[];
+  onSelectPerson?: (person: NearbyProfile) => void;
   hue?: string;
   /**
    * Pans the camera to this pin when it changes. Used by search, where the
@@ -27,11 +30,19 @@ const KIND_HUE: Record<CampusPin["kind"], string> = {
 };
 
 /** Smallest region containing every pin, with a margin so none sit on the edge. */
-function regionFor(pins: CampusPin[]) {
-  if (pins.length === 0) return CAMPUS_CENTER;
+function regionFor(pins: CampusPin[], people: NearbyProfile[]) {
+  const points = [
+    ...pins.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude })),
+    ...people.flatMap((person) =>
+      person.latitude != null && person.longitude != null
+        ? [{ latitude: person.latitude, longitude: person.longitude }]
+        : []
+    ),
+  ];
+  if (points.length === 0) return CAMPUS_CENTER;
 
-  const lats = pins.map((pin) => pin.latitude);
-  const lngs = pins.map((pin) => pin.longitude);
+  const lats = points.map((point) => point.latitude);
+  const lngs = points.map((point) => point.longitude);
   const minLat = Math.min(...lats);
   const maxLat = Math.max(...lats);
   const minLng = Math.min(...lngs);
@@ -60,6 +71,8 @@ export function CampusMap({
   pins,
   selectedId,
   onSelect,
+  people = [],
+  onSelectPerson,
   hue = SECTION_HUE.connect,
   focusId,
 }: Props) {
@@ -67,7 +80,18 @@ export function CampusMap({
   // `initialRegion` is read once on mount, so the region is keyed on the pins:
   // buildings arrive asynchronously and a map already mounted on the fallback
   // would otherwise stay in Legon for the rest of the session.
-  const region = useMemo(() => regionFor(pins), [pins]);
+  const locatedPeople = useMemo(
+    () =>
+      people.filter(
+        (person) =>
+          person.latitude != null &&
+          person.longitude != null &&
+          Number.isFinite(person.latitude) &&
+          Number.isFinite(person.longitude)
+      ),
+    [people]
+  );
+  const region = useMemo(() => regionFor(pins, locatedPeople), [pins, locatedPeople]);
 
   useEffect(() => {
     if (!focusId) return;
@@ -90,7 +114,7 @@ export function CampusMap({
   return (
     <MapView
       ref={mapRef}
-      key={pins.length ? "located" : "fallback"}
+      key={pins.length || locatedPeople.length ? "located" : "fallback"}
       provider={PROVIDER_DEFAULT}
       style={StyleSheet.absoluteFill}
       initialRegion={region}
@@ -143,6 +167,37 @@ export function CampusMap({
               >
                 <Text variant="caption" onMedia numberOfLines={1}>
                   {pin.label}
+                </Text>
+              </View>
+            </View>
+          </Marker>
+        );
+      })}
+
+      {locatedPeople.map((person) => {
+        const name = [person.first_name, person.last_name].filter(Boolean).join(" ");
+        return (
+          <Marker
+            key={`person-${person.user_id}`}
+            coordinate={{ latitude: person.latitude!, longitude: person.longitude! }}
+            onPress={() => onSelectPerson?.(person)}
+            tracksViewChanges={false}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={{ alignItems: "center", width: 104 }}>
+              <Avatar uri={person.profile_picture ?? undefined} size={48} ring={person.is_online} />
+              <View
+                style={{
+                  marginTop: spacing["2xs"],
+                  maxWidth: 104,
+                  paddingHorizontal: spacing.xs,
+                  paddingVertical: 2,
+                  borderRadius: radius.full,
+                  backgroundColor: "rgba(11,14,18,0.88)",
+                }}
+              >
+                <Text variant="caption" onMedia numberOfLines={1}>
+                  {name || "Someone nearby"}
                 </Text>
               </View>
             </View>

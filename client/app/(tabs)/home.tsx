@@ -159,6 +159,12 @@ function PeopleStrip({ people }: { people: ApiUserCard[] }) {
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(154, width * 0.39);
 
+  const matchColor = (percentage: number) => {
+    if (percentage >= 75) return culture.lime;
+    if (percentage >= 40) return culture.yellow;
+    return culture.pink;
+  };
+
   return (
     <ScrollView
       horizontal
@@ -166,11 +172,18 @@ function PeopleStrip({ people }: { people: ApiUserCard[] }) {
       style={{ flexGrow: 0 }}
       contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}
     >
-      {people.slice(0, 5).map((person, index) => (
+      {people.slice(0, 5).map((person) => (
         <PressableScale
           key={person.user_id}
           accessibilityRole="button"
-          accessibilityLabel={`View ${person.first_name} ${person.last_name ?? ""}`.trim()}
+          accessibilityLabel={[
+            `View ${person.first_name} ${person.last_name ?? ""}`.trim(),
+            typeof person.match_percentage === "number"
+              ? `${person.match_percentage}% match`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(", ")}
           onPress={() => router.push(`/person/${person.user_id}`)}
           style={{ width: cardWidth }}
         >
@@ -181,12 +194,10 @@ function PeopleStrip({ people }: { people: ApiUserCard[] }) {
             style={{ height: 190 }}
           >
             <View style={{ flex: 1, justifyContent: "space-between", padding: spacing.sm }}>
-              {/* The API ranks recommendations, so the top one is the strongest
-                  match rather than an arbitrary "new here" badge. */}
-              {index === 0 && person.match_percentage ? (
+              {typeof person.match_percentage === "number" ? (
                 <Sticker
                   label={`${person.match_percentage}% MATCH`}
-                  backgroundColor={culture.pink}
+                  backgroundColor={matchColor(person.match_percentage)}
                 />
               ) : (
                 <View />

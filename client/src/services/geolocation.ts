@@ -23,6 +23,8 @@ export interface NearbyProfile {
   distance: number;
   is_online: boolean;
   building?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   /** Optional until the API exposes it for every account. */
   age?: number | null;
 }
@@ -73,6 +75,8 @@ export function adaptNearby(profile: ApiNearbyProfile): NearbyProfile {
     distance: profile.distance ?? 0,
     is_online: profile.online ?? false,
     building: profile.location_context ?? null,
+    latitude: Number.isFinite(Number(profile.latitude)) ? Number(profile.latitude) : null,
+    longitude: Number.isFinite(Number(profile.longitude)) ? Number(profile.longitude) : null,
     age: yearsSince(profile.date_of_birth),
   };
 }
@@ -106,7 +110,10 @@ export async function publishCurrentLocation() {
   await api.post("/geofencing/location", {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
-    accuracy: position.coords.accuracy,
+    // Expo may return null when the platform cannot estimate accuracy. The
+    // API parses this value as a number; sending null becomes NaN and prevents
+    // the location record that the subsequent nearby query depends on.
+    accuracy: position.coords.accuracy ?? 50,
   });
 
   return position.coords;

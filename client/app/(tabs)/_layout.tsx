@@ -1,12 +1,14 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
-import { Tabs } from "expo-router";
+import { router, Tabs } from "expo-router";
+import { useEffect } from "react";
 import { View } from "react-native";
 import Animated, { LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon, Text, type IconName } from "@/src/components/ui";
+import { useSession } from "@/src/services/SessionContext";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -141,6 +143,21 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 export default function TabsLayout() {
+  const { profile, setupDismissed, setupCompleted } = useSession();
+
+  // This also catches an incomplete account already inside an older build's
+  // tabs. Dismissing setup is session-scoped, so returning here never loops.
+  useEffect(() => {
+    if (
+      profile &&
+      !Boolean(profile.is_profile_complete) &&
+      !setupDismissed &&
+      !setupCompleted
+    ) {
+      router.replace("/setup" as never);
+    }
+  }, [profile, setupDismissed, setupCompleted]);
+
   return (
     <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
       <Tabs.Screen name="home" options={{ title: "Home" }} />
