@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 
 import { disconnectSocket, getSocket } from "./socket";
+import { registerForPushNotificationsAsync, unregisterPushNotificationsAsync } from "./notifications";
 import {
   createContext,
   useCallback,
@@ -134,7 +135,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     getSocket();
   }, [user]);
 
+  useEffect(() => {
+    // Fires on cold start with a restored session and right after a fresh
+    // login. Not on every render: keyed on the id, not the object, since
+    // `user` is a new reference each time `refresh()` re-reads it.
+    if (user?.id) registerForPushNotificationsAsync();
+  }, [user?.id]);
+
   const signOut = useCallback(async () => {
+    await unregisterPushNotificationsAsync();
     await clearSession();
     // Before clearing local state: the socket authenticates with the token
     // this is about to drop, and it must not stay open as the previous user.

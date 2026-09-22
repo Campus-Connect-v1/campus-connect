@@ -39,8 +39,10 @@ const ICON_FOR: Record<string, IconName> = {
   connection_request: "connectAdd",
   connection_accepted: "connect",
   event_invite: "events",
+  event_created: "events",
   group_invite: "connect",
   story_view: "visible",
+  new_post: "home",
 };
 
 function since(iso: string) {

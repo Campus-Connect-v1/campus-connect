@@ -29,6 +29,17 @@ export const getUniversityDomainsModel = async (search = "") => {
   }
 };
 
+// Recipient ids for a university-wide announcement (e.g. a new public event).
+// Excludes the actor so the creator doesn't get notified of their own post.
+export const getUserIdsByUniversityModel = async (universityId, excludeUserId = null) => {
+  const [rows] = await db.execute(
+    `SELECT user_id FROM users
+     WHERE university_id = ? AND is_active = 1 AND user_id <> ?`,
+    [universityId, excludeUserId || ""]
+  );
+  return rows.map((row) => row.user_id);
+};
+
 // =====================  CAMPUS BUILDING  ======================
 
 export class CampusBuilding {
