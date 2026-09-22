@@ -1,4 +1,5 @@
 import express from "express";
+import { socialGraphLimiter } from "../utils/rateLimiter.js";
 import {
   getProfile,
   updateUserProfile,
@@ -117,7 +118,7 @@ router.get("/connections/:status", getConnections);
  *     tags: [Connections]
  *     summary: Send connection request
  */
-router.post("/connections/request", sendConnectionRequest);
+router.post("/connections/request", socialGraphLimiter, sendConnectionRequest);
 
 /** Respond to a request received by the signed-in user. */
 router.post("/connections/respond", respondToConnection);

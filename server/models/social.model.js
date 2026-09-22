@@ -47,9 +47,41 @@ export const createPostModel = async (postData) => {
 };
 
 // Get posts for user's feed (from connections)
-export const getFeedPostsModel = async (userId, limit = 20, offset = 0) => {
+/**
+ * Encode/decode a feed cursor.
+ *
+ * The cursor is the sort key of the last row returned -- preference score,
+ * then creation time, then post id as the tiebreak. base64 is not for secrecy
+ * (the values are the caller's own last row); it keeps an opaque token out of
+ * a URL so clients cannot be tempted to construct one by hand.
+ */
+export const encodeFeedCursor = (row) =>
+  Buffer.from(
+    JSON.stringify({
+      s: Number(row.preference_score ?? 0),
+      t: new Date(row.created_at).toISOString(),
+      i: row.post_id,
+    })
+  ).toString("base64url");
+
+const decodeFeedCursor = (cursor) => {
+  if (!cursor) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(String(cursor), "base64url").toString("utf8"));
+    if (typeof parsed?.i !== "string" || !parsed?.t) return null;
+    // A malformed cursor is treated as no cursor rather than as an error: the
+    // worst case is the reader gets page one again, which beats a 400 on what
+    // is usually a stale client.
+    return { s: Number(parsed.s) || 0, t: new Date(parsed.t), i: parsed.i };
+  } catch {
+    return null;
+  }
+};
+
+export const getFeedPostsModel = async (userId, limit = 20, offset = 0, cursor = null) => {
   const safeLimit = Number.isInteger(parseInt(limit)) ? parseInt(limit) : 20;
   const safeOffset = Number.isInteger(parseInt(offset)) ? parseInt(offset) : 0;
+  const after = decodeFeedCursor(cursor);
 
   try {
     // Visibility is enforced here, in the query.
@@ -102,19 +134,48 @@ export const getFeedPostsModel = async (userId, limit = 20, offset = 0) => {
           )
         )
         AND ${hiddenPostFilterSql()}
-      ORDER BY preference_score DESC, p.created_at DESC
-      LIMIT ${safeLimit} OFFSET ${safeOffset};
+      ORDER BY preference_score DESC, p.created_at DESC, p.post_id DESC
+    `;
+
+    /**
+     * Keyset pagination.
+     *
+     * OFFSET is stable only while the underlying rows are: post something new
+     * and every row shifts down one, so page two repeats the item that was
+     * last on page one. At this size that is a correctness bug rather than a
+     * speed one -- the cost of OFFSET 70 here is unmeasurable -- but it is the
+     * one the reader actually notices.
+     *
+     * The comparison is lexicographic over the full sort key. Row-value syntax
+     * ((a,b,c) < (?,?,?)) would be terser, but MySQL will not use an index for
+     * it, and spelling it out leaves room to add one later.
+     *
+     * preference_score is deterministic per (viewer, post), so the key is
+     * stable between pages. A "see less" tap mid-scroll changes it and can
+     * shuffle what is still to come -- which is the correct response to the
+     * reader having just told us their preferences changed.
+     */
+    const keysetSql = after
+      ? `WHERE f.preference_score < ?
+           OR (f.preference_score = ? AND f.created_at < ?)
+           OR (f.preference_score = ? AND f.created_at = ? AND f.post_id < ?)`
+      : "";
+
+    const paginatedQuery = `
+      SELECT f.* FROM (${postsQuery}) f
+      ${keysetSql}
+      ORDER BY f.preference_score DESC, f.created_at DESC, f.post_id DESC
+      LIMIT ${safeLimit}${after ? "" : ` OFFSET ${safeOffset}`};
     `;
 
     // Five binds, all the same viewer: preference score, own posts, both sides
     // of the connections test, and the hidden-posts filter.
-    const [posts] = await db.execute(postsQuery, [
-      userId,
-      userId,
-      userId,
-      userId,
-      userId,
-    ]);
+    const viewerBinds = [userId, userId, userId, userId, userId];
+    const cursorBinds = after
+      ? [after.s, after.s, after.t, after.s, after.t, after.i]
+      : [];
+
+    const [posts] = await db.execute(paginatedQuery, [...viewerBinds, ...cursorBinds]);
 
     // If no posts, return empty array
     if (posts.length === 0) {

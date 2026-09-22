@@ -1,5 +1,6 @@
 // routes/poll.routes.js
 import express from "express";
+import { createContentLimiter, reactionLimiter } from "../utils/rateLimiter.js";
 import {
   createPoll,
   getPoll,
@@ -29,7 +30,7 @@ router.use(authenticate);
  *     tags: [Polls]
  *     summary: Create a poll
  */
-router.post("/", createPoll);
+router.post("/", createContentLimiter, createPoll);
 
 /**
  * @swagger
@@ -56,7 +57,7 @@ router.delete("/:poll_id", deletePoll);
  *     tags: [Polls]
  *     summary: Cast or change a vote
  */
-router.post("/:poll_id/vote", votePoll);
+router.post("/:poll_id/vote", reactionLimiter, votePoll);
 
 /**
  * @swagger

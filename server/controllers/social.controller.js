@@ -12,6 +12,7 @@ import {
   updateCommentModel,
   deleteCommentModel,
   getPostCountsModel,
+  encodeFeedCursor,
   likeCommentModel,
   unlikeCommentModel,
   getCommentLikeStateModel,
@@ -125,17 +126,24 @@ export const createPost = async (req, res) => {
 export const getFeedPosts = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 20, offset = 0 } = req.query;
+    const { limit = 20, offset = 0, cursor = null } = req.query;
 
-    const posts = await getFeedPostsModel(
-      userId,
-      parseInt(limit),
-      parseInt(offset)
-    );
+    // Cap the page size: limit is caller-supplied and an unbounded one lets a
+    // single request ask for the whole table.
+    const pageSize = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
+
+    const posts = await getFeedPostsModel(userId, pageSize, parseInt(offset), cursor);
+
+    // A short page means the end of the feed; sending no cursor is how the
+    // client knows to stop asking rather than looping on an empty response.
+    const nextCursor =
+      posts.length === pageSize ? encodeFeedCursor(posts[posts.length - 1]) : null;
 
     res.status(200).json({
       message: "Feed posts retrieved successfully",
       count: posts.length,
+      next_cursor: nextCursor,
+      has_more: Boolean(nextCursor),
       posts: posts.map((post) => ({
         post_id: post.post_id,
         content: post.content,

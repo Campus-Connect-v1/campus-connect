@@ -1,6 +1,11 @@
 // routes/social.routes.js
 import express from "express";
 import {
+  createContentLimiter,
+  conversationLimiter,
+  reactionLimiter,
+} from "../utils/rateLimiter.js";
+import {
   createPost,
   getFeedPosts,
   getPost,
@@ -40,7 +45,7 @@ router.use(authenticate);
  *     tags: [Social]
  *     summary: Create a new post
  */
-router.post("/posts", createPost);
+router.post("/posts", createContentLimiter, createPost);
 
 /**
  * @swagger
@@ -103,7 +108,7 @@ router.patch("/posts/:post_id", updatePost);
  *     tags: [Social]
  *     summary: Like a post
  */
-router.post("/posts/:post_id/like", likePost);
+router.post("/posts/:post_id/like", reactionLimiter, likePost);
 
 /**
  * @swagger
@@ -112,7 +117,7 @@ router.post("/posts/:post_id/like", likePost);
  *     tags: [Social]
  *     summary: Unlike a post
  */
-router.delete("/posts/:post_id/like", unlikePost);
+router.delete("/posts/:post_id/like", reactionLimiter, unlikePost);
 
 /**
  * @swagger
@@ -121,7 +126,7 @@ router.delete("/posts/:post_id/like", unlikePost);
  *     tags: [Social]
  *     summary: Add comment to post
  */
-router.post("/posts/:post_id/comments", addComment);
+router.post("/posts/:post_id/comments", conversationLimiter, addComment);
 
 /**
  * @swagger
@@ -157,7 +162,7 @@ router.delete("/posts/:post_id/comments/:comment_id", deleteComment);
  *     tags: [Social]
  *     summary: Like a comment
  */
-router.post("/comments/:comment_id/like", likeComment);
+router.post("/comments/:comment_id/like", reactionLimiter, likeComment);
 
 /**
  * @swagger
@@ -166,7 +171,7 @@ router.post("/comments/:comment_id/like", likeComment);
  *     tags: [Social]
  *     summary: Unlike a comment
  */
-router.delete("/comments/:comment_id/like", unlikeComment);
+router.delete("/comments/:comment_id/like", reactionLimiter, unlikeComment);
 
 /**
  * @swagger
@@ -175,7 +180,7 @@ router.delete("/comments/:comment_id/like", unlikeComment);
  *     tags: [Social]
  *     summary: Save (bookmark) a post
  */
-router.post("/posts/:post_id/save", savePost);
+router.post("/posts/:post_id/save", reactionLimiter, savePost);
 
 /**
  * @swagger
@@ -184,6 +189,6 @@ router.post("/posts/:post_id/save", savePost);
  *     tags: [Social]
  *     summary: Remove a bookmark
  */
-router.delete("/posts/:post_id/save", unsavePost);
+router.delete("/posts/:post_id/save", reactionLimiter, unsavePost);
 
 export default router;

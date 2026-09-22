@@ -1,5 +1,6 @@
 // routes/conversationRoutes.js
 import express from "express";
+import { conversationLimiter } from "../utils/rateLimiter.js";
 import {
   getConversations,
   getConversation,
@@ -225,7 +226,7 @@ router.get("/:conversationId", authenticate, getConversation);
  *       500:
  *         description: Server error
  */
-router.post("/", authenticate, createConversation);
+router.post("/", conversationLimiter, authenticate, createConversation);
 
 /**
  * @swagger

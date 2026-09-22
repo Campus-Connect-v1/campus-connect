@@ -29,7 +29,62 @@ export default function socketServer(httpServer) {
 
   const onlineUsers = new Map(); // userId -> socket.id
 
+  /**
+   * Per-socket throttle.
+   *
+   * The HTTP limiters do not apply here: a socket event is one frame on an
+   * already-open connection, so send_message over the socket bypassed every
+   * control on the REST side. A simple token bucket per socket per event is
+   * enough -- the connection is already authenticated, so this is about
+   * flooding rather than identity.
+   *
+   * Buckets live on the socket and die with it, which is the right lifetime:
+   * a reconnect is cheap for a real client and no help to a flooder, who has
+   * to redo the handshake to get a fresh allowance.
+   */
+  const RATES = {
+    send_message: { max: 30, windowMs: 60_000 },
+    mark_message_read: { max: 200, windowMs: 60_000 },
+    get_conversations: { max: 30, windowMs: 60_000 },
+    join_post: { max: 300, windowMs: 60_000 },
+    leave_post: { max: 300, windowMs: 60_000 },
+    whoami: { max: 30, windowMs: 60_000 },
+  };
+
+  const allow = (socket, event) => {
+    const rate = RATES[event];
+    if (!rate) return true;
+
+    socket.data.buckets ??= {};
+    const now = Date.now();
+    const bucket = (socket.data.buckets[event] ??= { count: 0, resetAt: now + rate.windowMs });
+
+    if (now > bucket.resetAt) {
+      bucket.count = 0;
+      bucket.resetAt = now + rate.windowMs;
+    }
+
+    if (++bucket.count > rate.max) {
+      // Told once per window, not per frame: a client in a loop would
+      // otherwise be handed a second flood back.
+      if (bucket.count === rate.max + 1) {
+        socket.emit("rate_limited", { event, retry_in_ms: bucket.resetAt - now });
+        console.warn(
+          JSON.stringify({ level: "warn", scope: "socket.rate_limit", event, user_id: socket.user?.id })
+        );
+      }
+      return false;
+    }
+    return true;
+  };
+
   io.on("connection", (socket) => {
+    // Applied as a catch-all rather than inside each handler, so an event
+    // added later is covered by default instead of by remembering to.
+    socket.use(([event], next) =>
+      allow(socket, event) ? next() : next(new Error("rate limited"))
+    );
+
     const userId = socket.user?.id;
     if (userId) {
       onlineUsers.set(userId, socket.id);
