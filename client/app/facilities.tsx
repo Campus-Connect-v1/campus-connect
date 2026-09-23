@@ -9,7 +9,9 @@ import { useAsync } from "@/src/hooks/useAsync";
 import {
   fetchFacilitiesByType,
   fetchReservableFacilities,
+  searchBuildings,
   searchFacilities,
+  type ApiBuilding,
   type ApiFacility,
 } from "@/src/services/campusServices";
 import { useSession } from "@/src/services/SessionContext";
@@ -149,12 +151,16 @@ export default function FacilitiesScreen() {
 
   // Search runs on its own, debounced, and takes over the list while active.
   const [results, setResults] = useState<ApiFacility[]>([]);
+  // Buildings are searched alongside rooms: somebody looking for "Balme" wants
+  // the building, and a rooms-only search finds nothing for it.
+  const [buildings, setBuildings] = useState<ApiBuilding[]>([]);
   const [busy, setBusy] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!universityId || !searching) {
       setResults([]);
+      setBuildings([]);
       setSearchError(null);
       setBusy(false);
       return;
@@ -164,12 +170,20 @@ export default function FacilitiesScreen() {
     setBusy(true);
 
     const timer = setTimeout(async () => {
-      const result = await searchFacilities(universityId, term);
+      const [rooms, places] = await Promise.all([
+        searchFacilities(universityId, term),
+        searchBuildings(universityId, term),
+      ]);
       if (cancelled) return;
+
       // A term that matches nothing comes back successful with no `data`, which
       // the service already normalises to [].
-      setResults(result.success ? result.data : []);
-      setSearchError(result.success ? null : result.error);
+      setResults(rooms.success ? rooms.data : []);
+      setBuildings(places.success ? places.data : []);
+      // Only a rooms failure is worth reporting: buildings are the secondary
+      // result, and a screen that errors because the lesser half failed is
+      // hiding the half that worked.
+      setSearchError(rooms.success ? null : rooms.error);
       setBusy(false);
     }, 300);
 
@@ -297,6 +311,63 @@ export default function FacilitiesScreen() {
         ItemSeparatorComponent={() => (
           <View style={{ height: 1, marginLeft: spacing.lg, backgroundColor: colors.border }} />
         )}
+        ListHeaderComponent={
+          searching && buildings.length > 0 ? (
+            <View style={{ paddingBottom: spacing.xs }}>
+              <Text
+                variant="micro"
+                color="textMuted"
+                style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.xs }}
+              >
+                BUILDINGS
+              </Text>
+              {buildings.map((place) => (
+                <PressableScale
+                  key={place.building_id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${place.building_name}. Open building`}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/building/[id]",
+                      params: { id: place.building_id },
+                    })
+                  }
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.md,
+                    paddingHorizontal: spacing.lg,
+                    paddingVertical: spacing.md,
+                  }}
+                >
+                  <Icon name="campus" size={19} color={colors.textMuted} />
+                  <View style={{ flex: 1 }}>
+                    <Text variant="body" numberOfLines={1}>
+                      {place.building_name}
+                    </Text>
+                    <Text variant="caption" color="textMuted" numberOfLines={1}>
+                      {[place.building_code, place.address].filter(Boolean).join(" · ")}
+                    </Text>
+                  </View>
+                  <Icon name="forward" size={16} color={colors.textMuted} />
+                </PressableScale>
+              ))}
+              {results.length > 0 ? (
+                <Text
+                  variant="micro"
+                  color="textMuted"
+                  style={{
+                    paddingHorizontal: spacing.lg,
+                    paddingTop: spacing.md,
+                    paddingBottom: spacing.xs,
+                  }}
+                >
+                  ROOMS
+                </Text>
+              ) : null}
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           loading ? (
             <SkeletonList count={4} />
@@ -309,10 +380,12 @@ export default function FacilitiesScreen() {
               onAction={searching ? () => setQuery(query) : byFilter.reload}
             />
           ) : searching ? (
-            <EmptyState
-              title="No room matches that"
-              body="Try part of a room name, or a building name."
-            />
+            buildings.length > 0 ? null : (
+              <EmptyState
+                title="Nothing matches that"
+                body="Try part of a room name, or a building name."
+              />
+            )
           ) : (
             <EmptyState
               title={`No ${activeLabel.toLowerCase()} listed`}

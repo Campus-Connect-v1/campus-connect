@@ -6,6 +6,7 @@ import { SettingsShell, SettingsToggle } from "@/src/components/settings/Setting
 import { EmptyState, Icon, InlineNotice, PressableScale, Text } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useOptimisticToggle } from "@/src/hooks/useOptimisticToggle";
+import { useLocationSharing } from "@/src/services/LocationSharingContext";
 import { useSession } from "@/src/services/SessionContext";
 import {
   audienceFor,
@@ -32,6 +33,9 @@ const VISIBILITY: { value: ProfileVisibility; label: string; detail: string }[] 
 export default function PrivacySettingsScreen() {
   const { colors } = useTheme();
   const { profile, refresh } = useSession();
+  // Shared with Ghost Mode on the map: the two write the same server field, so
+  // they must not hold separate ideas of its value.
+  const locationSharing = useLocationSharing();
 
   const settings = useAsync(
     useCallback(() => fetchPrivacySettings(), []),
@@ -144,6 +148,12 @@ export default function PrivacySettingsScreen() {
               value={discoverable.value}
               onChange={discoverable.toggle}
               disabled={discoverable.busy}
+            />
+            <SettingsToggle
+              title="Share my location"
+              detail="Off removes you from the map and from nearby entirely"
+              value={locationSharing.sharing}
+              onChange={(next) => void locationSharing.setSharing(next)}
             />
             <SettingsToggle
               title="Show exact location"

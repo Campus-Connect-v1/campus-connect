@@ -31,10 +31,10 @@ import {
   getPermissionStatus,
   publishCurrentLocation,
   requestLocationPermission,
-  setIncognito,
   type NearbyProfile,
 } from "@/src/services/geolocation";
 import { fetchFriendLocations, type FriendLocation } from "@/src/services/friendMapServices";
+import { useLocationSharing } from "@/src/services/LocationSharingContext";
 import { useSession } from "@/src/services/SessionContext";
 import { TAB_BAR_CLEARANCE } from "@/src/styles/layout";
 import { culture, SECTION_HUE, radius, spacing } from "@/src/styles/theme";
@@ -69,7 +69,8 @@ export default function ConnectScreen() {
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hidden, setHidden] = useState(false);
+  const locationSharing = useLocationSharing();
+  const hidden = !locationSharing.sharing;
 
   const universityId = profile?.university_id ?? user?.university_id;
 
@@ -217,11 +218,9 @@ export default function ConnectScreen() {
             accessibilityLabel={
               hidden ? "You are hidden. Become visible" : "You are visible. Go invisible"
             }
-            onPress={async () => {
+            onPress={() => {
               Haptics.selectionAsync();
-              const next = !hidden;
-              setHidden(next);
-              await setIncognito(next).catch(() => {});
+              void locationSharing.setGhost(!hidden);
             }}
             style={{
               flexDirection: "row",
@@ -350,14 +349,10 @@ export default function ConnectScreen() {
                 ? "You are hidden from the map. Become visible"
                 : "You are visible on the map. Hide yourself"
             }
-            onPress={async () => {
+            onPress={() => {
               Haptics.selectionAsync();
-              const next = !hidden;
-              setHidden(next);
-              const result = await setIncognito(next);
-              // Reverted on failure: a switch that says you are hidden while
-              // the server still shows you is the worst possible outcome here.
-              if (!result.success) setHidden(!next);
+              // Reverting on failure is handled in the shared context.
+              void locationSharing.setGhost(!hidden);
             }}
             style={{
               position: "absolute",

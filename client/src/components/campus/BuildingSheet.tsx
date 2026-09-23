@@ -1,7 +1,8 @@
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
-import { useCallback, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { router } from "expo-router";
+import { useCallback } from "react";
+import { View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { Icon, Loader, PressableScale, Text } from "@/src/components/ui";
@@ -97,7 +98,6 @@ export function BuildingSheet({
   onClose: () => void;
 }) {
   const { colors } = useTheme();
-  const [expanded, setExpanded] = useState(false);
 
   const facilities = useAsync(
     useCallback(() => fetchBuildingFacilities(pin.id), [pin.id]),
@@ -106,7 +106,8 @@ export function BuildingSheet({
 
   const rooms = facilities.data ?? [];
   const bookable = rooms.filter((room) => Number(room.is_reservable)).length;
-  const shown = expanded ? rooms : rooms.slice(0, 3);
+  // The sheet stays a glance; the full list lives on the building screen.
+  const shown = rooms.slice(0, 3);
 
   const summary = facilities.loading
     ? "Looking for rooms"
@@ -178,23 +179,17 @@ export function BuildingSheet({
                 backgroundColor: "rgba(255,255,255,0.14)",
               }}
             />
-            <ScrollView
-              scrollEnabled={expanded}
-              showsVerticalScrollIndicator={false}
-              style={{ maxHeight: expanded ? 240 : undefined }}
-            >
+            <View>
               {shown.map((room) => (
                 <FacilityRow key={room.facility_id} facility={room} />
               ))}
-            </ScrollView>
+            </View>
 
             {rooms.length > 3 ? (
               <PressableScale
                 accessibilityRole="button"
-                accessibilityLabel={
-                  expanded ? "Show fewer rooms" : `Show all ${rooms.length} rooms`
-                }
-                onPress={() => setExpanded((value) => !value)}
+                accessibilityLabel={`Open ${pin.label}`}
+                onPress={() => router.push({ pathname: "/building/[id]", params: { id: pin.id } })}
                 style={{
                   minHeight: 40,
                   alignItems: "center",
@@ -204,9 +199,9 @@ export function BuildingSheet({
                 }}
               >
                 <Text variant="label" onMedia>
-                  {expanded ? "Show less" : `All ${rooms.length} rooms`}
+                  {`All ${rooms.length} rooms`}
                 </Text>
-                <Icon name={expanded ? "back" : "forward"} size={14} color={colors.onMedia} />
+                <Icon name="forward" size={14} color={colors.onMedia} />
               </PressableScale>
             ) : null}
           </>

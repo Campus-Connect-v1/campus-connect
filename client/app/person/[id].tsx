@@ -8,6 +8,7 @@ import { EmptyState, Loader, Media, PressableScale, Tag, Text, Icon } from "@/sr
 import { adaptPublicUser } from "@/src/features/profile/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
 import { createConversation, fetchConversationWith } from "@/src/services/conversationServices";
+import { fetchUserStories } from "@/src/services/storyServices";
 import { useSession } from "@/src/services/SessionContext";
 import {
   fetchUserById,
@@ -41,6 +42,14 @@ export default function PersonScreen() {
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+
+  // Whether this person has an unexpired story, so the profile can offer it.
+  // The story feed does not necessarily carry them, hence the direct read.
+  const stories = useAsync(
+    useCallback(() => fetchUserStories(id), [id]),
+    [id]
+  );
+  const hasStory = (stories.data ?? []).length > 0;
 
   /**
    * Follow state.
@@ -328,6 +337,29 @@ export default function PersonScreen() {
           {/* Counts read from the follow state that is already loaded, so this
               adds no request. Both are tappable, because a number nobody can
               open is decoration. */}
+          {hasStory ? (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`View ${person.name}'s story`}
+              onPress={() => router.push({ pathname: "/stories/[userId]", params: { userId: id } })}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.xs,
+                minHeight: 46,
+                borderRadius: radius.full,
+                borderWidth: 1.5,
+                borderColor: culture.pink,
+              }}
+            >
+              <Icon name="play" size={15} color={culture.pink} />
+              <Text variant="label" style={{ color: culture.pink }}>
+                View story
+              </Text>
+            </PressableScale>
+          ) : null}
+
           {follow ? (
             <View style={{ flexDirection: "row", gap: spacing["2xl"] }}>
               {[
