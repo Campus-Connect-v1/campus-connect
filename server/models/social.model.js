@@ -78,7 +78,30 @@ const decodeFeedCursor = (cursor) => {
   }
 };
 
-export const getFeedPostsModel = async (userId, limit = 20, offset = 0, cursor = null) => {
+/**
+ * How the feed decides what is eligible.
+ *
+ * "following" — posts from people you follow, plus your connections and your
+ * own. This is the timeline proper.
+ *
+ * "discovery" — every public post from your university. Used when you follow
+ * too few people for a graph query to fill a screen, because an empty feed is
+ * the worst possible first impression and a new account has no graph yet.
+ *
+ * Before this, the clause was simply `OR p.visibility = 'public'` with no
+ * graph term at all: every public post by every account in the database was in
+ * everyone's feed. That is a firehose, and it works only while the database is
+ * small enough that the firehose and a timeline look the same.
+ */
+export const FEED_MODES = { FOLLOWING: "following", DISCOVERY: "discovery" };
+
+export const getFeedPostsModel = async (
+  userId,
+  limit = 20,
+  offset = 0,
+  cursor = null,
+  mode = FEED_MODES.FOLLOWING
+) => {
   const safeLimit = Number.isInteger(parseInt(limit)) ? parseInt(limit) : 20;
   const safeOffset = Number.isInteger(parseInt(offset)) ? parseInt(offset) : 0;
   const after = decodeFeedCursor(cursor);
@@ -120,7 +143,23 @@ export const getFeedPostsModel = async (userId, limit = 20, offset = 0, cursor =
         AND (p.expires_at IS NULL OR p.expires_at > NOW())
         AND (
           p.user_id = ?
-          OR p.visibility = 'public'
+          OR (
+            -- Public posts are visible to anyone; the graph decides whether
+            -- they are RELEVANT. Two different questions that were previously
+            -- answered by the same clause.
+            p.visibility = 'public'
+            AND (
+              ${mode === FEED_MODES.DISCOVERY
+                  // Campus-wide, not world-wide. A student with no graph yet
+                  // should meet their own university, not every account on the
+                  // platform -- that is a firehose wearing a different hat.
+                  ? "u.university_id = (SELECT university_id FROM users WHERE user_id = ?)"
+                  : `EXISTS (
+                SELECT 1 FROM follows f
+                WHERE f.follower_id = ? AND f.following_id = p.user_id
+              )`}
+            )
+          )
           OR (
             p.visibility = 'connections'
             AND EXISTS (
@@ -170,7 +209,12 @@ export const getFeedPostsModel = async (userId, limit = 20, offset = 0, cursor =
 
     // Five binds, all the same viewer: preference score, own posts, both sides
     // of the connections test, and the hidden-posts filter.
-    const viewerBinds = [userId, userId, userId, userId, userId];
+    // Bind order tracks the clause above: preference score, own posts, the
+    // follows test (absent in discovery, where the branch is a literal), both
+    // sides of the connections test, then the hidden-posts filter.
+    // Both modes take six binds; only the third differs in meaning -- the
+    // viewer's university in discovery, the viewer's follow edge otherwise.
+    const viewerBinds = [userId, userId, userId, userId, userId, userId];
     const cursorBinds = after
       ? [after.s, after.s, after.t, after.s, after.t, after.i]
       : [];
@@ -735,3 +779,128 @@ export const getSavedPostsModel = async (userId, limit = 50, offset = 0) => {
     throw new Error(`Database error in getSavedPosts: ${error.message}`);
   }
 };
+
+// ---------------------------------------------------------------------------
+// Posts by author
+// ---------------------------------------------------------------------------
+
+/**
+ * One user's posts, as seen by a particular viewer.
+ *
+ * The client used to get this by pulling a page of the caller's own feed and
+ * filtering it by author. That was already lossy -- it could only find posts
+ * inside the fetched window -- and once the feed became graph-scoped it became
+ * wrong: a profile for someone you do not follow would show nothing at all,
+ * because none of their posts were in your feed to filter.
+ *
+ * Visibility is enforced here rather than inherited from the feed, and the
+ * rules are the profile's own: your own posts always, public posts to anyone,
+ * connections-only posts to accepted connections. Following someone does not
+ * grant access to their 'connections' posts -- follow is about reach, the
+ * connection is about trust, and conflating them would quietly widen who can
+ * read a post someone deliberately restricted.
+ *
+ * Keyset on (created_at, post_id): a profile is strictly chronological, with
+ * no preference score to fold in, so the cursor is simpler than the feed's.
+ */
+export const getUserPostsModel = async (
+  authorId,
+  viewerId,
+  limit = 20,
+  cursor = null
+) => {
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
+
+  let after = null;
+  if (cursor) {
+    try {
+      const parsed = JSON.parse(Buffer.from(String(cursor), "base64url").toString("utf8"));
+      if (parsed?.t && typeof parsed?.i === "string") {
+        after = { t: new Date(parsed.t), i: parsed.i };
+      }
+    } catch {
+      after = null;
+    }
+  }
+
+  try {
+    const keyset = after
+      ? `AND (p.created_at < ? OR (p.created_at = ? AND p.post_id < ?))`
+      : "";
+
+    const query = `
+      SELECT
+        p.post_id, p.user_id, p.content, p.media_url, p.media_type,
+        p.visibility, p.created_at, p.expires_at,
+        u.first_name, u.last_name, u.profile_picture_url, u.profile_headline,
+        pol.poll_id,
+        (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id) AS like_count,
+        (SELECT COUNT(*) FROM post_comments WHERE post_id = p.post_id AND is_active = 1) AS comment_count,
+        (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id AND user_id = ?) AS has_liked,
+        (SELECT COUNT(*) FROM saved_posts WHERE post_id = p.post_id AND user_id = ?) AS has_saved
+      FROM posts p
+      JOIN users u ON u.user_id = p.user_id
+      LEFT JOIN polls pol ON pol.post_id = p.post_id
+      WHERE p.user_id = ?
+        AND p.is_active = 1
+        AND (p.expires_at IS NULL OR p.expires_at > NOW())
+        AND (
+          p.user_id = ?
+          OR p.visibility = 'public'
+          OR (
+            p.visibility = 'connections'
+            AND EXISTS (
+              SELECT 1 FROM connections c
+              WHERE c.status = 'accepted'
+                AND (
+                  (c.requester_id = ? AND c.receiver_id = p.user_id)
+                  OR (c.receiver_id = ? AND c.requester_id = p.user_id)
+                )
+            )
+          )
+        )
+        ${keyset}
+      ORDER BY p.created_at DESC, p.post_id DESC
+      LIMIT ${safeLimit}
+    `;
+
+    const binds = [viewerId, viewerId, authorId, viewerId, viewerId, viewerId];
+    if (after) binds.push(after.t, after.t, after.i);
+
+    const [rows] = await db.execute(query, binds);
+
+    return rows.map((row) => ({
+      post_id: row.post_id,
+      content: row.content,
+      media_url: row.media_url,
+      media_type: row.media_type,
+      poll_id: row.poll_id ?? null,
+      visibility: row.visibility,
+      created_at: row.created_at,
+      expires_at: row.expires_at,
+      author: {
+        user_id: row.user_id,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        profile_picture_url: row.profile_picture_url,
+        profile_headline: row.profile_headline,
+      },
+      stats: {
+        like_count: Number(row.like_count),
+        comment_count: Number(row.comment_count),
+      },
+      user_actions: {
+        has_liked: Number(row.has_liked) > 0,
+        has_saved: Number(row.has_saved) > 0,
+      },
+    }));
+  } catch (error) {
+    throw new Error(`Database error in getUserPosts: ${error.message}`);
+  }
+};
+
+/** Cursor for getUserPostsModel — chronological, so no score component. */
+export const encodeUserPostCursor = (post) =>
+  Buffer.from(
+    JSON.stringify({ t: new Date(post.created_at).toISOString(), i: post.post_id })
+  ).toString("base64url");

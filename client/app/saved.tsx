@@ -8,26 +8,24 @@ import { EmptyState, SkeletonList } from "@/src/components/ui";
 import { adaptPost } from "@/src/features/feed/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
-import { fetchFeed } from "@/src/services/socialServices";
+import { fetchSavedPosts } from "@/src/services/socialServices";
 import { spacing } from "@/src/styles/theme";
 
 export default function SavedScreen() {
   const store = useSavedPosts();
+
+  // Asks the server for the saved posts themselves rather than pulling a page
+  // of the feed and filtering it. The old approach could only ever show saves
+  // that happened to still be in the first fifty feed rows -- anything older
+  // was silently missing from a screen whose whole job is not to lose things.
   const feed = useAsync(
-    useCallback(() => fetchFeed(50, 0), []),
+    useCallback(() => fetchSavedPosts(50, 0), []),
     []
   );
 
-  // Saves are device-local ids, so the feed is the source of the post bodies
-  // and the store decides which of them belong here. A saved post that has
-  // since dropped out of the feed window simply will not appear.
   const saved = useMemo(
-    () =>
-      (feed.data ?? [])
-        .map(adaptPost)
-        .filter((post) => store.ids.has(post.id))
-        .map((post) => ({ ...post, saved: true })),
-    [feed.data, store.ids]
+    () => (feed.data ?? []).map(adaptPost).map((post) => ({ ...post, saved: true })),
+    [feed.data]
   );
 
   return (
