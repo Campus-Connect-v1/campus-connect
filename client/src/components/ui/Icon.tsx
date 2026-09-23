@@ -119,8 +119,30 @@ export interface IconProps {
   color: string;
   /** Hugeicons default is 1.5. Bump to 2 for small sizes that read too faint. */
   strokeWidth?: number;
+  /**
+   * Fill the glyph rather than outlining it.
+   *
+   * The icon set is stroke-only, so an "active" state otherwise has to be
+   * carried by colour alone — which is too weak a signal for a toggle like a
+   * like button, where the difference between on and off should be obvious at
+   * a glance and not depend on remembering which colour meant what.
+   *
+   * HugeiconsProps extends SvgProps, so fill passes straight through to the
+   * underlying paths.
+   */
+  filled?: boolean;
 }
 
-export function Icon({ name, size = 22, color, strokeWidth = 1.8 }: IconProps) {
-  return <HugeiconsIcon icon={ICONS[name]} size={size} color={color} strokeWidth={strokeWidth} />;
+export function Icon({ name, size = 22, color, strokeWidth = 1.8, filled = false }: IconProps) {
+  return (
+    <HugeiconsIcon
+      icon={ICONS[name]}
+      size={size}
+      color={color}
+      strokeWidth={strokeWidth}
+      // "none" rather than undefined: react-native-svg inherits fill from the
+      // parent otherwise, which paints outline icons solid at random.
+      fill={filled ? color : "none"}
+    />
+  );
 }

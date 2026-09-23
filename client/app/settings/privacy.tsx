@@ -67,7 +67,7 @@ export default function PrivacySettingsScreen() {
   useEffect(() => {
     if (!profile) return;
     // The column is an audience enum; anything other than "none" is on.
-    const value = (profile as { show_status_preference?: string }).show_status_preference;
+    const value = profile?.show_status_preference;
     syncActivity(value !== "none");
   }, [profile, syncActivity]);
 

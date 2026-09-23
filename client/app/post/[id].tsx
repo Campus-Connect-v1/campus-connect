@@ -83,16 +83,29 @@ function CommentRow({
       <PressableScale
         onPress={() => onToggleLike(comment.comment_id)}
         accessibilityRole="button"
-        accessibilityLabel={`${liked ? "Unlike" : "Like"} comment by ${name}`}
-        hitSlop={8}
-        style={{ alignItems: "center", gap: 2, paddingTop: 2 }}
+        accessibilityState={{ selected: liked }}
+        accessibilityLabel={
+          `${liked ? "Unlike" : "Like"} comment by ${name}` +
+          (likeCount > 0 ? `, ${likeCount} ${likeCount === 1 ? "like" : "likes"}` : "")
+        }
+        hitSlop={10}
+        // Fixed width and a reserved line for the count, so the comment text
+        // does not reflow sideways the moment a count appears or disappears.
+        style={{ alignItems: "center", width: 30, paddingTop: 2 }}
       >
-        <Icon name="like" size={15} color={liked ? colors.accent : colors.textMuted} />
-        {likeCount > 0 ? (
-          <Text variant="micro" color="textMuted">
-            {likeCount}
-          </Text>
-        ) : null}
+        <Icon
+          name="like"
+          size={16}
+          filled={liked}
+          color={liked ? colors.accent : colors.textMuted}
+        />
+        <Text
+          variant="micro"
+          color={liked ? "accent" : "textMuted"}
+          style={{ marginTop: 1, opacity: likeCount > 0 ? 1 : 0 }}
+        >
+          {likeCount > 0 ? likeCount : "0"}
+        </Text>
       </PressableScale>
     </View>
   );

@@ -801,7 +801,14 @@ export const getUserProfile = async (userId) => {
       linkedin_url, website_url,
       date_of_birth, gender, year_of_study, graduation_year,
       social_links, privacy_settings, is_profile_complete,
-      is_email_verified, created_at, updated_at
+      is_email_verified, created_at, updated_at,
+      -- The notification and privacy screens read these off the session
+      -- profile. They were writable (updateUserProfileModel allows them) but
+      -- never selected, so every toggle saved correctly and then read back as
+      -- its default: switch one off, reopen the screen, it is on again.
+      notification_email, notification_push,
+      privacy_profile, show_status_preference, show_location_preference,
+      timezone
      FROM users WHERE user_id = ? AND is_active = TRUE`,
     [userId]
     ),

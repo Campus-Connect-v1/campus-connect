@@ -37,8 +37,18 @@ export function seeLessLikePost(postId: string) {
 }
 
 export async function fetchHiddenPosts() {
-  const result = await request<{ posts?: { post_id: string }[] }>(() =>
-    api.get("/moderation/hidden")
-  );
-  return result.success ? { ...result, data: result.data.posts ?? [] } : result;
+  const result = await request<{
+    hidden_posts?: {
+      post_id: string;
+      hidden_at: string;
+      content: string | null;
+      media_url: string | null;
+      media_type: string | null;
+      created_at: string;
+      is_active: boolean;
+    }[];
+  }>(() => api.get("/moderation/hidden"));
+  // The server sends `hidden_posts`, not `posts` — reading the wrong key here
+  // returned an empty list unconditionally.
+  return result.success ? { ...result, data: result.data.hidden_posts ?? [] } : result;
 }

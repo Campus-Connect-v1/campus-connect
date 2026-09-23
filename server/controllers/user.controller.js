@@ -20,7 +20,9 @@ import {
   cancelConnectionRequestModel,
   getUserInterestsModel,
   getUserCoursesModel,
+  deleteProfileModel,
 } from "../models/user.model.js";
+import bcrypt from "bcrypt";
 import { authenticate } from "../middleware/auth.js";
 import { notify } from "../models/notification.model.js";
 import { db } from "../config/db.js";
@@ -60,6 +62,14 @@ export const getProfile = async (req, res) => {
           ? JSON.parse(user.privacy_settings)
           : {},
         is_profile_complete: user.is_profile_complete,
+        // Preferences the settings screens render. Booleans rather than
+        // MySQL's 1/0, so the client can use them directly.
+        notification_email: Boolean(user.notification_email),
+        notification_push: Boolean(user.notification_push),
+        privacy_profile: user.privacy_profile,
+        show_status_preference: user.show_status_preference,
+        show_location_preference: user.show_location_preference,
+        timezone: user.timezone,
         university_id: user.university_id,
         created_at: user.created_at,
       },
@@ -115,13 +125,23 @@ export const deleteProfile = async (req, res) => {
     const userId = req.user.id;
     const { deletion_reason, password } = req.body;
 
-    // Optional: Add password confirmation for security
+    // Password confirmation. The client always sends one, so this branch
+    // always runs -- which is why the three undefined identifiers it used to
+    // reference (getUserByIdModel, bcrypt, deleteProfileModel, none of them
+    // imported) made account deletion a guaranteed ReferenceError and a
+    // generic 500. findById was already imported and is the right function;
+    // getUserByIdModel does not exist in the model at all.
     if (password) {
-      const user = await getUserByIdModel(userId);
-      const isPasswordValid = await bcrypt.compare(
-        password,
-        user.password_hash
-      );
+      const user = await findById(userId);
+
+      if (!user || !user.password_hash) {
+        return res.status(401).json({
+          message:
+            "Invalid password. Please confirm your password to delete your account.",
+        });
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
       if (!isPasswordValid) {
         return res.status(401).json({

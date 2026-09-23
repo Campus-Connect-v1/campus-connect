@@ -161,6 +161,13 @@ export const getFeedPostsModel = async (
             )
           )
           OR (
+            -- Campus-wide: anyone at the same university, no graph required.
+            -- This sits between public and connections and is the audience the
+            -- composer has always called "Campus".
+            p.visibility = 'university'
+            AND u.university_id = (SELECT university_id FROM users WHERE user_id = ?)
+          )
+          OR (
             p.visibility = 'connections'
             AND EXISTS (
               SELECT 1 FROM connections c
@@ -214,7 +221,10 @@ export const getFeedPostsModel = async (
     // sides of the connections test, then the hidden-posts filter.
     // Both modes take six binds; only the third differs in meaning -- the
     // viewer's university in discovery, the viewer's follow edge otherwise.
-    const viewerBinds = [userId, userId, userId, userId, userId, userId];
+    // Seven now: preference score, own posts, the follows test (or the
+    // viewer university in discovery), the university-visibility test, both
+    // sides of the connections test, then the hidden-posts filter.
+    const viewerBinds = [userId, userId, userId, userId, userId, userId, userId];
     const cursorBinds = after
       ? [after.s, after.s, after.t, after.s, after.t, after.i]
       : [];
@@ -746,10 +756,14 @@ export const getSavedPostsModel = async (userId, limit = 50, offset = 0) => {
          u.profile_picture_url, u.profile_headline,
          (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id) AS like_count,
          (SELECT COUNT(*) FROM post_comments WHERE post_id = p.post_id AND is_active = 1) AS comment_count,
-         (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id AND user_id = ?) AS has_liked
+         (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id AND user_id = ?) AS has_liked,
+         pol.poll_id
        FROM saved_posts sp
        JOIN posts p ON p.post_id = sp.post_id AND p.is_active = 1
        JOIN users u ON u.user_id = p.user_id
+       -- The feed and the profile query both join this; omitting it here meant
+       -- a saved poll lost its options and rendered as a bare caption.
+       LEFT JOIN polls pol ON pol.post_id = p.post_id
        WHERE sp.user_id = ?
        ORDER BY sp.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -761,7 +775,7 @@ export const getSavedPostsModel = async (userId, limit = 50, offset = 0) => {
       content: row.content,
       media_url: row.media_url,
       media_type: row.media_type,
-      poll_id: null,
+      poll_id: row.poll_id ?? null,
       visibility: row.visibility,
       created_at: row.created_at,
       expires_at: row.expires_at,
@@ -848,6 +862,10 @@ export const getUserPostsModel = async (
           p.user_id = ?
           OR p.visibility = 'public'
           OR (
+            p.visibility = 'university'
+            AND u.university_id = (SELECT university_id FROM users WHERE user_id = ?)
+          )
+          OR (
             p.visibility = 'connections'
             AND EXISTS (
               SELECT 1 FROM connections c
@@ -864,7 +882,7 @@ export const getUserPostsModel = async (
       LIMIT ${safeLimit}
     `;
 
-    const binds = [viewerId, viewerId, authorId, viewerId, viewerId, viewerId];
+    const binds = [viewerId, viewerId, authorId, viewerId, viewerId, viewerId, viewerId];
     if (after) binds.push(after.t, after.t, after.i);
 
     const [rows] = await db.execute(query, binds);
