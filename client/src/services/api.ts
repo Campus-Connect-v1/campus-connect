@@ -17,8 +17,19 @@ export type Result<T> =
 export const api: AxiosInstance = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
-  // Render free instances cold-start; the default gives up long before.
-  timeout: 45000,
+  // Render free instances spin down after 15 minutes idle, and the repo's own
+  // keep-awake workflow documents the cold start as ~50s. This was 45000 --
+  // BELOW that -- so a request that woke the instance was abandoned by the
+  // client about five seconds before the server finished booting.
+  //
+  // The failure was worse than a slow request: the server had already run the
+  // write, so a post would be created and then reported as "The server took
+  // too long to respond", and the obvious retry created a duplicate.
+  //
+  // 90s clears the documented worst case with room to spare. A request that
+  // genuinely takes this long is a cold start, not a hang, and the caller is
+  // better off waiting than being told something false.
+  timeout: 90000,
 });
 
 api.interceptors.request.use((config) => {

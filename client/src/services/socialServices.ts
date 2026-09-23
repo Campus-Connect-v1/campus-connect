@@ -109,12 +109,28 @@ export function unlikePost(postId: string) {
   return request(() => api.delete(`/social/posts/${postId}/like`));
 }
 
-export function createPost(content: string, mediaUrl?: string) {
+export type PostVisibility = "public" | "university" | "connections";
+
+/**
+ * Create a post.
+ *
+ * Visibility is sent explicitly and defaults to "public". It used to be
+ * omitted entirely, so the server applied its own default of "connections" --
+ * and the discovery feed only admits public posts from your university. The
+ * result was that an ordinary post reached accepted connections and nobody
+ * else, on a network where almost nobody has connections yet.
+ */
+export function createPost(
+  content: string,
+  mediaUrl?: string,
+  visibility: PostVisibility = "public"
+) {
   return request<{ post: ApiCreatedPost }>(() =>
     api.post("/social/posts", {
       content,
       media_url: mediaUrl,
       media_type: mediaUrl ? "image" : "text",
+      visibility,
     })
   );
 }

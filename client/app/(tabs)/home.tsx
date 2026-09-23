@@ -32,8 +32,9 @@ import { useAsync } from "@/src/hooks/useAsync";
 import { fetchEvents } from "@/src/services/eventServices";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
-import { fetchFeed, likePost, unlikePost } from "@/src/services/socialServices";
+import { fetchFeed, likePost, unlikePost, type ApiPost } from "@/src/services/socialServices";
 import { useFeedRealtime } from "@/src/hooks/useFeedRealtime";
+import { onNewPost } from "@/src/services/socket";
 import { fetchUniversityById } from "@/src/services/universityServices";
 import { useUnread } from "@/src/services/UnreadContext";
 import { fetchStoryFeed } from "@/src/services/storyServices";
@@ -391,6 +392,17 @@ export default function HomeScreen() {
   // and a ref is read synchronously where a state flag would still be false on
   // the second call and fetch the same page twice.
   const fetching = useRef(false);
+  const listRef = useRef<FlatList<FeedRow>>(null);
+
+  /**
+   * Posts published while this feed is open, held back rather than inserted.
+   *
+   * Instagram's behaviour, and for a reason: silently splicing rows into a
+   * list someone is reading moves the thing under their thumb. Buffering and
+   * offering "N new posts" lets the reader choose the interruption, and the
+   * tap doubles as the scroll-to-top they would otherwise do by hand.
+   */
+  const [pending, setPending] = useState<FeedPost[]>([]);
 
   useEffect(() => {
     if (!feed.data) return;
@@ -474,6 +486,41 @@ export default function HomeScreen() {
         ),
     }
   );
+
+  useEffect(() => {
+    const unsubscribe = onNewPost(({ post }) => {
+      // Our own post is already on screen optimistically after composing, and
+      // being told your own post is "new" is nonsense.
+      if (post.author.user_id === user?.id) return;
+
+      const adapted = adaptPost(post as unknown as ApiPost);
+
+      setPending((current) => {
+        // The same frame can arrive twice -- campus room and follower fan-out.
+        if (current.some((p) => p.id === adapted.id)) return current;
+        return [adapted, ...current];
+      });
+    });
+
+    return unsubscribe;
+  }, [user?.id]);
+
+  // Drop anything from the buffer that a refresh has already pulled in, so the
+  // count never promises posts the reader can already see.
+  useEffect(() => {
+    if (pending.length === 0) return;
+    setPending((current) => current.filter((p) => !posts.some((existing) => existing.id === p.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts]);
+
+  const showPending = useCallback(() => {
+    setPosts((current) => {
+      const seen = new Set(current.map((post) => post.id));
+      return [...pending.filter((post) => !seen.has(post.id)), ...current];
+    });
+    setPending([]);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [pending]);
 
   const toggleSave = saved.toggle;
 
@@ -563,6 +610,7 @@ export default function HomeScreen() {
       ) : null}
 
       <FlatList
+        ref={listRef}
         data={rows}
         // The slot index keys the injected rows: two suggestion blocks in one
         // feed would otherwise collide on a constant key and FlatList would
@@ -747,6 +795,50 @@ export default function HomeScreen() {
           );
         }}
       />
+
+      {/*
+        New posts arrived while reading. Offered rather than inserted: the
+        reader decides when the list moves, and the tap also takes them to the
+        top, which is where the new rows are.
+      */}
+      {pending.length > 0 ? (
+        <View
+          style={{
+            position: "absolute",
+            top: insets.top + 4,
+            left: 0,
+            right: 0,
+            alignItems: "center",
+            zIndex: 10,
+          }}
+          pointerEvents="box-none"
+        >
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={`Show ${pending.length} new ${pending.length === 1 ? "post" : "posts"}`}
+            onPress={showPending}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.xs,
+              paddingHorizontal: spacing.lg,
+              minHeight: 40,
+              borderRadius: radius.full,
+              backgroundColor: colors.accent,
+              shadowColor: "#000",
+              shadowOpacity: 0.18,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 5,
+            }}
+          >
+            <Icon name="forward" size={14} color={colors.accentFg} />
+            <Text variant="label" style={{ color: colors.accentFg }}>
+              {pending.length === 1 ? "1 new post" : `${pending.length} new posts`}
+            </Text>
+          </PressableScale>
+        </View>
+      ) : null}
 
       {/*
         Composing is the one thing someone opens this screen to do that the

@@ -274,14 +274,52 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
         u2.profile_headline,
         u2.program,
         u2.graduation_year,
-        (
-          COALESCE(shared_interests.score, 0) * 2 +
-          COALESCE(shared_courses.score, 0) +
-          COALESCE(shared_groups.score, 0) +
-          COALESCE(mutuals.score, 0) +
-          CASE WHEN u1.program = u2.program THEN 1 ELSE 0 END +
-          CASE WHEN u1.graduation_year = u2.graduation_year THEN 1 ELSE 0 END
-        ) AS match_score
+        -- Returned so the client can say WHY two people match ("3 shared
+        -- interests, 2 mutual friends") instead of only showing a number.
+        COALESCE(shared_interests.score, 0) AS shared_interests,
+        COALESCE(shared_courses.score, 0)   AS shared_courses,
+        COALESCE(shared_groups.score, 0)    AS shared_groups,
+        COALESCE(mutuals.score, 0)          AS mutual_connections,
+        CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 1 ELSE 0 END AS same_program,
+        CASE WHEN u1.graduation_year IS NOT NULL
+              AND u1.graduation_year = u2.graduation_year THEN 1 ELSE 0 END AS same_year,
+        /*
+         * Match score, 0-100, computed here rather than derived downstream.
+         *
+         * The previous formula summed raw counts and the controller divided by
+         * a hardcoded 5, so the score was unbounded while the denominator was
+         * not: three shared interests scored 6 and clamped to 100%, and every
+         * strong match looked identical to every other. Two people sharing
+         * three interests and nothing else were indistinguishable from two who
+         * shared interests, courses, a study group and nine mutual friends.
+         *
+         * Each signal is now saturated individually, then weighted. Saturating
+         * first is the important part: it stops any single dimension running
+         * away with the total, so the score rewards breadth of overlap rather
+         * than depth in one place -- which is what actually predicts whether
+         * two students would get on.
+         *
+         * Weights, and why:
+         *   interests 30 - the only signal a brand-new account has
+         *   mutuals   25 - the strongest real-world predictor of a connection
+         *   courses   20 - you already share a room twice a week
+         *   groups    12 - deliberate, but a smaller population
+         *   program    8 - same department, weak on its own
+         *   year       5 - weakest; cohort alone says little
+         *
+         * Caps are set where the signal stops being informative: a fourth
+         * shared interest says much less than the first, and beyond five
+         * mutuals you are simply in the same circle.
+         */
+        LEAST(100, ROUND(
+          LEAST(COALESCE(shared_interests.score, 0) / 3.0, 1.0) * 30 +
+          LEAST(COALESCE(mutuals.score, 0)          / 5.0, 1.0) * 25 +
+          LEAST(COALESCE(shared_courses.score, 0)   / 2.0, 1.0) * 20 +
+          LEAST(COALESCE(shared_groups.score, 0)    / 2.0, 1.0) * 12 +
+          CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 8 ELSE 0 END +
+          CASE WHEN u1.graduation_year IS NOT NULL
+                AND u1.graduation_year = u2.graduation_year THEN 5 ELSE 0 END
+        )) AS match_score
       FROM users u1
       JOIN users u2
         ON u2.university_id = u1.university_id
@@ -801,7 +839,14 @@ export const getUserProfile = async (userId) => {
       linkedin_url, website_url,
       date_of_birth, gender, year_of_study, graduation_year,
       social_links, privacy_settings, is_profile_complete,
-      is_email_verified, created_at, updated_at
+      is_email_verified, created_at, updated_at,
+      -- The notification and privacy screens read these off the session
+      -- profile. They were writable (updateUserProfileModel allows them) but
+      -- never selected, so every toggle saved correctly and then read back as
+      -- its default: switch one off, reopen the screen, it is on again.
+      notification_email, notification_push,
+      privacy_profile, show_status_preference, show_location_preference,
+      timezone
      FROM users WHERE user_id = ? AND is_active = TRUE`,
     [userId]
     ),

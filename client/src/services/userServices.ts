@@ -48,6 +48,20 @@ export interface ApiProfile {
   social_links: Record<string, string>;
   privacy_settings: Record<string, unknown>;
   is_profile_complete: boolean | number;
+  /**
+   * Preferences the settings screens render.
+   *
+   * These were writable but never returned by GET /user/profile, so the
+   * screens read undefined and fell back to their defaults -- every toggle
+   * appeared to be on again the moment you reopened it. Optional because a
+   * client can be newer than the server it is talking to.
+   */
+  notification_email?: boolean;
+  notification_push?: boolean;
+  privacy_profile?: "public" | "university" | "friends" | "private";
+  show_status_preference?: "friends" | "university" | "none";
+  show_location_preference?: "friends" | "university" | "none";
+  timezone?: string | null;
   university_id: string;
   created_at: string;
 }
@@ -262,4 +276,58 @@ export function addCourse(
 
 export function removeCourse(courseId: number) {
   return request(() => api.delete(`/user/courses/${courseId}`));
+}
+
+// --- Follow graph ---------------------------------------------------------
+
+export interface FollowStats {
+  follower_count: number;
+  following_count: number;
+  /** Whether the viewer follows this person. */
+  is_following: boolean;
+  /** Whether this person follows the viewer — the strongest prompt to follow back. */
+  follows_you: boolean;
+}
+
+export interface ApiFollowUser {
+  user_id: string;
+  first_name: string;
+  last_name: string | null;
+  profile_picture_url: string | null;
+  profile_headline: string | null;
+  program: string | null;
+  university_id: string;
+  followed_at: string;
+  /** The viewer's own relationship, so a list doubles as a follow-back list. */
+  is_following: boolean;
+}
+
+export function followUser(userId: string) {
+  return request<FollowStats & { message: string }>(() =>
+    api.post(`/user/${userId}/follow`)
+  );
+}
+
+export function unfollowUser(userId: string) {
+  return request<FollowStats & { message: string }>(() =>
+    api.delete(`/user/${userId}/follow`)
+  );
+}
+
+export function fetchFollowStats(userId: string) {
+  return request<FollowStats>(() => api.get(`/user/${userId}/follow-stats`));
+}
+
+export async function fetchFollowers(userId: string, limit = 50, offset = 0) {
+  const result = await request<{ count: number; users?: ApiFollowUser[] }>(() =>
+    api.get(`/user/${userId}/followers`, { params: { limit, offset } })
+  );
+  return result.success ? { ...result, data: result.data.users ?? [] } : result;
+}
+
+export async function fetchFollowing(userId: string, limit = 50, offset = 0) {
+  const result = await request<{ count: number; users?: ApiFollowUser[] }>(() =>
+    api.get(`/user/${userId}/following`, { params: { limit, offset } })
+  );
+  return result.success ? { ...result, data: result.data.users ?? [] } : result;
 }

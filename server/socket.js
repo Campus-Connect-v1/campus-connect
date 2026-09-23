@@ -5,7 +5,7 @@ import Conversation from "./models/conversation.model.js"; // NEW
 import { findByEmail, findById } from "./models/user.model.js";
 import { verifySocketToken } from "./middleware/verifySocketToken.js";
 import { isOriginAllowed } from "./config/cors.js";
-import { registerRealtime, userRoom, postRoom } from "./realtime.js";
+import { registerRealtime, userRoom, postRoom, campusRoom } from "./realtime.js";
 
 export default function socketServer(httpServer) {
   const io = new Server(httpServer, {
@@ -91,6 +91,11 @@ export default function socketServer(httpServer) {
       // onlineUsers keeps one socket per user, so a second device evicts the
       // first. The room holds every live socket; new emits address the room.
       socket.join(userRoom(userId));
+      // Campus room: how a new post reaches everyone whose discovery feed
+      // would include it, without enumerating them.
+      if (socket.user?.university_id) {
+        socket.join(campusRoom(socket.user.university_id));
+      }
       console.log(`✅ User connected: ${userId} (${socket.id})`);
     }
 

@@ -215,3 +215,46 @@ export function onNotification(
     active.off("notification:new", handler);
   };
 }
+
+/** The payload of a `feed:new_post` frame. */
+export interface NewPostEventPayload {
+  post: {
+    post_id: string;
+    content: string | null;
+    media_url: string | null;
+    media_type: string | null;
+    poll_id: string | null;
+    visibility: string;
+    created_at: string;
+    expires_at: string | null;
+    author: {
+      user_id: string;
+      first_name: string;
+      last_name: string | null;
+      profile_picture_url: string | null;
+      profile_headline: string | null;
+    };
+    stats: { like_count: number; comment_count: number };
+    user_actions: { has_liked: boolean };
+  };
+  visibility: string;
+  author_university_id: string;
+}
+
+/**
+ * Subscribe to posts published while the feed is open.
+ *
+ * The server sends the whole post in feed shape, so nothing has to be fetched
+ * to show it. A frame can arrive twice — once via the campus room and once
+ * because you follow the author — so the caller de-duplicates on post_id.
+ */
+export function onNewPost(handler: (payload: NewPostEventPayload) => void): () => void {
+  const active = getSocket();
+  if (!active) return () => {};
+
+  bindLifecycle(active);
+  active.on("feed:new_post", handler);
+  return () => {
+    active.off("feed:new_post", handler);
+  };
+}

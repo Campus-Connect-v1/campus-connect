@@ -1,9 +1,10 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
+import { PostOptionsSheet } from "@/src/components/feed/PostOptionsSheet";
 import {
   Button,
   EmptyState,
@@ -17,6 +18,7 @@ import {
 } from "@/src/components/ui";
 import { adaptPost } from "@/src/features/feed/adapt";
 import { adaptProfile } from "@/src/features/profile/adapt";
+import { type FeedPost } from "@/src/features/feed/types";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
@@ -32,14 +34,44 @@ const STALE_AFTER_MS = 30_000;
 const COVER_FALLBACK =
   "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1200&q=75&auto=format&fit=crop";
 
-function Stat({ value, label }: { value: number; label: string }) {
-  return (
-    <View style={{ gap: 2 }}>
+/**
+ * One figure in the profile's stat row.
+ *
+ * Pressable rather than decorative: a count with no way to see what it counts
+ * is a dead end, and these are the three things someone opens a profile to
+ * look through. Falls back to plain text when there is nowhere to go, so the
+ * control never lies about being tappable.
+ */
+function Stat({
+  value,
+  label,
+  onPress,
+}: {
+  value: number;
+  label: string;
+  onPress?: () => void;
+}) {
+  const body = (
+    <>
       <Text variant="heading">{value.toLocaleString()}</Text>
       <Text variant="micro" color="textMuted">
         {label}
       </Text>
-    </View>
+    </>
+  );
+
+  if (!onPress) return <View style={{ gap: 2, alignItems: "center" }}>{body}</View>;
+
+  return (
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={`${value} ${label}`}
+      onPress={onPress}
+      hitSlop={10}
+      style={{ gap: 2, alignItems: "center", minWidth: 72 }}
+    >
+      {body}
+    </PressableScale>
   );
 }
 
@@ -49,6 +81,13 @@ export default function ProfileScreen() {
   const { height } = useWindowDimensions();
   const { user, profile, stats, university, loadingProfile, profileError, refresh } = useSession();
   const store = useSavedPosts();
+  // The three-dot control rendered on every card here but had no handler, so
+  // tapping it did nothing -- no delete, no save, no report, on your own posts.
+  const [options, setOptions] = useState<FeedPost | null>(null);
+  // Locally removed so a delete leaves immediately rather than waiting for a
+  // refetch this screen does not do.
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const listRef = useRef<FlatList<FeedPost>>(null);
 
   const heroHeight = Math.max(380, height * 0.52);
 
@@ -76,7 +115,10 @@ export default function ProfileScreen() {
     [userId]
   );
 
-  const myPosts = useMemo(() => (posts.data ?? []).map(adaptPost), [posts.data]);
+  const myPosts = useMemo(
+    () => (posts.data ?? []).map(adaptPost).filter((post) => !removedIds.has(post.id)),
+    [posts.data, removedIds]
+  );
 
   if (loadingProfile && !display) {
     return (
@@ -111,7 +153,21 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {options ? (
+        <PostOptionsSheet
+          postId={options.id}
+          authorName={options.author.name}
+          isOwnPost={options.author.id === user?.id}
+          saved={store.isSaved(options.id)}
+          visible
+          onClose={() => setOptions(null)}
+          onRemoved={(id) => setRemovedIds((current) => new Set(current).add(id))}
+          onToggleSave={store.toggle}
+        />
+      ) : null}
+
       <FlatList
+        ref={listRef}
         data={myPosts}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
@@ -200,10 +256,32 @@ export default function ProfileScreen() {
                 onPress={() => router.push("/settings/account")}
               />
 
-              <View style={{ flexDirection: "row", gap: spacing["3xl"] }}>
-                <Stat value={myPosts.length} label="Posts" />
-                <Stat value={stats?.connections ?? 0} label="Connections" />
-                <Stat value={stats?.groups ?? 0} label="Groups" />
+              {/* Centred and evenly spread, so the three read as one unit
+                  rather than as a left-aligned list. */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-evenly",
+                  alignItems: "flex-start",
+                }}
+              >
+                <Stat
+                  value={myPosts.length}
+                  label="Posts"
+                  // Already on screen below; scrolling to them beats a
+                  // navigation that shows the same list again.
+                  onPress={() => listRef.current?.scrollToOffset({ offset: heroHeight, animated: true })}
+                />
+                <Stat
+                  value={stats?.connections ?? 0}
+                  label="Connections"
+                  onPress={() => router.push("/(tabs)/connect")}
+                />
+                <Stat
+                  value={stats?.groups ?? 0}
+                  label="Groups"
+                  onPress={() => router.push("/(tabs)/events")}
+                />
               </View>
 
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
@@ -304,6 +382,7 @@ export default function ProfileScreen() {
             post={{ ...item, saved: store.isSaved(item.id) }}
             onToggleLike={() => {}}
             onToggleSave={store.toggle}
+            onOpenOptions={setOptions}
           />
         )}
       />
