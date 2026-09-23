@@ -12,6 +12,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar, EmptyState, Icon, PressableScale, Text } from "@/src/components/ui";
+import { StoryViewers } from "@/src/components/stories/StoryViewers";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSession } from "@/src/services/SessionContext";
 import {
@@ -132,6 +133,7 @@ export default function StoryViewerScreen() {
   // what makes a rail of half-watched stories usable.
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [showViewers, setShowViewers] = useState(false);
   const started = useRef(false);
 
   useFocusEffect(
@@ -212,12 +214,7 @@ export default function StoryViewerScreen() {
               comment on it vanished.
             */}
             {current.content ? (
-              <Text
-                variant="body"
-                onMedia
-                numberOfLines={4}
-                style={{ marginBottom: spacing.md }}
-              >
+              <Text variant="body" onMedia numberOfLines={4} style={{ marginBottom: spacing.md }}>
                 {current.content}
               </Text>
             ) : null}
@@ -347,6 +344,31 @@ export default function StoryViewerScreen() {
           {isOwn && current ? (
             <PressableScale
               accessibilityRole="button"
+              accessibilityLabel="See who viewed this story"
+              onPress={() => {
+                // Paused while the sheet is up, so the story does not advance
+                // out from under the list the user is reading.
+                setPaused(true);
+                setShowViewers(true);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing["3xs"],
+                minHeight: 44,
+                paddingHorizontal: spacing.xs,
+              }}
+            >
+              <Icon name="visible" size={18} color={colors.onMedia} />
+              <Text variant="caption" onMedia>
+                Views
+              </Text>
+            </PressableScale>
+          ) : null}
+
+          {isOwn && current ? (
+            <PressableScale
+              accessibilityRole="button"
               accessibilityLabel="Delete this story"
               onPress={async () => {
                 await deleteStory(current.story_id);
@@ -368,6 +390,17 @@ export default function StoryViewerScreen() {
           </PressableScale>
         </View>
       </View>
+
+      {isOwn && current ? (
+        <StoryViewers
+          storyId={current.story_id}
+          visible={showViewers}
+          onClose={() => {
+            setShowViewers(false);
+            setPaused(false);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

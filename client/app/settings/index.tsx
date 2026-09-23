@@ -3,12 +3,14 @@ import { Alert, ScrollView, View } from "react-native";
 
 import { SettingsRow, SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { Text } from "@/src/components/ui";
+import { useAttention } from "@/src/services/AttentionContext";
 import { useSession } from "@/src/services/SessionContext";
 import { radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
+  const attention = useAttention();
   const { signOut } = useSession();
 
   // Signing out drops the stored token, so it is confirmed rather than fired
@@ -32,6 +34,19 @@ export default function SettingsScreen() {
           <View
             style={{ borderRadius: radius.md, backgroundColor: colors.surface, overflow: "hidden" }}
           >
+            <SettingsRow
+              title="Connections"
+              detail="Requests, connections and follows"
+              icon="connect"
+              badge={attention.connectionRequests}
+              onPress={() => router.push("/connections")}
+            />
+            <SettingsRow
+              title="Interests and courses"
+              detail="What the app suggests people by"
+              icon="course"
+              onPress={() => router.push("/settings/interests")}
+            />
             <SettingsRow
               title="Account"
               detail="Profile, email and university"
@@ -71,6 +86,12 @@ export default function SettingsScreen() {
               detail="Get support or share an idea"
               icon="help"
               onPress={() => router.push("/settings/help")}
+            />
+            <SettingsRow
+              title="Hidden posts"
+              detail="Posts you removed from your feed"
+              icon="hidden"
+              onPress={() => router.push("/settings/hidden-posts")}
             />
             <SettingsRow
               title="Privacy Policy"

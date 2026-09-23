@@ -1140,3 +1140,54 @@ export const updatePrivacySettingsModel = async (userId, settings) => {
     throw error;
   }
 };
+
+/**
+ * Whether two users have an accepted connection.
+ *
+ * `connections` stores ONE directed row per pair, so the test has to look at
+ * both orientations. Checking only (requester = viewer) would report a
+ * connection as absent for whichever side did not send the request.
+ */
+export const areUsersConnected = async (userIdA, userIdB) => {
+  if (!userIdA || !userIdB || userIdA === userIdB) return false;
+
+  const [rows] = await db.execute(
+    `SELECT 1 FROM connections
+      WHERE status = 'accepted'
+        AND ((requester_id = ? AND receiver_id = ?)
+          OR (requester_id = ? AND receiver_id = ?))
+      LIMIT 1`,
+    [userIdA, userIdB, userIdB, userIdA]
+  );
+  return rows.length > 0;
+};
+
+/**
+ * Every user with an accepted connection to this one, with the fields the map
+ * needs. Returns the OTHER side of each row, whichever orientation it is in.
+ */
+export const getAcceptedConnectionProfiles = async (userId) => {
+  const [rows] = await db.execute(
+    `SELECT
+       u.user_id,
+       u.first_name,
+       u.last_name,
+       u.profile_picture_url,
+       u.university_id,
+       u.privacy_profile,
+       EXISTS(
+         SELECT 1 FROM stories s
+          WHERE s.user_id = u.user_id
+            AND s.is_active = 1
+            AND s.expires_at > NOW()
+       ) AS has_story
+     FROM connections c
+     JOIN users u
+       ON u.user_id = CASE WHEN c.requester_id = ? THEN c.receiver_id ELSE c.requester_id END
+     WHERE c.status = 'accepted'
+       AND (c.requester_id = ? OR c.receiver_id = ?)
+       AND u.is_active = 1`,
+    [userId, userId, userId]
+  );
+  return rows;
+};

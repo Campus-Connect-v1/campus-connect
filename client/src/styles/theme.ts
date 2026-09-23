@@ -69,31 +69,85 @@ export const SECTION_FOREGROUND = {
  * Measured contrast against these tokens: violet 5.29, pink 5.37, yellow 13.08,
  * lime 15.07 - all clear of 4.5:1.
  */
-export function foregroundOn(background: string): string {
-  const hex = background.replace("#", "");
+/** sRGB relative luminance. Shared by the contrast helpers below. */
+function luminance(hex: string): number | null {
+  const raw = hex.replace("#", "");
   const full =
-    hex.length === 3
-      ? hex
+    raw.length === 3
+      ? raw
           .split("")
           .map((c) => c + c)
           .join("")
-      : hex;
-
-  if (full.length !== 6) return culture.ink;
+      : raw;
+  if (full.length !== 6 || /[^0-9a-fA-F]/.test(full)) return null;
 
   const channel = (offset: number) => {
     const value = parseInt(full.slice(offset, offset + 2), 16) / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   };
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+}
 
-  const luminance = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+function contrast(a: number, b: number) {
+  const [hi, lo] = a > b ? [a, b] : [b, a];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * Nudges a colour until it is visible against `background`.
+ *
+ * University brand colours come from the database and are frequently very dark
+ * (#800000, and #000000 is the column default), so a ring drawn in the raw
+ * brand colour disappears against a dark ground. This walks the colour toward
+ * whichever end of the scale has room until it clears `minRatio`.
+ *
+ * 3:1 is the WCAG 1.4.11 floor for a non-text UI component, which is what a
+ * ring is. Text uses 4.5:1 and `foregroundOn` instead.
+ */
+export function readableOn(color: string, background: string, minRatio = 3): string {
+  const target = luminance(background);
+  const start = luminance(color);
+  if (target === null || start === null) return color;
+
+  if (contrast(start, target) >= minRatio) return color;
+
+  const raw = color.replace("#", "");
+  const full =
+    raw.length === 3
+      ? raw
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : raw;
+  const rgb = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+
+  // Move away from the background: lighten on a dark ground, darken on a light
+  // one. Mixing toward white or black keeps the hue recognisable.
+  const towardWhite = target < 0.5;
+
+  for (let step = 1; step <= 20; step++) {
+    const amount = step / 20;
+    const mixed = rgb.map((c) =>
+      Math.round(towardWhite ? c + (255 - c) * amount : c * (1 - amount))
+    );
+    const hex = "#" + mixed.map((c) => c.toString(16).padStart(2, "0")).join("");
+    const lum = luminance(hex);
+    if (lum !== null && contrast(lum, target) >= minRatio) return hex;
+  }
+
+  return towardWhite ? culture.warmWhite : culture.ink;
+}
+
+export function foregroundOn(background: string): string {
+  const lum = luminance(background);
+  if (lum === null) return culture.ink;
 
   // Compared against both candidates rather than a fixed midpoint, because the
   // two are not symmetric around one.
-  const contrastWithInk = (luminance + 0.05) / 0.0757;
-  const contrastWithWarmWhite = 0.9611 / (luminance + 0.05);
+  const withInk = (lum + 0.05) / 0.0757;
+  const withWarmWhite = 0.9611 / (lum + 0.05);
 
-  return contrastWithInk >= contrastWithWarmWhite ? culture.ink : culture.warmWhite;
+  return withInk >= withWarmWhite ? culture.ink : culture.warmWhite;
 }
 
 export type SectionKey = keyof typeof SECTION_HUE;

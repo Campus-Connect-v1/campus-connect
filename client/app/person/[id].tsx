@@ -325,6 +325,36 @@ export default function PersonScreen() {
         </View>
 
         <View style={{ padding: spacing.xl, gap: spacing.md }}>
+          {/* Counts read from the follow state that is already loaded, so this
+              adds no request. Both are tappable, because a number nobody can
+              open is decoration. */}
+          {follow ? (
+            <View style={{ flexDirection: "row", gap: spacing["2xl"] }}>
+              {[
+                { tab: "followers" as const, label: "FOLLOWERS", value: follow.follower_count },
+                { tab: "following" as const, label: "FOLLOWING", value: follow.following_count },
+              ].map((entry) => (
+                <PressableScale
+                  key={entry.tab}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${entry.value} ${entry.label.toLowerCase()}`}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/person/[id]/follows",
+                      params: { id, tab: entry.tab, name: person.name },
+                    })
+                  }
+                  style={{ gap: 2 }}
+                >
+                  <Text variant="heading">{entry.value.toLocaleString()}</Text>
+                  <Text variant="micro" color="textMuted">
+                    {entry.label}
+                  </Text>
+                </PressableScale>
+              ))}
+            </View>
+          ) : null}
+
           {person.bio ? (
             <Text variant="body" color="textSecondary">
               {person.bio}

@@ -1,18 +1,20 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 
 import { FormChoice, FormField } from "@/src/components/forms/FormControls";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
-import { Button, EmptyState, InlineNotice, Text } from "@/src/components/ui";
+import { Button, EmptyState, InlineNotice, PressableScale, Text } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
 import {
+  deleteStudyGroup,
   fetchStudyGroup,
   updateStudyGroup,
   type ApiStudyGroup,
 } from "@/src/services/studyGroupServices";
 import { spacing } from "@/src/styles/theme";
+import { useTheme } from "@/src/styles/useTheme";
 
 const GROUP_TYPES = [
   { value: "public", label: "Anyone can join" },
@@ -38,6 +40,7 @@ type Frequency = (typeof FREQUENCIES)[number]["value"];
 type LocationType = (typeof LOCATIONS)[number]["value"];
 
 export default function EditGroupScreen() {
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const remote = useAsync(
@@ -138,6 +141,26 @@ export default function EditGroupScreen() {
     await remote.reload();
   };
 
+  const confirmDelete = () =>
+    Alert.alert("Delete this group?", "Every member loses access and it cannot be recovered.", [
+      { text: "Keep it", style: "cancel" },
+      {
+        text: "Delete group",
+        style: "destructive",
+        onPress: async () => {
+          const result = await deleteStudyGroup(id);
+          if (!result.success) {
+            setError(
+              result.status === 403 ? "Only the group's creator can delete it." : result.error
+            );
+            return;
+          }
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          router.replace("/(tabs)/events?section=groups");
+        },
+      },
+    ]);
+
   return (
     <SettingsShell title="Edit group">
       <KeyboardAvoidingView
@@ -207,6 +230,25 @@ export default function EditGroupScreen() {
           {error ? <InlineNotice message={error} /> : null}
 
           <Button label="Save changes" loading={saving} onPress={submit} />
+
+          {/* Last, and visually separated: an irreversible action does not sit
+              next to Save where a mis-tap is cheap. */}
+          <View style={{ paddingTop: spacing.md, gap: spacing.sm }}>
+            <View style={{ height: 1, backgroundColor: colors.border }} />
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel="Delete this group"
+              onPress={confirmDelete}
+              style={{ minHeight: 48, alignItems: "center", justifyContent: "center" }}
+            >
+              <Text variant="label" color="destructive">
+                Delete group
+              </Text>
+            </PressableScale>
+            <Text variant="caption" color="textMuted" style={{ textAlign: "center" }}>
+              Everyone loses access and the group cannot be recovered.
+            </Text>
+          </View>
 
           <Text variant="caption" color="textMuted">
             Study groups have no cover image, so the card colour is assigned automatically.

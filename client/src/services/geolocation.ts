@@ -27,6 +27,10 @@ export interface NearbyProfile {
   longitude?: number | null;
   /** Optional until the API exposes it for every account. */
   age?: number | null;
+  /** Drives the campus ring. Absent means "campus unknown", not "same campus". */
+  universityId?: string | null;
+  /** ISO. How stale this position is. */
+  lastSeen?: string | null;
 }
 
 /** Exactly what /geofencing/nearby puts in `profiles`. */
@@ -78,6 +82,8 @@ export function adaptNearby(profile: ApiNearbyProfile): NearbyProfile {
     latitude: Number.isFinite(Number(profile.latitude)) ? Number(profile.latitude) : null,
     longitude: Number.isFinite(Number(profile.longitude)) ? Number(profile.longitude) : null,
     age: yearsSince(profile.date_of_birth),
+    universityId: profile.university_id || null,
+    lastSeen: profile.last_seen ?? null,
   };
 }
 
