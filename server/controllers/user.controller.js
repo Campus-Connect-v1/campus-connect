@@ -940,10 +940,19 @@ export const getConnectionRecommendations = async (req, res) => {
         program: user.program,
         graduation_year: user.graduation_year,
         match_score: user.match_score,
-        match_percentage: Math.min(
-          Math.round((user.match_score / 5) * 100),
-          100
-        ), // Assuming max score of 5
+        // Already 0-100 from the query. It used to be divided by a hardcoded
+        // 5 here while the score itself was unbounded, which is how three
+        // shared interests became a 100% match.
+        match_percentage: Number(user.match_score),
+        // The reasons behind the number, so a card can explain itself.
+        match_reasons: {
+          shared_interests: Number(user.shared_interests ?? 0),
+          shared_courses: Number(user.shared_courses ?? 0),
+          shared_groups: Number(user.shared_groups ?? 0),
+          mutual_connections: Number(user.mutual_connections ?? 0),
+          same_program: Number(user.same_program ?? 0) > 0,
+          same_year: Number(user.same_year ?? 0) > 0,
+        },
       })),
     });
   } catch (error) {

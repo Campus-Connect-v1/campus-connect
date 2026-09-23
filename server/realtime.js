@@ -31,6 +31,15 @@ export const registerRealtime = (server) => {
 export const userRoom = (userId) => `user:${userId}`;
 export const postRoom = (postId) => `post:${postId}`;
 
+/**
+ * Everyone signed in at one university.
+ *
+ * The feed's discovery mode is campus-scoped, so a new post is relevant to
+ * this whole set. Addressing a room rather than looking up thousands of user
+ * ids keeps the fan-out O(1) for the emitter -- Socket.IO does the rest.
+ */
+export const campusRoom = (universityId) => `campus:${universityId}`;
+
 const emit = (target, event, payload) => {
   // Not an error: the HTTP API is usable before socketServer() has run, and
   // the unit tests import controllers without ever starting a server.
@@ -48,6 +57,16 @@ const emit = (target, event, payload) => {
 /** Push to every socket this user has open, across devices. */
 export const emitToUser = (userId, event, payload) =>
   userId ? emit(userRoom(userId), event, payload) : false;
+
+/**
+ * Push to everyone signed in at one university.
+ *
+ * The feed discovery mode is campus-scoped, so a new post is relevant to this
+ * whole set. Addressing a room rather than enumerating thousands of user ids
+ * keeps the fan-out O(1) for the emitter.
+ */
+export const emitToCampus = (universityId, event, payload) =>
+  universityId ? emit(campusRoom(universityId), event, payload) : false;
 
 /** Push to everyone currently viewing a post (see `join_post` in socket.js). */
 export const emitToPost = (postId, event, payload) =>

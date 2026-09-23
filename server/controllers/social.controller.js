@@ -28,7 +28,7 @@ import { isOwnMediaUrl } from "../config/cloudinary.js";
 import { notify, notifyMany } from "../models/notification.model.js";
 import { getConnectionUserIds } from "../models/user.model.js";
 import { db } from "../config/db.js";
-import { emitToPostExcept } from "../realtime.js";
+import { emitToPostExcept, emitToCampus, emitToUser } from "../realtime.js";
 import { getFollowingCountModel } from "../models/follow.model.js";
 import { logHandled } from "../middleware/observability.js";
 
@@ -122,6 +122,86 @@ export const createPost = async (req, res) => {
         });
       })
       .catch((error) => console.error("new_post fan-out failed:", error.message));
+
+    /**
+     * Live feed delivery.
+     *
+     * Without this a reader had to pull-to-refresh before a new post appeared,
+     * which on a quiet campus means it is never seen. The payload is the whole
+     * post in feed shape, so a client can render it without a round trip.
+     *
+     * Two audiences, because they are reached differently:
+     *  - the campus room covers everyone whose discovery feed would include
+     *    this post, in one emit and without enumerating anybody;
+     *  - followers at other universities are not in that room, so they are
+     *    addressed individually. Both can deliver to the same person, so the
+     *    client de-duplicates on post_id.
+     *
+     * Fire-and-forget and after the response, exactly like the notification
+     * fan-out above: a socket failure must not turn a successful post into an
+     * error.
+     */
+    void (async () => {
+      try {
+        const [[author]] = await db.execute(
+          `SELECT user_id, first_name, last_name, profile_picture_url,
+                  profile_headline, university_id
+           FROM users WHERE user_id = ?`,
+          [userId]
+        );
+        if (!author) return;
+
+        const framePayload = {
+          post: {
+            post_id: post.post_id,
+            content: post.content ?? null,
+            media_url: post.media_url ?? null,
+            media_type: post.media_type,
+            poll_id: post.poll_id ?? null,
+            visibility: post.visibility,
+            created_at: post.created_at ?? new Date().toISOString(),
+            expires_at: post.expires_at ?? null,
+            author: {
+              user_id: author.user_id,
+              first_name: author.first_name,
+              last_name: author.last_name,
+              profile_picture_url: author.profile_picture_url,
+              profile_headline: author.profile_headline,
+            },
+            stats: { like_count: 0, comment_count: 0 },
+            user_actions: { has_liked: false },
+          },
+          // So a client can drop a frame for an audience it is not in rather
+          // than trusting the room it arrived on.
+          visibility: post.visibility,
+          author_university_id: author.university_id,
+        };
+
+        // A private post has no audience beyond its author; a connections-only
+        // post is not broadcast at all, because working out who qualifies is
+        // the feed query's job and duplicating it here would be a second place
+        // for the rule to drift.
+        if (post.visibility === "public" || post.visibility === "university") {
+          emitToCampus(author.university_id, "feed:new_post", framePayload);
+        }
+
+        if (post.visibility === "public") {
+          const [followers] = await db.execute(
+            `SELECT f.follower_id
+             FROM follows f
+             JOIN users u ON u.user_id = f.follower_id AND u.is_active = 1
+             WHERE f.following_id = ?
+               AND u.university_id <> ?`,
+            [userId, author.university_id]
+          );
+          for (const row of followers) {
+            emitToUser(row.follower_id, "feed:new_post", framePayload);
+          }
+        }
+      } catch (error) {
+        console.error("feed:new_post broadcast failed:", error.message);
+      }
+    })();
 
     res.status(201).json({
       message: "Post created successfully",

@@ -202,6 +202,26 @@ export default function StoryViewerScreen() {
           />
         ) : current?.story_type === "repost" && current.reposted_post ? (
           <View style={{ flex: 1, justifyContent: "center", padding: spacing.xl }}>
+            {/*
+              The sharer's own caption, above the post being shared.
+
+              It was saved correctly and simply never rendered: this branch
+              showed reposted_post.content (the ORIGINAL post's text) while
+              current.content (what the sharer typed) was only rendered in the
+              plain-text-story branch below. So the share went out and the
+              comment on it vanished.
+            */}
+            {current.content ? (
+              <Text
+                variant="body"
+                onMedia
+                numberOfLines={4}
+                style={{ marginBottom: spacing.md }}
+              >
+                {current.content}
+              </Text>
+            ) : null}
+
             <View
               style={{
                 borderRadius: radius.lg,
