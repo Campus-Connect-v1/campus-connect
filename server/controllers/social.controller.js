@@ -326,7 +326,10 @@ export const likePost = async (req, res) => {
         type: "post_like",
         resourceType: "post",
         resourceId: post_id,
-        title: `${await actorName(userId)} liked your post`,
+        // actorName + action opt this into bundling: five likers become one
+        // "Ada and 4 others liked your post" rather than five rows.
+        actorName: await actorName(userId),
+        action: "liked your post",
       });
     }
 
@@ -430,7 +433,8 @@ export const addComment = async (req, res) => {
         type: "post_comment",
         resourceType: "post",
         resourceId: post_id,
-        title: `${await actorName(userId)} commented on your post`,
+        actorName: await actorName(userId),
+        action: "commented on your post",
         body: String(content || "").slice(0, 140),
       });
     }
@@ -698,7 +702,8 @@ export const likeComment = async (req, res) => {
         type: "post_like",
         resourceType: "post",
         resourceId: like.post_id,
-        title: `${await actorName(userId)} liked your comment`,
+        actorName: await actorName(userId),
+        action: "liked your comment",
       });
     }
 

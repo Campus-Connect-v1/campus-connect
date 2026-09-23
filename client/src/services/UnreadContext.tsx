@@ -12,6 +12,7 @@ import {
 import { fetchUnreadCount } from "./notificationServices";
 import { getToken } from "./session";
 import { onNotification } from "./socket";
+import { syncBadgeCount } from "./notifications";
 
 interface UnreadValue {
   count: number;
@@ -69,6 +70,13 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       unsubscribe();
     };
   }, [refresh]);
+
+  // One place to reflect the count outward, so every path that changes it --
+  // a socket frame, a refresh, marking all read -- moves the badge too,
+  // rather than each call site remembering.
+  useEffect(() => {
+    void syncBadgeCount(count);
+  }, [count]);
 
   const value = useMemo(() => ({ count, refresh, clear }), [count, refresh, clear]);
   return <UnreadContext.Provider value={value}>{children}</UnreadContext.Provider>;

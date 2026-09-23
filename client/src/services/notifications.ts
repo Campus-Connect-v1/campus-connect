@@ -101,6 +101,26 @@ export async function unregisterPushNotificationsAsync(): Promise<void> {
   }
 }
 
+/**
+ * Mirror the app icon badge to the unread count.
+ *
+ * setNotificationHandler already asks for shouldSetBadge, but that only lets
+ * an incoming push increment it -- nothing ever set it from the real count or
+ * cleared it on read, so the number drifted from the app and stayed there
+ * after everything had been seen. The unread count is the single source of
+ * truth; this just reflects it.
+ *
+ * Failures are swallowed: Android launchers vary in whether they support
+ * badges at all, and a missing badge must not surface as an error.
+ */
+export async function syncBadgeCount(count: number): Promise<void> {
+  try {
+    await Notifications.setBadgeCountAsync(Math.max(0, count));
+  } catch {
+    // Not supported here; nothing to do.
+  }
+}
+
 export type NotificationDestination = { resourceType: string | null; resourceId: string | null };
 
 /**

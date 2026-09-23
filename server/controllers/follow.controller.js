@@ -39,6 +39,12 @@ export const followUser = async (req, res) => {
         type: "new_follower",
         resourceType: "user",
         resourceId: followerId,
+        // Deliberately NOT bundled. Bundling groups on resource_id, and a
+        // follow's resource is the follower themselves -- so every follow has
+        // a different key and would never group anyway. Dropping the resource
+        // to force grouping would trade the tap-through to that person's
+        // profile for a collapsed line, which is the wrong way round: a new
+        // follower is worth one notification you can act on.
         title: `${await actorName(followerId)} started following you`,
       });
     }

@@ -31,6 +31,7 @@ import notificationRoutes from "./routes/notification.routes.js";
 import connectMongoDB from "./config/mongoDB.js";
 
 import socketServer from "./socket.js";
+import { processPushReceipts } from "./models/notification.model.js";
 
 // ============= DOTENV ======================
 dotenv.config({ debug: false });
@@ -169,6 +170,25 @@ app.use((req, res, next) => {
 app.use(errorLogger);
 
 app.get("/", (req, res) => res.send("Campus Connect API running..."));
+
+// ========================= PUSH RECEIPTS ======================
+// Expo answers a send with a ticket and the real outcome with a receipt
+// fetched later, so a token that died is only discoverable on a second pass.
+// Fifteen minutes is well inside Expo's ~24h retention and costs one request
+// per interval when there is nothing to collect.
+//
+// unref() so this timer never holds the process open on shutdown.
+const RECEIPT_POLL_MS = 15 * 60 * 1000;
+const receiptTimer = setInterval(() => {
+  void processPushReceipts().then((summary) => {
+    if (summary.checked || summary.deactivated) {
+      console.log(
+        JSON.stringify({ level: "info", scope: "push.receipts", ...summary })
+      );
+    }
+  });
+}, RECEIPT_POLL_MS);
+receiptTimer.unref();
 
 // ========================= SOCKET SERVER ======================
 socketServer(server);
