@@ -14,6 +14,8 @@ import {
   getPostCountsModel,
   encodeFeedCursor,
   FEED_MODES,
+  getUserPostsModel,
+  encodeUserPostCursor,
   likeCommentModel,
   unlikeCommentModel,
   getCommentLikeStateModel,
@@ -28,6 +30,7 @@ import { getConnectionUserIds } from "../models/user.model.js";
 import { db } from "../config/db.js";
 import { emitToPostExcept } from "../realtime.js";
 import { getFollowingCountModel } from "../models/follow.model.js";
+import { logHandled } from "../middleware/observability.js";
 
 /**
  * The socket that issued this request, if any.
@@ -821,5 +824,36 @@ export const getSavedPosts = async (req, res) => {
       message: "Failed to load saved posts",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
+  }
+};
+
+/**
+ * A single user's posts, for their profile.
+ *
+ * Exists because the client was reconstructing this by filtering its own feed,
+ * which stopped working the moment the feed became graph-scoped: a profile for
+ * someone you do not follow contained none of their posts, because none of
+ * them were in your feed to filter.
+ */
+export const getUserPosts = async (req, res) => {
+  try {
+    const { user_id } = req.params;
+    const { limit = 20, cursor = null } = req.query;
+
+    const pageSize = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
+    const posts = await getUserPostsModel(user_id, req.user.id, pageSize, cursor);
+
+    const nextCursor =
+      posts.length === pageSize ? encodeUserPostCursor(posts[posts.length - 1]) : null;
+
+    res.status(200).json({
+      count: posts.length,
+      next_cursor: nextCursor,
+      has_more: Boolean(nextCursor),
+      posts,
+    });
+  } catch (error) {
+    logHandled(req, "getUserPosts", error);
+    res.status(500).json({ message: "Failed to load posts" });
   }
 };

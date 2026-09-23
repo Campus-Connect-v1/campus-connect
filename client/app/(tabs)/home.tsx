@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,6 +12,7 @@ import {
   Avatar,
   EmptyState,
   Icon,
+  Loader,
   OfflineBanner,
   SkeletonList,
   Media,
@@ -157,6 +158,107 @@ function FeaturedEvent({ event }: { event: CampusEvent }) {
   );
 }
 
+/**
+ * The suggestions block: heading plus strip.
+ *
+ * Extracted because it now appears in two places — inline in the feed, and at
+ * the top only when the feed is too short to interleave into.
+ */
+/**
+ * What the bottom of the feed says once there is nothing left.
+ *
+ * An infinite list that simply stops is ambiguous -- the reader cannot tell
+ * whether they have caught up or whether it failed to load. Saying so
+ * explicitly turns an unsatisfying dead end into a finished state, and the
+ * action turns the moment someone has run out of things to read into the
+ * moment they are most likely to write something.
+ */
+function FeedEnd({ postCount }: { postCount: number }) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xl }}>
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          borderColor: colors.border,
+          padding: spacing.xl,
+          alignItems: "center",
+          gap: spacing.sm,
+        }}
+      >
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: radius.full,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: culture.lime,
+          }}
+        >
+          <Icon name="check" size={22} color={foregroundOn(culture.lime)} />
+        </View>
+
+        <Text variant="heading" style={{ textAlign: "center" }}>
+          You are all caught up
+        </Text>
+        <Text variant="body" color="textMuted" style={{ textAlign: "center" }}>
+          {postCount === 0
+            ? "Nothing on your campus yet. Be the first to say something."
+            : `That is all ${postCount} ${postCount === 1 ? "post" : "posts"} from your campus. Got something to add?`}
+        </Text>
+
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Write a post"
+          onPress={() => router.push("/compose/post")}
+          style={{
+            marginTop: spacing.xs,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.xs,
+            paddingHorizontal: spacing.lg,
+            minHeight: 44,
+            borderRadius: radius.full,
+            backgroundColor: colors.accent,
+          }}
+        >
+          <Icon name="add" size={17} color={colors.accentFg} />
+          <Text variant="label" style={{ color: colors.accentFg }}>
+            Post now
+          </Text>
+        </PressableScale>
+      </View>
+    </View>
+  );
+}
+
+function PeopleSection({ people }: { people: ApiUserCard[] }) {
+  return (
+    // gap separates the heading from the strip; the vertical padding separates
+    // the whole block from the posts above and below it, so it reads as an
+    // interruption in the feed rather than as part of the preceding post.
+    <View style={{ gap: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.lg }}>
+      <View style={{ paddingHorizontal: spacing.lg }}>
+        <SectionHeader
+          eyebrow="AROUND CAMPUS"
+          title="People you might know"
+          actionLabel="Explore"
+          onAction={() => router.push("/(tabs)/connect")}
+        />
+      </View>
+      <PeopleStrip people={people} />
+    </View>
+  );
+}
+
+type FeedRow =
+  | { kind: "post"; post: FeedPost }
+  | { kind: "people"; slot: number };
+
 function PeopleStrip({ people }: { people: ApiUserCard[] }) {
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(154, width * 0.39);
@@ -172,7 +274,7 @@ function PeopleStrip({ people }: { people: ApiUserCard[] }) {
       horizontal
       showsHorizontalScrollIndicator={false}
       style={{ flexGrow: 0 }}
-      contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}
+      contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
     >
       {people.slice(0, 5).map((person) => (
         <PressableScale
@@ -282,9 +384,49 @@ export default function HomeScreen() {
   // after.
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Guards the append: onEndReached fires repeatedly while the list settles,
+  // and a ref is read synchronously where a state flag would still be false on
+  // the second call and fetch the same page twice.
+  const fetching = useRef(false);
+
   useEffect(() => {
-    if (feed.data) setPosts(feed.data.map(adaptPost));
+    if (!feed.data) return;
+    setPosts(feed.data.posts.map(adaptPost));
+    setCursor(feed.data.nextCursor);
+    setHasMore(feed.data.hasMore);
   }, [feed.data]);
+
+  const loadMore = useCallback(async () => {
+    if (fetching.current || !hasMore || feed.loading) return;
+    fetching.current = true;
+    setLoadingMore(true);
+
+    // Offset is the fallback for a server that has not issued a cursor; it is
+    // what posts.length means here.
+    const page = await fetchFeed(20, posts.length, cursor);
+
+    if (page.success) {
+      setPosts((current) => {
+        // The server excludes nothing on a page boundary, but a refresh racing
+        // a page append can still overlap. De-duplicating by id is cheaper
+        // than reasoning about which of the two won.
+        const seen = new Set(current.map((post) => post.id));
+        const added = page.data.posts.map(adaptPost).filter((post) => !seen.has(post.id));
+        return [...current, ...added];
+      });
+      setCursor(page.data.nextCursor);
+      setHasMore(page.data.hasMore);
+    } else {
+      // Stop asking on failure rather than retrying on every scroll tick.
+      setHasMore(false);
+    }
+
+    setLoadingMore(false);
+    fetching.current = false;
+  }, [cursor, hasMore, posts.length, feed.loading]);
 
   const toggleLike = useCallback((id: string) => {
     let wasLiked = false;
@@ -343,6 +485,39 @@ export default function HomeScreen() {
 
   const recommendations = people.data ?? [];
 
+  /**
+   * The feed, with suggestions woven in rather than parked above it.
+   *
+   * Pinned to the top, the strip spent the most valuable space on the screen
+   * on people rather than on the posts someone opened the app to read, and it
+   * was only ever seen once — scroll past it and it is gone for the session.
+   *
+   * The cadence is fixed, not random. A block that lands somewhere different
+   * on every render cannot be scrolled back to, and re-shuffling on each
+   * refresh reads as a glitch rather than as variety. After the third post,
+   * then every eighth, puts it past the first screenful and then at a rhythm
+   * that is predictable without being frequent enough to nag.
+   */
+  const FIRST_SLOT = 2;
+  const REPEAT_EVERY = 8;
+
+  const rows = useMemo(() => {
+    const out: FeedRow[] = [];
+    posts.forEach((post, index) => {
+      out.push({ kind: "post", post });
+      if (!recommendations.length) return;
+      const isSlot =
+        index === FIRST_SLOT ||
+        (index > FIRST_SLOT && (index - FIRST_SLOT) % REPEAT_EVERY === 0);
+      if (isSlot) out.push({ kind: "people", slot: index });
+    });
+    return out;
+  }, [posts, recommendations.length]);
+
+  // Too few posts to interleave into — without this the strip would simply
+  // never appear for a new account, which is exactly who needs it most.
+  const peopleAtTop = recommendations.length > 0 && posts.length <= FIRST_SLOT;
+
   return (
     <Screen>
       <OfflineBanner />
@@ -388,8 +563,13 @@ export default function HomeScreen() {
       ) : null}
 
       <FlatList
-        data={posts}
-        keyExtractor={(item) => item.id}
+        data={rows}
+        // The slot index keys the injected rows: two suggestion blocks in one
+        // feed would otherwise collide on a constant key and FlatList would
+        // recycle one over the other.
+        keyExtractor={(item) =>
+          item.kind === "post" ? item.post.id : `people-${item.slot}`
+        }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
         refreshControl={
@@ -508,19 +688,7 @@ export default function HomeScreen() {
               </>
             ) : null}
 
-            {recommendations.length ? (
-              <>
-                <View style={{ paddingHorizontal: spacing.lg }}>
-                  <SectionHeader
-                    eyebrow="AROUND CAMPUS"
-                    title="People you might know"
-                    actionLabel="Explore"
-                    onAction={() => router.push("/(tabs)/connect")}
-                  />
-                </View>
-                <PeopleStrip people={recommendations} />
-              </>
-            ) : null}
+            {peopleAtTop ? <PeopleSection people={recommendations} /> : null}
 
             <View style={{ paddingHorizontal: spacing.lg }}>
               <SectionHeader eyebrow="FOR YOU" title="From your campus" />
@@ -547,16 +715,37 @@ export default function HomeScreen() {
             />
           )
         }
-        renderItem={({ item, index }) => (
-          <Animated.View entering={index < 4 ? FadeIn.delay(index * 45).duration(200) : undefined}>
-            <PostCard
-              post={{ ...item, saved: saved.isSaved(item.id) }}
-              onToggleLike={toggleLike}
-              onToggleSave={toggleSave}
-              onOpenOptions={setOptions}
-            />
-          </Animated.View>
-        )}
+        onEndReached={loadMore}
+        // Half a screen of runway: enough that the next page is usually there
+        // before the reader arrives, without fetching pages nobody reaches.
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          posts.length === 0 ? null : loadingMore ? (
+            <View style={{ paddingVertical: spacing.xl }}>
+              <Loader />
+            </View>
+          ) : hasMore ? null : (
+            <FeedEnd postCount={posts.length} />
+          )
+        }
+        renderItem={({ item, index }) => {
+          if (item.kind === "people") {
+            return <PeopleSection people={recommendations} />;
+          }
+
+          return (
+            <Animated.View
+              entering={index < 4 ? FadeIn.delay(index * 45).duration(200) : undefined}
+            >
+              <PostCard
+                post={{ ...item.post, saved: saved.isSaved(item.post.id) }}
+                onToggleLike={toggleLike}
+                onToggleSave={toggleSave}
+                onOpenOptions={setOptions}
+              />
+            </Animated.View>
+          );
+        }}
       />
 
       {/*

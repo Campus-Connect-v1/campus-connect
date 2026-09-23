@@ -30,19 +30,70 @@ type ApiCreatedPost = Pick<
   expires_at: string | null;
 };
 
-export async function fetchFeed(limit = 20, offset = 0) {
-  const result = await request<{ count: number; posts?: ApiPost[] }>(() =>
-    api.get("/social/posts/feed", { params: { limit, offset } })
-  );
-  return result.success ? { ...result, data: result.data.posts ?? [] } : result;
+export interface FeedPage {
+  posts: ApiPost[];
+  /** Opaque; pass back to get the next page. Null means the end. */
+  nextCursor: string | null;
+  hasMore: boolean;
+  /** "following" or "discovery" — what the server actually served. */
+  mode: string | null;
 }
 
-/** The feed endpoint has no "posts by user" filter, so this narrows client-side. */
+/**
+ * One page of the feed.
+ *
+ * Takes a cursor rather than an offset: with an offset, a post arriving
+ * between two pages shifts every row down one, so page two repeats the item
+ * that was last on page one. The server still accepts offset, so this falls
+ * back to it when no cursor has been issued yet — which also means this works
+ * unchanged against a server that predates cursors.
+ */
+export async function fetchFeed(limit = 20, offset = 0, cursor: string | null = null) {
+  const result = await request<{
+    count: number;
+    posts?: ApiPost[];
+    next_cursor?: string | null;
+    has_more?: boolean;
+    mode?: string;
+  }>(() =>
+    api.get("/social/posts/feed", {
+      params: cursor ? { limit, cursor } : { limit, offset },
+    })
+  );
+
+  if (!result.success) return result;
+
+  const posts = result.data.posts ?? [];
+  return {
+    ...result,
+    data: {
+      posts,
+      nextCursor: result.data.next_cursor ?? null,
+      // An older server sends neither field. A short page is the only honest
+      // signal of the end in that case -- claiming more would loop forever,
+      // claiming the end would hide posts.
+      hasMore:
+        result.data.has_more ?? (result.data.next_cursor ? true : posts.length >= limit),
+      mode: result.data.mode ?? null,
+    } as FeedPage,
+  };
+}
+
+/**
+ * One user's posts, for their profile.
+ *
+ * This used to fetch a page of the caller's own feed and filter it by author,
+ * which could only ever find posts inside that window — and once the feed
+ * became graph-scoped it returned nothing at all for anyone the caller did not
+ * follow. The server now answers this directly and applies the profile's own
+ * visibility rules, so a profile shows that person's posts regardless of who
+ * is looking.
+ */
 export async function fetchPostsByAuthor(userId: string, limit = 50) {
-  const result = await fetchFeed(limit, 0);
-  return result.success
-    ? { ...result, data: result.data.filter((post) => post.author.user_id === userId) }
-    : result;
+  const result = await request<{ count: number; posts?: ApiPost[] }>(() =>
+    api.get(`/user/${userId}/posts`, { params: { limit } })
+  );
+  return result.success ? { ...result, data: result.data.posts ?? [] } : result;
 }
 
 export async function fetchPost(postId: string) {

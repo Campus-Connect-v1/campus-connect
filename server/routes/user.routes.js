@@ -1,5 +1,6 @@
 import express from "express";
 import { socialGraphLimiter } from "../utils/rateLimiter.js";
+import { getUserPosts } from "../controllers/social.controller.js";
 import {
   followUser,
   unfollowUser,
@@ -241,6 +242,15 @@ router.delete("/:user_id/follow", socialGraphLimiter, unfollowUser);
  *     summary: Follower/following counts and this viewer's relationship
  */
 router.get("/:user_id/follow-stats", getFollowStats);
+
+/**
+ * @swagger
+ * /user/{user_id}/posts:
+ *   get:
+ *     tags: [User]
+ *     summary: Posts by one user, visibility-filtered for the viewer
+ */
+router.get("/:user_id/posts", getUserPosts);
 
 /**
  * @swagger
