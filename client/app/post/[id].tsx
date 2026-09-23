@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useRef, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform, TextInput, View } from "react-native";
+import { Alert, FlatList, KeyboardAvoidingView, Platform, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
@@ -22,9 +22,11 @@ import { useAsync } from "@/src/hooks/useAsync";
 import { usePostRealtime } from "@/src/hooks/usePostRealtime";
 import {
   addComment,
+  deleteComment,
   fetchComments,
   likeComment,
   unlikeComment,
+  updateComment,
   type ApiComment,
 } from "@/src/services/commentServices";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
@@ -46,12 +48,18 @@ function CommentRow({
   comment,
   liked,
   likeCount,
+  isOwn,
   onToggleLike,
+  onEdit,
+  onDelete,
 }: {
   comment: ApiComment;
   liked: boolean;
   likeCount: number;
+  isOwn: boolean;
   onToggleLike: (commentId: string) => void;
+  onEdit: (comment: ApiComment) => void;
+  onDelete: (comment: ApiComment) => void;
 }) {
   const { colors } = useTheme();
   const name = [comment.author.first_name, comment.author.last_name].filter(Boolean).join(" ");
@@ -59,8 +67,22 @@ function CommentRow({
   // conversation instead of a stack of boxes.
   const isReply = Boolean(comment.parent_comment_id);
 
+  // Long press rather than a visible menu button: a row this small cannot
+  // carry another control without crowding the text, and the actions only
+  // apply to your own comments.
+  const promptOwn = () => {
+    if (!isOwn) return;
+    Haptics.selectionAsync();
+    Alert.alert("Your comment", undefined, [
+      { text: "Edit", onPress: () => onEdit(comment) },
+      { text: "Delete", style: "destructive", onPress: () => onDelete(comment) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   return (
     <View
+      onStartShouldSetResponder={() => false}
       style={{
         flexDirection: "row",
         gap: spacing.sm,
@@ -70,15 +92,28 @@ function CommentRow({
       }}
     >
       <Avatar uri={comment.author.profile_picture_url ?? undefined} size={34} />
-      <View style={{ flex: 1, gap: 2 }}>
+      <PressableScale
+        accessibilityRole={isOwn ? "button" : "text"}
+        accessibilityLabel={
+          isOwn ? `Your comment: ${comment.content}. Long press to edit or delete` : undefined
+        }
+        onLongPress={promptOwn}
+        disabled={!isOwn}
+        style={{ flex: 1, gap: 2 }}
+      >
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
           <Text variant="label">{name}</Text>
           <Text variant="caption" color="textMuted">
             {since(comment.created_at)}
           </Text>
+          {isOwn ? (
+            <Text variant="caption" color="textMuted">
+              · you
+            </Text>
+          ) : null}
         </View>
         <Text variant="body">{comment.content}</Text>
-      </View>
+      </PressableScale>
 
       <PressableScale
         onPress={() => onToggleLike(comment.comment_id)}
@@ -123,6 +158,7 @@ export default function PostCommentsScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extra, setExtra] = useState<ApiComment[]>([]);
+  const [editingComment, setEditingComment] = useState<ApiComment | null>(null);
   // Comments edited or removed by someone else while this screen is open.
   // Held apart from the fetched list, which useAsync owns and will not mutate.
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -256,12 +292,71 @@ export default function PostCommentsScreen() {
         : comment
     );
 
+  /**
+   * Editing reuses the composer at the bottom rather than opening a second
+   * input: there is only one place to type on this screen, and a row that
+   * turns into a field moves everything below it.
+   */
+  const startEditingComment = (comment: ApiComment) => {
+    setEditingComment(comment);
+    setDraft(comment.content);
+    inputRef.current?.focus();
+  };
+
+  const cancelEditing = () => {
+    setEditingComment(null);
+    setDraft("");
+  };
+
+  const confirmDeleteComment = (comment: ApiComment) =>
+    Alert.alert("Delete your comment?", "This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const result = await deleteComment(id, comment.comment_id);
+          if (!result.success) {
+            setError(result.error);
+            return;
+          }
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          if (editingComment?.comment_id === comment.comment_id) cancelEditing();
+          setExtra((current) => current.filter((row) => row.comment_id !== comment.comment_id));
+          await comments.reload();
+        },
+      },
+    ]);
+
   const send = async () => {
     const content = draft.trim();
     if (!content || sending) return;
 
     setSending(true);
     setError(null);
+
+    // The same composer serves both jobs, so which one depends on whether a
+    // comment is being edited.
+    if (editingComment) {
+      const result = await updateComment(id, editingComment.comment_id, content);
+      setSending(false);
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setExtra((current) =>
+        current.map((row) =>
+          row.comment_id === editingComment.comment_id ? { ...row, content } : row
+        )
+      );
+      cancelEditing();
+      await comments.reload();
+      return;
+    }
+
     const result = await addComment(id, content);
     setSending(false);
 
@@ -347,7 +442,10 @@ export default function PostCommentsScreen() {
               comment={item}
               liked={commentLikes[item.comment_id]?.liked ?? Boolean(item.has_liked)}
               likeCount={commentLikes[item.comment_id]?.count ?? Number(item.like_count ?? 0)}
+              isOwn={item.author.user_id === user?.id}
               onToggleLike={toggleCommentLike}
+              onEdit={startEditingComment}
+              onDelete={confirmDeleteComment}
             />
           )}
         />
@@ -378,8 +476,8 @@ export default function PostCommentsScreen() {
           <Avatar uri={profile?.profile_picture_url ?? undefined} size={34} />
           <TextInput
             ref={inputRef}
-            accessibilityLabel="Write a comment"
-            placeholder="Write a comment"
+            accessibilityLabel={editingComment ? "Edit your comment" : "Write a comment"}
+            placeholder={editingComment ? "Edit your comment" : "Write a comment"}
             placeholderTextColor={colors.textMuted}
             multiline
             autoCapitalize="sentences"
@@ -427,6 +525,9 @@ export default function PostCommentsScreen() {
           postId={display.id}
           authorName={display.author.name}
           isOwnPost={display.author.id === user?.id}
+          content={display.caption}
+          pollId={display.pollId}
+          onEdited={() => post.reload()}
           saved={display.saved}
           visible
           onClose={() => setOptions(false)}

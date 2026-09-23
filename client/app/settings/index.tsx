@@ -3,12 +3,14 @@ import { Alert, ScrollView, View } from "react-native";
 
 import { SettingsRow, SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { Text } from "@/src/components/ui";
+import { useAttention } from "@/src/services/AttentionContext";
 import { useSession } from "@/src/services/SessionContext";
 import { radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
+  const attention = useAttention();
   const { signOut } = useSession();
 
   // Signing out drops the stored token, so it is confirmed rather than fired
@@ -36,6 +38,7 @@ export default function SettingsScreen() {
               title="Connections"
               detail="Requests, connections and follows"
               icon="connect"
+              badge={attention.connectionRequests}
               onPress={() => router.push("/connections")}
             />
             <SettingsRow

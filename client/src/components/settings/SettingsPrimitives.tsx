@@ -42,20 +42,24 @@ export function SettingsRow({
   icon,
   onPress,
   destructive,
+  badge,
 }: {
   title: string;
   detail?: string;
   icon: IconName;
   onPress?: () => void;
   destructive?: boolean;
+  /** A count of things waiting here. Omitted or 0 renders nothing. */
+  badge?: number;
 }) {
   const { colors } = useTheme();
   const tint = destructive ? colors.destructive : colors.textPrimary;
+  const waiting = badge && badge > 0 ? badge : 0;
 
   return (
     <PressableScale
       accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityLabel={waiting ? `${title}, ${waiting} waiting` : title}
       onPress={onPress}
       style={{
         minHeight: 66,
@@ -87,6 +91,26 @@ export function SettingsRow({
           </Text>
         ) : null}
       </View>
+      {/* A count here, unlike the tab bar dot: this is where the user is
+          deciding whether the trip is worth it. */}
+      {waiting ? (
+        <View
+          style={{
+            minWidth: 22,
+            height: 22,
+            paddingHorizontal: 6,
+            borderRadius: radius.full,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: culture.pink,
+          }}
+        >
+          <Text variant="caption" style={{ color: culture.warmWhite, fontSize: 11 }}>
+            {waiting > 9 ? "9+" : waiting}
+          </Text>
+        </View>
+      ) : null}
+
       {onPress ? <Icon name="forward" size={17} color={colors.textMuted} /> : null}
     </PressableScale>
   );

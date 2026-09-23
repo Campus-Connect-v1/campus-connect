@@ -1,11 +1,18 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Icon, InlineNotice, PressableScale, Text, type IconName } from "@/src/components/ui";
+import {
+  Button,
+  Icon,
+  InlineNotice,
+  PressableScale,
+  Text,
+  type IconName,
+} from "@/src/components/ui";
 import {
   hidePost,
   reportPost,
@@ -13,15 +20,22 @@ import {
   seeLessLikePost,
   type ReportReason,
 } from "@/src/services/moderationServices";
-import { deletePost } from "@/src/services/socialServices";
-import { radius, spacing } from "@/src/styles/theme";
+import { deletePoll } from "@/src/services/pollServices";
+import { deletePost, updatePost } from "@/src/services/socialServices";
+import { inputTextStyle, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 export interface PostOptionsSheetProps {
   postId: string;
   authorName: string;
-  /** Shows Delete instead of the moderation actions. */
+  /** Shows Edit and Delete instead of the moderation actions. */
   isOwnPost: boolean;
+  /** The post's current text, so Edit can open pre-filled. */
+  content?: string;
+  /** Set when the post is a poll: deleting removes the poll and its post. */
+  pollId?: string;
+  /** Called after an edit, so the row can show the new text. */
+  onEdited?: (postId: string, content: string) => void;
   saved: boolean;
   visible: boolean;
   onClose: () => void;
@@ -85,22 +99,28 @@ export function PostOptionsSheet({
   postId,
   authorName,
   isOwnPost,
-  saved,
+  content,
+  pollId,
   visible,
+  saved,
   onClose,
   onRemoved,
+  onEdited,
   onToggleSave,
 }: PostOptionsSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [reporting, setReporting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
   const close = () => {
     setReporting(false);
+    setEditing(false);
     setError(null);
     setDone(null);
     onClose();
@@ -180,8 +200,60 @@ export function PostOptionsSheet({
           </View>
         ) : null}
 
-        <ScrollView>
-          {reporting ? (
+        <ScrollView keyboardShouldPersistTaps="handled">
+          {editing ? (
+            <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
+              <Text variant="micro" color="textMuted">
+                EDIT YOUR POST
+              </Text>
+              <TextInput
+                accessibilityLabel="Post text"
+                multiline
+                autoFocus
+                autoCapitalize="sentences"
+                value={draft}
+                onChangeText={setDraft}
+                placeholderTextColor={colors.textMuted}
+                style={[
+                  inputTextStyle(true),
+                  {
+                    minHeight: 120,
+                    borderRadius: radius.sm,
+                    backgroundColor: colors.surface,
+                    color: colors.textPrimary,
+                    padding: spacing.md,
+                    textAlignVertical: "top",
+                  },
+                ]}
+              />
+              <View style={{ flexDirection: "row", gap: spacing.sm, paddingBottom: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <Button label="Cancel" variant="secondary" onPress={() => setEditing(false)} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    label="Save"
+                    loading={busy}
+                    disabled={!draft.trim() || draft.trim() === (content ?? "").trim()}
+                    onPress={async () => {
+                      const next = draft.trim();
+                      setBusy(true);
+                      const result = await updatePost(postId, next);
+                      setBusy(false);
+
+                      if (!result.success) {
+                        setError(result.error);
+                        return;
+                      }
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      onEdited?.(postId, next);
+                      close();
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
+          ) : reporting ? (
             <>
               <Text
                 variant="micro"
@@ -225,13 +297,32 @@ export function PostOptionsSheet({
               />
 
               {isOwnPost ? (
-                <Row
-                  icon="alert"
-                  label="Delete post"
-                  detail="This cannot be undone"
-                  destructive
-                  onPress={() => run(() => deletePost(postId), { removes: true })}
-                />
+                <>
+                  {/* A poll's options and votes are fixed once it is live, so
+                      only a plain post offers Edit. */}
+                  {!pollId ? (
+                    <Row
+                      icon="edit"
+                      label="Edit post"
+                      onPress={() => {
+                        setDraft(content ?? "");
+                        setEditing(true);
+                      }}
+                    />
+                  ) : null}
+
+                  <Row
+                    icon="alert"
+                    label={pollId ? "Delete poll" : "Delete post"}
+                    detail={pollId ? "Removes the poll and every vote" : "This cannot be undone"}
+                    destructive
+                    onPress={() =>
+                      run(() => (pollId ? deletePoll(pollId) : deletePost(postId)), {
+                        removes: true,
+                      })
+                    }
+                  />
+                </>
               ) : (
                 <>
                   <Row

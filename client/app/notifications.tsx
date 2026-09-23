@@ -1,7 +1,8 @@
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, RefreshControl, View } from "react-native";
+import { Alert, FlatList, RefreshControl, View } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import {
@@ -16,6 +17,8 @@ import {
 } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
 import {
+  clearNotifications,
+  deleteNotification,
   markAllNotificationsRead,
   markNotificationRead,
   fetchNotifications,
@@ -145,7 +148,9 @@ function Row({
         gap: spacing.sm,
         // The unread marker is a tinted ground, not a dot: the whole row is
         // the thing you have not dealt with.
-        backgroundColor: notification.is_read ? "transparent" : colors.surface,
+        // Opaque, not transparent: the row slides over a red delete action,
+        // and a see-through row would show it bleeding under every read item.
+        backgroundColor: notification.is_read ? colors.background : colors.surface,
       }}
     >
       <PressableScale
@@ -293,6 +298,7 @@ export default function NotificationsScreen() {
   const { colors } = useTheme();
   const unreadBadge = useUnread();
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const [responses, setResponses] = useState<Record<string, ResponseState>>({});
 
   const feed = useAsync(
@@ -335,10 +341,10 @@ export default function NotificationsScreen() {
     }, [])
   );
 
-  const notifications = (feed.data?.notifications ?? []).map((n) =>
-    readIds.has(n.notification_id) ? { ...n, is_read: true } : n
-  );
-  const unread = notifications.filter((n) => !n.is_read).length;
+  const notifications = (feed.data?.notifications ?? [])
+    .filter((n) => !removedIds.has(n.notification_id))
+    .map((n) => (readIds.has(n.notification_id) ? { ...n, is_read: true } : n));
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const open = (notification: ApiNotification) => {
     if (!notification.is_read) {
@@ -349,6 +355,43 @@ export default function NotificationsScreen() {
     const destination = destinationFor(notification);
     if (destination) router.push(destination as never);
   };
+
+  const remove = async (notification: ApiNotification) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRemovedIds((current) => new Set(current).add(notification.notification_id));
+
+    const result = await deleteNotification(notification.notification_id);
+    if (!result.success) {
+      // Put it back rather than leaving the list claiming a delete that failed.
+      setRemovedIds((current) => {
+        const next = new Set(current);
+        next.delete(notification.notification_id);
+        return next;
+      });
+      return;
+    }
+    if (!notification.is_read) void unreadBadge.refresh();
+  };
+
+  const confirmClear = () =>
+    Alert.alert(
+      "Clear all notifications?",
+      "This removes every notification, read and unread. It cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear all",
+          style: "destructive",
+          onPress: async () => {
+            const result = await clearNotifications();
+            if (!result.success) return;
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            unreadBadge.clear();
+            await feed.reload();
+          },
+        },
+      ]
+    );
 
   const markAll = async () => {
     Haptics.selectionAsync();
@@ -390,16 +433,39 @@ export default function NotificationsScreen() {
 
   return (
     <SettingsShell title="Notifications">
-      {unread > 0 ? (
-        <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
+      {notifications.length > 0 ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.lg,
+            paddingHorizontal: spacing.lg,
+            paddingBottom: spacing.sm,
+          }}
+        >
+          {unreadCount > 0 ? (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`Mark all ${unreadCount} as read`}
+              onPress={markAll}
+              style={{ minHeight: 40, justifyContent: "center" }}
+            >
+              <Text variant="label" style={{ color: colors.accent }}>
+                Mark all as read
+              </Text>
+            </PressableScale>
+          ) : null}
+
+          <View style={{ flex: 1 }} />
+
           <PressableScale
             accessibilityRole="button"
-            accessibilityLabel={`Mark all ${unread} as read`}
-            onPress={markAll}
-            style={{ alignSelf: "flex-start", minHeight: 40, justifyContent: "center" }}
+            accessibilityLabel="Clear all notifications"
+            onPress={confirmClear}
+            style={{ minHeight: 40, justifyContent: "center" }}
           >
-            <Text variant="label" style={{ color: colors.accent }}>
-              Mark all as read
+            <Text variant="label" color="destructive">
+              Clear all
             </Text>
           </PressableScale>
         </View>
@@ -450,12 +516,36 @@ export default function NotificationsScreen() {
               : (responses[item.notification_id] ?? persistedResponse);
 
           return (
-            <Row
-              notification={item}
-              response={response}
-              onPress={() => open(item)}
-              onRespond={(action) => respond(item, action)}
-            />
+            <Swipeable
+              // Right-to-left only: a left swipe on a row that can also be
+              // tapped is too easy to trigger while scrolling.
+              renderRightActions={() => (
+                <PressableScale
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete notification: ${item.title}`}
+                  onPress={() => remove(item)}
+                  style={{
+                    width: 84,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: colors.destructive,
+                  }}
+                >
+                  <Icon name="alert" size={20} color={colors.onMedia} />
+                  <Text variant="caption" onMedia style={{ marginTop: 2 }}>
+                    Delete
+                  </Text>
+                </PressableScale>
+              )}
+              overshootRight={false}
+            >
+              <Row
+                notification={item}
+                response={response}
+                onPress={() => open(item)}
+                onRespond={(action) => respond(item, action)}
+              />
+            </Swipeable>
           );
         }}
       />

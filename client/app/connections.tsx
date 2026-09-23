@@ -13,6 +13,7 @@ import {
   Text,
 } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
+import { useAttention } from "@/src/services/AttentionContext";
 import {
   cancelConnectionRequest,
   fetchConnections,
@@ -26,6 +27,7 @@ type Tab = "requests" | "connections" | "sent";
 
 export default function ConnectionsScreen() {
   const { colors } = useTheme();
+  const attention = useAttention();
   const [tab, setTab] = useState<Tab>("requests");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +76,8 @@ export default function ConnectionsScreen() {
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setResolved((current) => new Set(current).add(connectionId));
+    // The dot that brought the user here has to go when the thing is done.
+    void attention.refresh();
   };
 
   const personFrom = (row: ApiConnection) => ({

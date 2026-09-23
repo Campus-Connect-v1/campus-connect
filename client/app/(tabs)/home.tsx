@@ -30,6 +30,7 @@ import { type FeedPost } from "@/src/features/feed/types";
 import { adaptProfile } from "@/src/features/profile/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
 import { fetchEvents } from "@/src/services/eventServices";
+import { useAttention } from "@/src/services/AttentionContext";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
 import { fetchFeed, likePost, unlikePost, type ApiPost } from "@/src/services/socialServices";
@@ -325,6 +326,7 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const { user, profile, signOut } = useSession();
   const saved = useSavedPosts();
+  const attention = useAttention();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [options, setOptions] = useState<FeedPost | null>(null);
   const [category, setCategory] = useState("Trending");
@@ -599,6 +601,13 @@ export default function HomeScreen() {
           postId={options.id}
           authorName={options.author.name}
           isOwnPost={options.author.id === user?.id}
+          content={options.caption}
+          pollId={options.pollId}
+          onEdited={(id, content) =>
+            setPosts((current) =>
+              current.map((post) => (post.id === id ? { ...post, caption: content } : post))
+            )
+          }
           saved={saved.isSaved(options.id)}
           visible
           onClose={() => setOptions(null)}
@@ -701,10 +710,31 @@ export default function HomeScreen() {
               </PressableScale>
               <PressableScale
                 accessibilityRole="button"
-                accessibilityLabel="Open profile menu"
+                accessibilityLabel={
+                  attention.hasAny
+                    ? `Open profile menu, ${attention.connectionRequests} waiting`
+                    : "Open profile menu"
+                }
                 onPress={() => setDrawerOpen(true)}
               >
                 <Avatar uri={display?.avatar ?? undefined} size={42} />
+                {/* A plain dot, not a count. This is a nudge to open the menu;
+                    the number belongs on the row that leads to the thing. */}
+                {attention.hasAny ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -1,
+                      right: -1,
+                      width: 13,
+                      height: 13,
+                      borderRadius: radius.full,
+                      backgroundColor: culture.pink,
+                      borderWidth: 2,
+                      borderColor: colors.background,
+                    }}
+                  />
+                ) : null}
               </PressableScale>
             </View>
 

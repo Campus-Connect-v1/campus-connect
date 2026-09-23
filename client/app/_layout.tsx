@@ -10,6 +10,7 @@ import { NetworkProvider } from "@/src/services/NetworkContext";
 import { PreferencesProvider, usePreferences } from "@/src/services/PreferencesContext";
 import { SavedPostsProvider } from "@/src/services/SavedPostsContext";
 import { SessionProvider } from "@/src/services/SessionContext";
+import { AttentionProvider } from "@/src/services/AttentionContext";
 import { UnreadProvider } from "@/src/services/UnreadContext";
 import { ThemeScheme } from "@/src/styles/ThemeScheme";
 
@@ -83,9 +84,11 @@ export default function RootLayout() {
                 {/* Inside SessionProvider: it reads the token and opens its
                     subscription against the signed-in user's socket. */}
                 <UnreadProvider>
-                  <Themed>
-                    <Stack screenOptions={{ headerShown: false }} />
-                  </Themed>
+                  <AttentionProvider>
+                    <Themed>
+                      <Stack screenOptions={{ headerShown: false }} />
+                    </Themed>
+                  </AttentionProvider>
                 </UnreadProvider>
               </SavedPostsProvider>
             </SessionProvider>

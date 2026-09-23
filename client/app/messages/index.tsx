@@ -1,11 +1,16 @@
 import { router } from "expo-router";
-import { useCallback } from "react";
-import { FlatList, RefreshControl, View } from "react-native";
+import { useCallback, useState } from "react";
+import { Alert, FlatList, RefreshControl, View } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
-import { Avatar, EmptyState, PressableScale, SkeletonList, Text } from "@/src/components/ui";
+import { Avatar, EmptyState, Icon, PressableScale, SkeletonList, Text } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
-import { fetchConversations, type ApiConversation } from "@/src/services/conversationServices";
+import {
+  deleteConversation,
+  fetchConversations,
+  type ApiConversation,
+} from "@/src/services/conversationServices";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -47,6 +52,8 @@ function Row({ conversation }: { conversation: ApiConversation }) {
         gap: spacing.md,
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.md,
+        // Opaque: the row slides over a red delete action behind it.
+        backgroundColor: colors.background,
       }}
     >
       <Avatar uri={other?.avatar ?? undefined} size={48} />
@@ -88,6 +95,7 @@ function Row({ conversation }: { conversation: ApiConversation }) {
 
 export default function ConversationsScreen() {
   const { colors } = useTheme();
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
 
   const conversations = useAsync(
     useCallback(() => fetchConversations(), []),
@@ -97,7 +105,7 @@ export default function ConversationsScreen() {
   return (
     <SettingsShell title="Messages">
       <FlatList
-        data={conversations.data ?? []}
+        data={(conversations.data ?? []).filter((row) => !removed.has(row._id))}
         style={{ flex: 1 }}
         keyExtractor={(item) => item._id}
         showsVerticalScrollIndicator={false}
@@ -129,7 +137,63 @@ export default function ConversationsScreen() {
             />
           )
         }
-        renderItem={({ item }) => <Row conversation={item} />}
+        renderItem={({ item }) => {
+          const name =
+            item.otherParticipant?.username ||
+            item.otherParticipant?.email?.split("@")[0] ||
+            "this chat";
+
+          const confirmDelete = () =>
+            Alert.alert(
+              "Delete this conversation?",
+              `Your copy of the conversation with ${name} is removed. This cannot be undone.`,
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: async () => {
+                    setRemoved((current) => new Set(current).add(item._id));
+                    const result = await deleteConversation(item._id);
+                    if (!result.success) {
+                      // Restored rather than left looking deleted.
+                      setRemoved((current) => {
+                        const next = new Set(current);
+                        next.delete(item._id);
+                        return next;
+                      });
+                    }
+                  },
+                },
+              ]
+            );
+
+          return (
+            <Swipeable
+              renderRightActions={() => (
+                <PressableScale
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete conversation with ${name}`}
+                  onPress={confirmDelete}
+                  style={{
+                    width: 84,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: colors.destructive,
+                  }}
+                >
+                  <Icon name="alert" size={20} color={colors.onMedia} />
+                  <Text variant="caption" onMedia style={{ marginTop: 2 }}>
+                    Delete
+                  </Text>
+                </PressableScale>
+              )}
+              overshootRight={false}
+            >
+              <Row conversation={item} />
+            </Swipeable>
+          );
+        }}
       />
     </SettingsShell>
   );
