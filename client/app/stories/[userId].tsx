@@ -18,6 +18,7 @@ import { useSession } from "@/src/services/SessionContext";
 import {
   deleteStory,
   fetchStoryFeed,
+  fetchUserStories,
   viewStory,
   type ApiStory,
   type ApiStoryGroup,
@@ -121,10 +122,47 @@ export default function StoryViewerScreen() {
     []
   );
 
-  const group: ApiStoryGroup | undefined = useMemo(
-    () => (feed.data ?? []).find((g) => g.author.user_id === userId),
-    [feed.data, userId]
+  /**
+   * Falls back to this person's own stories when they are not in the feed.
+   *
+   * The story feed only carries people whose stories reach you through the
+   * feed's own rules, so opening a profile's story directly -- from their
+   * avatar, or from a notification -- found nothing and showed "No stories
+   * here" for someone who plainly had one.
+   */
+  const direct = useAsync(
+    useCallback(() => fetchUserStories(userId), [userId]),
+    [userId]
   );
+
+  const group: ApiStoryGroup | undefined = useMemo(() => {
+    const fromFeed = (feed.data ?? []).find((g) => g.author.user_id === userId);
+    if (fromFeed) return fromFeed;
+
+    const stories = direct.data ?? [];
+    if (stories.length === 0) return undefined;
+
+    // The direct endpoint returns stories, not a group, so the author is
+    // assembled from the first one.
+    const first = stories[0] as (typeof stories)[number] & {
+      author?: ApiStoryGroup["author"];
+    };
+
+    return {
+      author: first.author ?? {
+        user_id: userId,
+        first_name: "",
+        last_name: null,
+        profile_picture_url: null,
+      },
+      story_count: stories.length,
+      unseen_count: stories.filter((story) => !story.has_viewed).length,
+      all_viewed: stories.every((story) => story.has_viewed),
+      is_own: false,
+      latest_story_at: stories[stories.length - 1]?.created_at ?? "",
+      stories,
+    };
+  }, [feed.data, direct.data, userId]);
 
   // Memoised because it feeds a dependency array; a fresh [] each render
   // would restart the "open on first unseen" effect on every frame.
@@ -166,7 +204,7 @@ export default function StoryViewerScreen() {
 
   const back = () => setIndex((i) => Math.max(0, i - 1));
 
-  if (feed.loading) {
+  if (feed.loading || direct.loading) {
     return <View style={{ flex: 1, backgroundColor: "#000" }} />;
   }
 

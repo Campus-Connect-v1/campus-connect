@@ -13,6 +13,7 @@ import {
   fetchInterests,
   removeCourse,
   removeInterest,
+  updateInterest,
   type ApiInterest,
 } from "@/src/services/userServices";
 import { culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
@@ -48,16 +49,22 @@ type SkillLevel = (typeof SKILL_LEVELS)[number]["value"];
 function Chip({
   label,
   hue,
+  onPress,
   onRemove,
   removing,
 }: {
   label: string;
   hue: string;
+  onPress: () => void;
   onRemove: () => void;
   removing: boolean;
 }) {
   return (
-    <View
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={`${label}. Tap to edit`}
+      onPress={onPress}
+      disabled={removing}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -82,7 +89,7 @@ function Chip({
       >
         <Icon name="close" size={13} color={foregroundOn(hue)} />
       </PressableScale>
-    </View>
+    </PressableScale>
   );
 }
 
@@ -101,6 +108,9 @@ export default function InterestsScreen() {
   const [name, setName] = useState("");
   const [type, setType] = useState<InterestType>("hobby");
   const [level, setLevel] = useState<SkillLevel>("beginner");
+  // Set while an existing interest is being changed, so the one form below
+  // serves both jobs rather than the screen growing a second one.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [code, setCode] = useState("");
   const [courseName, setCourseName] = useState("");
@@ -108,23 +118,46 @@ export default function InterestsScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const startEditing = (interest: ApiInterest) => {
+    Haptics.selectionAsync();
+    setEditingId(interest.interest_id);
+    setName(interest.interest_name || interest.name || "");
+    setType(interest.interest_type);
+    setLevel(interest.skill_level);
+    setError(null);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setName("");
+    setType("hobby");
+    setLevel("beginner");
+  };
+
   const submitInterest = async () => {
     const trimmed = name.trim();
     if (!trimmed) return setError("Give the interest a name.");
 
     setBusy("interest");
     setError(null);
-    const result = await addInterest({
-      interest_type: type,
-      interest_name: trimmed,
-      skill_level: level,
-    });
+
+    const result = editingId
+      ? await updateInterest(editingId, {
+          interest_type: type,
+          interest_name: trimmed,
+          skill_level: level,
+        })
+      : await addInterest({
+          interest_type: type,
+          interest_name: trimmed,
+          skill_level: level,
+        });
     setBusy(null);
 
     if (!result.success) return setError(result.error);
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setName("");
+    cancelEditing();
     await interests.reload();
   };
 
@@ -202,6 +235,7 @@ export default function InterestsScreen() {
                     label={labelFor(interest)}
                     hue={TYPE_HUE[interest.interest_type] ?? culture.violet}
                     removing={busy === interest.interest_id}
+                    onPress={() => startEditing(interest)}
                     onRemove={() =>
                       drop(
                         interest.interest_id,
@@ -215,7 +249,7 @@ export default function InterestsScreen() {
             )}
 
             <FormField
-              label="Add an interest"
+              label={editingId ? "Edit interest" : "Add an interest"}
               placeholder="Robotics, Afrobeats, debate…"
               value={name}
               onChangeText={setName}
@@ -233,12 +267,21 @@ export default function InterestsScreen() {
               options={[...SKILL_LEVELS]}
               onChange={setLevel}
             />
-            <Button
-              label="Add interest"
-              loading={busy === "interest"}
-              disabled={!name.trim()}
-              onPress={submitInterest}
-            />
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              {editingId ? (
+                <View style={{ flex: 1 }}>
+                  <Button label="Cancel" variant="secondary" onPress={cancelEditing} />
+                </View>
+              ) : null}
+              <View style={{ flex: 1 }}>
+                <Button
+                  label={editingId ? "Save changes" : "Add interest"}
+                  loading={busy === "interest"}
+                  disabled={!name.trim()}
+                  onPress={submitInterest}
+                />
+              </View>
+            </View>
           </View>
 
           <View style={{ height: 1, backgroundColor: colors.border }} />

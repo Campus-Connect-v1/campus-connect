@@ -11,6 +11,7 @@ import { PreferencesProvider, usePreferences } from "@/src/services/PreferencesC
 import { SavedPostsProvider } from "@/src/services/SavedPostsContext";
 import { SessionProvider } from "@/src/services/SessionContext";
 import { AttentionProvider } from "@/src/services/AttentionContext";
+import { LocationSharingProvider } from "@/src/services/LocationSharingContext";
 import { UnreadProvider } from "@/src/services/UnreadContext";
 import { ThemeScheme } from "@/src/styles/ThemeScheme";
 
@@ -85,9 +86,11 @@ export default function RootLayout() {
                     subscription against the signed-in user's socket. */}
                 <UnreadProvider>
                   <AttentionProvider>
-                    <Themed>
-                      <Stack screenOptions={{ headerShown: false }} />
-                    </Themed>
+                    <LocationSharingProvider>
+                      <Themed>
+                        <Stack screenOptions={{ headerShown: false }} />
+                      </Themed>
+                    </LocationSharingProvider>
                   </AttentionProvider>
                 </UnreadProvider>
               </SavedPostsProvider>
