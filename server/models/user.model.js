@@ -714,6 +714,21 @@ export const getUserConnections = async (userId, status = "accepted") => {
   return rows;
 };
 
+// Lightweight companion to getUserConnections: just the other side's ids, for
+// fan-out (e.g. notifying connections about a new post). No joined profile
+// columns, since the caller only wants recipient ids.
+export const getConnectionUserIds = async (userId) => {
+  const [rows] = await db.execute(
+    `SELECT
+       CASE WHEN requester_id = ? THEN receiver_id ELSE requester_id END AS connection_user_id
+     FROM connections
+     WHERE (requester_id = ? OR receiver_id = ?)
+       AND status = 'accepted'`,
+    [userId, userId, userId]
+  );
+  return rows.map((row) => row.connection_user_id);
+};
+
 export const getAllUserConnectionsModel = async (
   userId,
   status,

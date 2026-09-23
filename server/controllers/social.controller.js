@@ -22,7 +22,8 @@ import {
   getSavedPostsModel,
 } from "../models/social.model.js";
 import { isOwnMediaUrl } from "../config/cloudinary.js";
-import { notify } from "../models/notification.model.js";
+import { notify, notifyMany } from "../models/notification.model.js";
+import { getConnectionUserIds } from "../models/user.model.js";
 import { db } from "../config/db.js";
 import { emitToPostExcept } from "../realtime.js";
 
@@ -99,6 +100,23 @@ export const createPost = async (req, res) => {
     };
 
     const post = await createPostModel(postData);
+
+    // Fire-and-forget, same as the like/comment notifications below: a
+    // notification failure must never turn a successful post into a 500.
+    getConnectionUserIds(userId)
+      .then(async (connectionIds) => {
+        if (!connectionIds.length) return;
+        const name = await actorName(userId);
+        notifyMany(connectionIds, {
+          actorId: userId,
+          type: "new_post",
+          resourceType: "post",
+          resourceId: post.post_id,
+          title: `${name} shared a new post`,
+          body: content ? String(content).slice(0, 140) : undefined,
+        });
+      })
+      .catch((error) => console.error("new_post fan-out failed:", error.message));
 
     res.status(201).json({
       message: "Post created successfully",

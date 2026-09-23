@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
 import Event from "../models/event.model.js";
 import e from "express";
+import { notifyMany } from "../models/notification.model.js";
+import { getUserIdsByUniversityModel } from "../models/university.model.js";
 
 export const eventController = {
   // Get all events with filtering
@@ -124,6 +126,28 @@ export const eventController = {
       };
 
       const result = await Event.create(eventData);
+
+      // Public events are announced to the whole university. Fire-and-forget:
+      // a notification failure must not turn a successful create into a 500.
+      // Private events (is_public: false) stay invite-only and are not
+      // broadcast here.
+      if (is_public) {
+        getUserIdsByUniversityModel(university_id, req.user.id)
+          .then((recipientIds) => {
+            if (!recipientIds.length) return;
+            notifyMany(recipientIds, {
+              actorId: req.user.id,
+              type: "event_created",
+              resourceType: "event",
+              resourceId: eventData.event_id,
+              title: `New event: ${event_title}`,
+              body: event_description
+                ? String(event_description).slice(0, 140)
+                : undefined,
+            });
+          })
+          .catch((error) => console.error("event_created fan-out failed:", error.message));
+      }
 
       res.status(201).json({
         success: true,

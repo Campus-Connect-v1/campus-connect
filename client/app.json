@@ -21,7 +21,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.campusconnect.app"
+      "package": "com.campusconnect.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -55,6 +56,13 @@
           "cameraPermission": "Campus Connect uses your camera so you can capture a photo for a post or your profile picture."
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-foreground.png",
+          "color": "#161616"
+        }
+      ],
       "expo-dev-client",
       "expo-video",
       "@react-native-community/datetimepicker"
@@ -62,6 +70,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9f6dadfc-e553-4855-8cb8-688dfe5fa41f"
+      }
+    },
+    "owner": "joycelli"
   }
 }
