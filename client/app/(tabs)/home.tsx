@@ -256,9 +256,7 @@ function PeopleSection({ people }: { people: ApiUserCard[] }) {
   );
 }
 
-type FeedRow =
-  | { kind: "post"; post: FeedPost }
-  | { kind: "people"; slot: number };
+type FeedRow = { kind: "post"; post: FeedPost } | { kind: "people"; slot: number };
 
 function PeopleStrip({ people }: { people: ApiUserCard[] }) {
   const { width } = useWindowDimensions();
@@ -554,8 +552,7 @@ export default function HomeScreen() {
       out.push({ kind: "post", post });
       if (!recommendations.length) return;
       const isSlot =
-        index === FIRST_SLOT ||
-        (index > FIRST_SLOT && (index - FIRST_SLOT) % REPEAT_EVERY === 0);
+        index === FIRST_SLOT || (index > FIRST_SLOT && (index - FIRST_SLOT) % REPEAT_EVERY === 0);
       if (isSlot) out.push({ kind: "people", slot: index });
     });
     return out;
@@ -584,6 +581,7 @@ export default function HomeScreen() {
             campus: "/(tabs)/campus",
             profile: "/(tabs)/profile",
             messages: "/messages",
+            connections: "/connections",
             saved: "/saved",
             groups: "/(tabs)/events?section=groups",
             events: "/(tabs)/events",
@@ -615,9 +613,7 @@ export default function HomeScreen() {
         // The slot index keys the injected rows: two suggestion blocks in one
         // feed would otherwise collide on a constant key and FlatList would
         // recycle one over the other.
-        keyExtractor={(item) =>
-          item.kind === "post" ? item.post.id : `people-${item.slot}`
-        }
+        keyExtractor={(item) => (item.kind === "post" ? item.post.id : `people-${item.slot}`)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
         refreshControl={

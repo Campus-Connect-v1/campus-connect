@@ -33,6 +33,18 @@ export default function SettingsScreen() {
             style={{ borderRadius: radius.md, backgroundColor: colors.surface, overflow: "hidden" }}
           >
             <SettingsRow
+              title="Connections"
+              detail="Requests, connections and follows"
+              icon="connect"
+              onPress={() => router.push("/connections")}
+            />
+            <SettingsRow
+              title="Interests and courses"
+              detail="What the app suggests people by"
+              icon="course"
+              onPress={() => router.push("/settings/interests")}
+            />
+            <SettingsRow
               title="Account"
               detail="Profile, email and university"
               icon="profile"
@@ -71,6 +83,12 @@ export default function SettingsScreen() {
               detail="Get support or share an idea"
               icon="help"
               onPress={() => router.push("/settings/help")}
+            />
+            <SettingsRow
+              title="Hidden posts"
+              detail="Posts you removed from your feed"
+              icon="hidden"
+              onPress={() => router.push("/settings/hidden-posts")}
             />
             <SettingsRow
               title="Privacy Policy"

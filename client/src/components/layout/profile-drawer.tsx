@@ -22,6 +22,7 @@ const MENU: { id: string; title: string; icon: IconName }[] = [
   { id: "campus", title: "Campus", icon: "campus" },
   { id: "profile", title: "Your profile", icon: "profile" },
   { id: "messages", title: "Messages", icon: "message" },
+  { id: "connections", title: "Connections", icon: "connectAdd" },
   { id: "saved", title: "Saved posts", icon: "save" },
   { id: "groups", title: "Study groups", icon: "connect" },
   { id: "events", title: "Events", icon: "events" },
