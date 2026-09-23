@@ -1,12 +1,15 @@
 import { Image } from "expo-image";
-import { useEffect, useMemo, useRef } from "react";
+import { Fragment, useEffect, useMemo, useRef } from "react";
 import { Platform, StyleSheet, View } from "react-native";
-import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
+import MapView, { Circle, Marker, PROVIDER_DEFAULT } from "react-native-maps";
 
 import { Avatar, Text } from "@/src/components/ui";
+import { useCampusLookup } from "@/src/hooks/useCampusRing";
 import { CAMPUS_CENTER, DARK_MAP_STYLE, type CampusPin } from "@/src/features/campus/types";
+import { freshnessOpacity, isTooOld, PRECISION_RADIUS, since } from "@/src/features/map/presence";
+import type { FriendLocation } from "@/src/services/friendMapServices";
 import type { NearbyProfile } from "@/src/services/geolocation";
-import { SECTION_HUE, culture, radius, spacing } from "@/src/styles/theme";
+import { SECTION_HUE, culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
 
 interface Props {
   pins: CampusPin[];
@@ -14,6 +17,9 @@ interface Props {
   onSelect: (pin: CampusPin) => void;
   people?: NearbyProfile[];
   onSelectPerson?: (person: NearbyProfile) => void;
+  /** Accepted connections at any distance. Rendered above nearby strangers. */
+  friends?: FriendLocation[];
+  onSelectFriend?: (friend: FriendLocation) => void;
   hue?: string;
   /**
    * Pans the camera to this pin when it changes. Used by search, where the
@@ -73,10 +79,13 @@ export function CampusMap({
   onSelect,
   people = [],
   onSelectPerson,
+  friends = [],
+  onSelectFriend,
   hue = SECTION_HUE.connect,
   focusId,
 }: Props) {
   const mapRef = useRef<MapView>(null);
+  const campusOf = useCampusLookup();
   // `initialRegion` is read once on mount, so the region is keyed on the pins:
   // buildings arrive asynchronously and a map already mounted on the fallback
   // would otherwise stay in Legon for the rest of the session.
@@ -91,6 +100,22 @@ export function CampusMap({
       ),
     [people]
   );
+  const visibleFriends = useMemo(
+    () => friends.filter((friend) => !isTooOld(friend.lastSeen)),
+    [friends]
+  );
+
+  // A friend who is also within the nearby radius arrives from both reads. The
+  // friend marker wins: it carries the relationship and the story ring.
+  const friendIds = useMemo(
+    () => new Set(visibleFriends.map((friend) => friend.userId)),
+    [visibleFriends]
+  );
+  const strangers = useMemo(
+    () => locatedPeople.filter((person) => !friendIds.has(person.user_id)),
+    [locatedPeople, friendIds]
+  );
+
   const region = useMemo(() => regionFor(pins, locatedPeople), [pins, locatedPeople]);
 
   useEffect(() => {
@@ -174,18 +199,51 @@ export function CampusMap({
         );
       })}
 
-      {locatedPeople.map((person) => {
+      {strangers.map((person) => {
         const name = [person.first_name, person.last_name].filter(Boolean).join(" ");
+        const campus = campusOf(person.universityId);
+        // Own campus stays quiet; a visitor from another university gets a
+        // heavier ring and their campus named, because on a map full of your
+        // own classmates the outsider is the thing worth spotting.
+        const away = campus && !campus.isOwn;
+
         return (
           <Marker
             key={`person-${person.user_id}`}
             coordinate={{ latitude: person.latitude!, longitude: person.longitude! }}
             onPress={() => onSelectPerson?.(person)}
-            tracksViewChanges={false}
+            // Re-rasterises when the ring colour arrives: the university list
+            // loads after first paint, so a marker frozen at mount would keep
+            // the default ring forever.
+            tracksViewChanges={!campus}
             anchor={{ x: 0.5, y: 0.5 }}
           >
             <View style={{ alignItems: "center", width: 104 }}>
-              <Avatar uri={person.profile_picture ?? undefined} size={48} ring={person.is_online} />
+              <View>
+                <Avatar
+                  uri={person.profile_picture ?? undefined}
+                  size={48}
+                  ring={Boolean(campus) || person.is_online}
+                  ringColor={campus?.color}
+                  ringWidth={away ? 3 : 2}
+                />
+                {person.is_online ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      bottom: 0,
+                      width: 12,
+                      height: 12,
+                      borderRadius: radius.full,
+                      backgroundColor: culture.lime,
+                      borderWidth: 2,
+                      borderColor: "rgba(11,14,18,0.88)",
+                    }}
+                  />
+                ) : null}
+              </View>
+
               <View
                 style={{
                   marginTop: spacing["2xs"],
@@ -193,15 +251,117 @@ export function CampusMap({
                   paddingHorizontal: spacing.xs,
                   paddingVertical: 2,
                   borderRadius: radius.full,
-                  backgroundColor: "rgba(11,14,18,0.88)",
+                  backgroundColor: away ? campus.color : "rgba(11,14,18,0.88)",
                 }}
               >
-                <Text variant="caption" onMedia numberOfLines={1}>
+                <Text
+                  variant="caption"
+                  numberOfLines={1}
+                  onMedia={!away}
+                  style={away ? { color: foregroundOn(campus.color) } : undefined}
+                >
                   {name || "Someone nearby"}
                 </Text>
               </View>
+
+              {away ? (
+                <Text
+                  variant="caption"
+                  numberOfLines={1}
+                  style={{ marginTop: 1, fontSize: 10, color: campus.color }}
+                >
+                  {campus.label}
+                </Text>
+              ) : null}
             </View>
           </Marker>
+        );
+      })}
+
+      {/* Friends last, so they draw above buildings and strangers. */}
+      {visibleFriends.map((friend) => {
+        const campus = campusOf(friend.universityId);
+        const away = campus && !campus.isOwn;
+        const opacity = freshnessOpacity(friend.lastSeen);
+        const ago = since(friend.lastSeen);
+        const haloRadius = PRECISION_RADIUS[friend.precision] ?? 0;
+        const ringColor = friend.hasStory ? culture.pink : (campus?.color ?? hue);
+
+        return (
+          <Fragment key={`friend-${friend.userId}`}>
+            {/* A coarse position is drawn as the area it actually means. A
+                precise-looking pin for a city-level fix would be a lie. */}
+            {haloRadius > 0 ? (
+              <Circle
+                center={{ latitude: friend.latitude, longitude: friend.longitude }}
+                radius={haloRadius}
+                strokeWidth={1}
+                strokeColor={`${ringColor}55`}
+                fillColor={`${ringColor}1A`}
+              />
+            ) : null}
+
+            <Marker
+              coordinate={{ latitude: friend.latitude, longitude: friend.longitude }}
+              onPress={() => onSelectFriend?.(friend)}
+              tracksViewChanges={!campus}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={{ alignItems: "center", width: 112, opacity }}>
+                <View>
+                  <Avatar
+                    uri={friend.avatar ?? undefined}
+                    size={52}
+                    ring
+                    ringColor={ringColor}
+                    ringWidth={friend.hasStory ? 3 : away ? 3 : 2}
+                  />
+                  {friend.isOnline ? (
+                    <View
+                      style={{
+                        position: "absolute",
+                        right: 0,
+                        bottom: 0,
+                        width: 13,
+                        height: 13,
+                        borderRadius: radius.full,
+                        backgroundColor: culture.lime,
+                        borderWidth: 2,
+                        borderColor: "rgba(11,14,18,0.88)",
+                      }}
+                    />
+                  ) : null}
+                </View>
+
+                <View
+                  style={{
+                    marginTop: spacing["2xs"],
+                    maxWidth: 112,
+                    paddingHorizontal: spacing.xs,
+                    paddingVertical: 2,
+                    borderRadius: radius.full,
+                    backgroundColor: "rgba(11,14,18,0.88)",
+                  }}
+                >
+                  <Text variant="caption" onMedia numberOfLines={1}>
+                    {friend.name}
+                  </Text>
+                </View>
+
+                {/* The age is shown on every friend, not just stale ones: a
+                    map that only timestamps old pins implies the rest are live. */}
+                {ago ? (
+                  <Text
+                    variant="caption"
+                    numberOfLines={1}
+                    style={{ marginTop: 1, fontSize: 10, color: culture.warmWhite, opacity: 0.75 }}
+                  >
+                    {friend.placeLabel ? `${friend.placeLabel} · ${ago}` : ago}
+                  </Text>
+                ) : null}
+              </View>
+            </Marker>
+          </Fragment>
         );
       })}
     </MapView>
