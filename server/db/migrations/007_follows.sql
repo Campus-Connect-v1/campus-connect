@@ -1,7 +1,7 @@
 -- ============================================================================
--- Migration 006 — the follow graph
+-- Migration 007 — the follow graph
 -- ----------------------------------------------------------------------------
---   mysql -h <host> -u <user> -p <database> < db/migrations/006_follows.sql
+--   mysql -h <host> -u <user> -p <database> < db/migrations/007_follows.sql
 --
 -- Idempotent; safe to re-run.
 --
@@ -39,16 +39,12 @@ CREATE TABLE IF NOT EXISTS `follows` (
     REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Being followed is a notification-worthy event and the enum is a closed set,
--- so it has to be widened before notify() can write the row. Re-running this
--- statement sets the same definition, which is why it is safe without a guard.
-ALTER TABLE `notifications`
-  MODIFY COLUMN `type` enum(
-    'connection_request','connection_accepted','post_like','post_comment',
-    'comment_reply','group_invite','group_joined','event_invite',
-    'event_reminder','event_rsvp','story_view','poll_vote','report_actioned',
-    'new_follower','system'
-  ) NOT NULL;
+-- The 'new_follower' enum value this migration needs is added by
+-- 006_notification_broadcast_types.sql, which now owns the notifications.type
+-- column. Deliberately NOT re-stated here: an ENUM MODIFY replaces the whole
+-- list, so repeating an older one would drop 'new_post' and 'event_created'
+-- and silently truncate any row already using them -- the exact footgun 006
+-- was written to close. One migration owns one column.
 
 -- ----------------------------------------------------------------------------
 -- Backfill: every accepted connection becomes a mutual follow.
@@ -74,4 +70,4 @@ JOIN `users` a ON a.user_id = c.requester_id AND a.is_active = 1
 JOIN `users` b ON b.user_id = c.receiver_id  AND b.is_active = 1
 WHERE c.status = 'accepted';
 
-SELECT 'migration 006 complete' AS `status`, (SELECT COUNT(*) FROM follows) AS `follow_rows`;
+SELECT 'migration 007 complete' AS `status`, (SELECT COUNT(*) FROM follows) AS `follow_rows`;
