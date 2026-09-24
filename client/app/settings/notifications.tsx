@@ -31,7 +31,6 @@ export default function NotificationSettingsScreen() {
   const { colors } = useTheme();
   const { profile, refresh } = useSession();
 
-<<<<<<< HEAD
   /**
    * Whether this device can actually receive a push.
    *
@@ -44,16 +43,7 @@ export default function NotificationSettingsScreen() {
   useEffect(() => {
     void getPushStatus().then(setPushStatus);
   }, []);
-
-=======
   const [pushNotice, setPushNotice] = useState<string | null>(null);
-
-  /**
-   * Turning push ON is the moment of intent, so the OS prompt happens here and
-   * nowhere else. Registering the device token is the half that was missing:
-   * the preference saved correctly, and the server had no device to send to.
-   */
->>>>>>> origin/main
   const push = useOptimisticToggle(
     true,
     useCallback(

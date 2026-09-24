@@ -141,37 +141,26 @@ export async function registerForPushNotificationsAsync(): Promise<PushRegistrat
       const requested = await Notifications.requestPermissionsAsync();
       status = requested.status;
     }
-<<<<<<< HEAD
     if (status !== "granted") {
       await recordStatus("denied");
-      return;
+      return "denied";
     }
 
     const token = await getExpoPushToken();
     if (!token) {
       await recordStatus("no_project");
-      return;
+      return "unavailable";
     }
 
     const result = await registerPushToken(token, PLATFORM);
     if (result.success) {
       await AsyncStorage.setItem(STORED_TOKEN_KEY, token);
       await recordStatus("active");
+      return "registered";
     } else {
       await recordStatus("server_rejected");
+      return "failed";
     }
-=======
-    if (status !== "granted") return "denied";
-
-    const token = await getExpoPushToken();
-    if (!token) return "unavailable";
-
-    const result = await registerPushToken(token, PLATFORM);
-    if (!result.success) return "failed";
-
-    await AsyncStorage.setItem(STORED_TOKEN_KEY, token);
-    return "registered";
->>>>>>> origin/main
   } catch (error) {
     // Never let push setup block or crash the session it is attached to.
     await recordStatus("error");
