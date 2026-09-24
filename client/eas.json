@@ -4,15 +4,54 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "//": [
+      "EXPO_PUBLIC_* values are declared here on purpose.",
+      "",
+      "Expo inlines them into the JS bundle at BUILD time, and an EAS build runs",
+      "on Expo's servers from a git clone -- where client/.env does not exist,",
+      "because it is gitignored. Without these, EXPO_PUBLIC_API_URL is undefined,",
+      "src/constants/env.ts throws at module load, and the build installs and",
+      "crashes on the splash screen with no useful message.",
+      "",
+      "Declaring them is safe: EXPO_PUBLIC_ values ship inside the bundle on every",
+      "device regardless, so they are public by definition. Anything genuinely",
+      "secret belongs in `eas secret:create`, never here."
+    ],
+
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://campus-connect-api-o0xt.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://campus-connect-api-o0xt.onrender.com",
+        "EXPO_PUBLIC_ENV": "development",
+        "EXPO_PUBLIC_ENABLE_GEOFENCING": "true",
+        "EXPO_PUBLIC_BYPASS_AUTH": "false"
+      }
     },
+
     "preview": {
-      "distribution": "internal"
+      "//": "A standalone build for real-device testing: no Metro, no dev menu. This is the one to hand to a tester.",
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://campus-connect-api-o0xt.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://campus-connect-api-o0xt.onrender.com",
+        "EXPO_PUBLIC_ENV": "preview",
+        "EXPO_PUBLIC_ENABLE_GEOFENCING": "true",
+        "EXPO_PUBLIC_BYPASS_AUTH": "false"
+      }
     },
+
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://campus-connect-api-o0xt.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://campus-connect-api-o0xt.onrender.com",
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_ENABLE_GEOFENCING": "true",
+        "EXPO_PUBLIC_BYPASS_AUTH": "false"
+      }
     }
   },
   "submit": {
