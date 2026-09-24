@@ -38,13 +38,37 @@ import { TAB_BAR_CLEARANCE } from "@/src/styles/layout";
 import { culture, SECTION_HUE, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
-const RANGES = [100, 500, 2000];
+/**
+ * Search radii, in metres.
+ *
+ * The first three are the original walking-distance options; the rest widen
+ * the net to city, region and country. The top of the scale is deliberate:
+ * 800km spans Ghana end to end, and matches the server's ceiling, so the UI
+ * can never ask for something the API will quietly clamp.
+ */
+const RANGES = [100, 500, 2000, 15_000, 120_000, 800_000];
+
+/** Bounds and step for the custom radius, matched to the server. */
+const MIN_RADIUS_M = 50;
+const MAX_RADIUS_M = 800_000;
+
+/** Steps get coarser as the radius grows, so one tap always feels meaningful. */
+function stepFor(metres: number) {
+  if (metres < 1_000) return 50;
+  if (metres < 10_000) return 500;
+  if (metres < 100_000) return 5_000;
+  return 50_000;
+}
 type Mode = "people" | "map" | "radar";
 
 const HUE = SECTION_HUE.connect;
 
 function label(metres: number) {
-  return metres >= 1000 ? `${metres / 1000} km` : `${metres} m`;
+  if (metres < 1000) return `${metres} m`;
+  const km = metres / 1000;
+  // No decimal past 10km: "120 km" reads better than "120.0 km", and at that
+  // scale the extra digit is noise.
+  return km >= 10 ? `${Math.round(km)} km` : `${Number(km.toFixed(1))} km`;
 }
 
 export default function ConnectScreen() {
@@ -59,6 +83,18 @@ export default function ConnectScreen() {
   const [mode, setMode] = useState<Mode>("people");
   const [pin, setPin] = useState<CampusPin | null>(null);
   const [range, setRange] = useState(500);
+  // Custom mode is a separate flag rather than "range is not a preset",
+  // because stepping through a custom value can land exactly on a preset and
+  // the control should not jump back to chips underneath the user's finger.
+  const [customRange, setCustomRange] = useState(false);
+
+  const nudgeRange = (direction: 1 | -1) => {
+    setRange((current) => {
+      const next = current + stepFor(direction > 0 ? current : current - 1) * direction;
+      return Math.min(Math.max(next, MIN_RADIUS_M), MAX_RADIUS_M);
+    });
+    Haptics.selectionAsync();
+  };
   const [people, setPeople] = useState<NearbyProfile[]>([]);
   // Distinct from `refreshing`: this is the first load, and without it the
   // screen claims "Nobody within 500 m" before the request has even returned.
@@ -349,8 +385,10 @@ export default function ConnectScreen() {
             />
           }
         >
-          <View
-            style={{
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
               flexDirection: "row",
               gap: spacing.xs,
               paddingHorizontal: spacing.lg,
@@ -358,7 +396,7 @@ export default function ConnectScreen() {
             }}
           >
             {RANGES.map((value) => {
-              const active = value === range;
+              const active = !customRange && value === range;
               return (
                 <PressableScale
                   key={value}
@@ -366,11 +404,13 @@ export default function ConnectScreen() {
                   accessibilityState={{ selected: active }}
                   onPress={() => {
                     Haptics.selectionAsync();
+                    setCustomRange(false);
                     setRange(value);
                   }}
                   style={{
-                    flex: 1,
+                    minWidth: 62,
                     minHeight: 40,
+                    paddingHorizontal: spacing.sm,
                     alignItems: "center",
                     justifyContent: "center",
                     borderRadius: radius.full,
@@ -385,7 +425,100 @@ export default function ConnectScreen() {
                 </PressableScale>
               );
             })}
-          </View>
+
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityState={{ selected: customRange }}
+              accessibilityLabel="Set a custom range"
+              onPress={() => {
+                Haptics.selectionAsync();
+                setCustomRange((on) => !on);
+              }}
+              style={{
+                minWidth: 76,
+                minHeight: 40,
+                paddingHorizontal: spacing.sm,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: radius.full,
+                borderWidth: 1,
+                borderColor: customRange ? colors.textPrimary : colors.border,
+                backgroundColor: customRange ? colors.textPrimary : "transparent",
+              }}
+            >
+              <Text variant="caption" color={customRange ? "background" : "textSecondary"}>
+                Custom
+              </Text>
+            </PressableScale>
+          </ScrollView>
+
+          {/* The stepper only exists while Custom is on, so the common case
+              stays a single row of chips. Steps coarsen with distance, so one
+              tap is always a meaningful change rather than 50m at country
+              scale. */}
+          {customRange ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.md,
+                paddingHorizontal: spacing.lg,
+                paddingBottom: spacing.md,
+              }}
+            >
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel="Decrease range"
+                disabled={range <= MIN_RADIUS_M}
+                onPress={() => nudgeRange(-1)}
+                hitSlop={8}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: radius.full,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: range <= MIN_RADIUS_M ? 0.4 : 1,
+                }}
+              >
+                <Text variant="label" color="textPrimary">
+                  −
+                </Text>
+              </PressableScale>
+
+              <View style={{ minWidth: 110, alignItems: "center" }}>
+                <Text variant="heading">{label(range)}</Text>
+                <Text variant="micro" color="textMuted">
+                  {range >= MAX_RADIUS_M ? "nationwide" : "search radius"}
+                </Text>
+              </View>
+
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel="Increase range"
+                disabled={range >= MAX_RADIUS_M}
+                onPress={() => nudgeRange(1)}
+                hitSlop={8}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: radius.full,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: range >= MAX_RADIUS_M ? 0.4 : 1,
+                }}
+              >
+                <Text variant="label" color="textPrimary">
+                  +
+                </Text>
+              </PressableScale>
+            </View>
+          ) : null}
 
           {loadingPeople ? (
             <PeopleSkeleton />

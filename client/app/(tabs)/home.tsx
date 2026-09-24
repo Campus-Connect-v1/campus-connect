@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
 import { PostOptionsSheet } from "@/src/components/feed/PostOptionsSheet";
+import { ProfileNudge } from "@/src/components/profile/ProfileNudge";
 import { StoryRail } from "@/src/components/stories/StoryRail";
 import ProfileDrawer from "@/src/components/layout/profile-drawer";
 import {
@@ -737,6 +738,10 @@ export default function HomeScreen() {
             ) : null}
 
             {peopleAtTop ? <PeopleSection people={recommendations} /> : null}
+
+            {/* Sits above the feed rather than inside it: a card interleaved
+                between posts reads as content and gets scrolled past. */}
+            <ProfileNudge />
 
             <View style={{ paddingHorizontal: spacing.lg }}>
               <SectionHeader eyebrow="FOR YOU" title="From your campus" />

@@ -1,9 +1,14 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 
 import { SettingsShell, SettingsToggle } from "@/src/components/settings/SettingsPrimitives";
 import { InlineNotice, Text } from "@/src/components/ui";
 import { useOptimisticToggle } from "@/src/hooks/useOptimisticToggle";
+import {
+  getPushStatus,
+  PUSH_STATUS_COPY,
+  type PushStatus,
+} from "@/src/services/notifications";
 import { useSession } from "@/src/services/SessionContext";
 import { updateNotificationPreferences } from "@/src/services/settingsServices";
 import { radius, spacing } from "@/src/styles/theme";
@@ -21,6 +26,19 @@ import { useTheme } from "@/src/styles/useTheme";
 export default function NotificationSettingsScreen() {
   const { colors } = useTheme();
   const { profile, refresh } = useSession();
+
+  /**
+   * Whether this device can actually receive a push.
+   *
+   * The preference switch says what the user WANTS; this says what the device
+   * can do. They are different questions, and conflating them is why "push is
+   * on" could sit above a device that had never been issued a token -- most
+   * often because it is a simulator, which Expo will not issue one to.
+   */
+  const [pushStatus, setPushStatus] = useState<PushStatus | null>(null);
+  useEffect(() => {
+    void getPushStatus().then(setPushStatus);
+  }, []);
 
   const push = useOptimisticToggle(
     true,
@@ -69,6 +87,30 @@ export default function NotificationSettingsScreen() {
         </Text>
 
         {error ? <InlineNotice message={error} /> : null}
+
+        {/* What the DEVICE can do, as opposed to what the user has asked for
+            above. Without it, "push on" could sit over a device that was never
+            issued a token -- most often a simulator, which Expo refuses. */}
+        {pushStatus ? (
+          pushStatus === "active" ? (
+            <InlineNotice tone="success" message={PUSH_STATUS_COPY[pushStatus]} />
+          ) : (
+            <View
+              style={{
+                marginTop: spacing.sm,
+                padding: spacing.md,
+                borderRadius: radius.md,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surfaceSunken,
+              }}
+            >
+              <Text variant="caption" color="textMuted">
+                {PUSH_STATUS_COPY[pushStatus]}
+              </Text>
+            </View>
+          )
+        ) : null}
 
         <View
           style={{ borderRadius: radius.md, backgroundColor: colors.surface, overflow: "hidden" }}

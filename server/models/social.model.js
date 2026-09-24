@@ -58,6 +58,10 @@ export const createPostModel = async (postData) => {
 export const encodeFeedCursor = (row) =>
   Buffer.from(
     JSON.stringify({
+      // Affinity leads, because it leads the ORDER BY. A cursor that omits the
+      // primary sort key is not a keyset at all -- page two would resume from
+      // the wrong place and silently repeat or skip rows.
+      a: Number(row.affinity_score ?? 0),
       s: Number(row.preference_score ?? 0),
       t: new Date(row.created_at).toISOString(),
       i: row.post_id,
@@ -72,7 +76,15 @@ const decodeFeedCursor = (cursor) => {
     // A malformed cursor is treated as no cursor rather than as an error: the
     // worst case is the reader gets page one again, which beats a 400 on what
     // is usually a stale client.
-    return { s: Number(parsed.s) || 0, t: new Date(parsed.t), i: parsed.i };
+    return {
+      // Older cursors carry no affinity; 0 is the correct default because it
+      // is the lowest rank, so a stale cursor degrades to "everything after
+      // this point" rather than losing rows.
+      a: Number(parsed.a) || 0,
+      s: Number(parsed.s) || 0,
+      t: new Date(parsed.t),
+      i: parsed.i,
+    };
   } catch {
     return null;
   }
@@ -135,7 +147,19 @@ export const getFeedPostsModel = async (
         u.profile_picture_url,
         u.profile_headline,
         pol.poll_id,
-        ${feedPreferenceScoreSql()} AS preference_score
+        ${feedPreferenceScoreSql()} AS preference_score,
+        -- Relevance, not permission. Own campus outranks another campus, and
+        -- an author you follow outranks a stranger, so a cross-university
+        -- feed still reads as "your campus, plus the wider network" rather
+        -- than as an undifferentiated stream.
+        (
+          CASE WHEN u.university_id = (SELECT university_id FROM users WHERE user_id = ?)
+               THEN 2 ELSE 0 END
+          + CASE WHEN EXISTS (
+              SELECT 1 FROM follows f2
+              WHERE f2.follower_id = ? AND f2.following_id = p.user_id
+            ) THEN 1 ELSE 0 END
+        ) AS affinity_score
       FROM posts p
       JOIN users u ON p.user_id = u.user_id
       LEFT JOIN polls pol ON pol.post_id = p.post_id
@@ -150,10 +174,21 @@ export const getFeedPostsModel = async (
             p.visibility = 'public'
             AND (
               ${mode === FEED_MODES.DISCOVERY
-                  // Campus-wide, not world-wide. A student with no graph yet
-                  // should meet their own university, not every account on the
-                  // platform -- that is a firehose wearing a different hat.
-                  ? "u.university_id = (SELECT university_id FROM users WHERE user_id = ?)"
+                  // Public means public, including across universities: a
+                  // society, a lecturer or a student journalist is worth
+                  // reading from another campus, and confining discovery to
+                  // one school is what made this a set of isolated islands
+                  // rather than a network.
+                  //
+                  // This is NOT the firehose it looks like, because the
+                  // ordering below ranks own-campus posts first -- reach is
+                  // decided here, relevance is decided by the sort. They were
+                  // previously the same decision, which is why widening one
+                  // meant widening the other.
+                  //
+                  // The bind is kept so both branches take the same parameter
+                  // count; it is simply not used to filter here.
+                  ? "(? IS NOT NULL)"
                   : `EXISTS (
                 SELECT 1 FROM follows f
                 WHERE f.follower_id = ? AND f.following_id = p.user_id
@@ -180,7 +215,7 @@ export const getFeedPostsModel = async (
           )
         )
         AND ${hiddenPostFilterSql()}
-      ORDER BY preference_score DESC, p.created_at DESC, p.post_id DESC
+      ORDER BY affinity_score DESC, preference_score DESC, p.created_at DESC, p.post_id DESC
     `;
 
     /**
@@ -201,16 +236,20 @@ export const getFeedPostsModel = async (
      * shuffle what is still to come -- which is the correct response to the
      * reader having just told us their preferences changed.
      */
+    // Lexicographic over the full sort key: affinity, then preference, then
+    // time, then id. Spelled out rather than using row-value syntax, which
+    // MySQL will not use an index for.
     const keysetSql = after
-      ? `WHERE f.preference_score < ?
-           OR (f.preference_score = ? AND f.created_at < ?)
-           OR (f.preference_score = ? AND f.created_at = ? AND f.post_id < ?)`
+      ? `WHERE f.affinity_score < ?
+           OR (f.affinity_score = ? AND f.preference_score < ?)
+           OR (f.affinity_score = ? AND f.preference_score = ? AND f.created_at < ?)
+           OR (f.affinity_score = ? AND f.preference_score = ? AND f.created_at = ? AND f.post_id < ?)`
       : "";
 
     const paginatedQuery = `
       SELECT f.* FROM (${postsQuery}) f
       ${keysetSql}
-      ORDER BY f.preference_score DESC, f.created_at DESC, f.post_id DESC
+      ORDER BY f.affinity_score DESC, f.preference_score DESC, f.created_at DESC, f.post_id DESC
       LIMIT ${safeLimit}${after ? "" : ` OFFSET ${safeOffset}`};
     `;
 
@@ -224,9 +263,19 @@ export const getFeedPostsModel = async (
     // Seven now: preference score, own posts, the follows test (or the
     // viewer university in discovery), the university-visibility test, both
     // sides of the connections test, then the hidden-posts filter.
-    const viewerBinds = [userId, userId, userId, userId, userId, userId, userId];
+    // Nine now: preference score, the two affinity terms, own posts, the
+    // discovery/follows branch, the university-visibility test, both sides of
+    // the connections test, then the hidden-posts filter.
+    const viewerBinds = [
+      userId, userId, userId, userId, userId, userId, userId, userId, userId,
+    ];
     const cursorBinds = after
-      ? [after.s, after.s, after.t, after.s, after.t, after.i]
+      ? [
+          after.a,
+          after.a, after.s,
+          after.a, after.s, after.t,
+          after.a, after.s, after.t, after.i,
+        ]
       : [];
 
     const [posts] = await db.execute(paginatedQuery, [...viewerBinds, ...cursorBinds]);

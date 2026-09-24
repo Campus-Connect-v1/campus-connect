@@ -11,7 +11,22 @@ const profileService = new ProfileService();
 export const getNearbyProfiles = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { radius = 500 } = req.query;
+    /**
+     * Search radius in metres.
+     *
+     * Bounded on both sides. The ceiling is national rather than global:
+     * 800km spans Ghana end to end, which is as wide as "nearby" can be and
+     * still mean anything, while an unbounded value turns a geo query into a
+     * full scan of every location in the collection.
+     *
+     * The floor stops a zero or negative radius silently returning nothing.
+     */
+    const MIN_RADIUS_M = 50;
+    const MAX_RADIUS_M = 800_000;
+    const requested = parseInt(req.query.radius, 10);
+    const radius = Number.isFinite(requested)
+      ? Math.min(Math.max(requested, MIN_RADIUS_M), MAX_RADIUS_M)
+      : 500;
 
     // console.log(
     //   `📍 Finding nearby profiles for user ${userId} within ${radius}m`
@@ -19,7 +34,7 @@ export const getNearbyProfiles = async (req, res) => {
 
     // Get nearby users
     const [nearbyUsers, viewerLocation] = await Promise.all([
-      locationService.findNearbyUsers(userId, parseInt(radius)),
+      locationService.findNearbyUsers(userId, radius),
       locationService.getUserLocationWithFallback(userId),
     ]);
 
@@ -67,10 +82,27 @@ export const getNearbyProfiles = async (req, res) => {
     res.json({
       message: "Nearby profiles retrieved successfully",
       count: enhancedProfiles.length,
-      radius: parseInt(radius),
-      profiles: enhancedProfiles, // FIXED: Added missing profiles array
+      radius,
+      profiles: enhancedProfiles,
     });
   } catch (error) {
+    /**
+     * Not having shared a location yet is the normal state of a new account,
+     * not a server fault. locationService throws "User location not found"
+     * for it, which was being caught below and returned as a 500 -- so the
+     * Connect tab greeted every new user with an error instead of an empty
+     * state, and the radius control looked broken before it had been used.
+     */
+    if (String(error.message).includes("location not found")) {
+      return res.status(200).json({
+        message: "Share your location to see who is nearby",
+        count: 0,
+        radius,
+        needs_location: true,
+        profiles: [],
+      });
+    }
+
     console.error("Get nearby profiles error:", error);
     res.status(500).json({
       message: "Failed to retrieve nearby profiles",
