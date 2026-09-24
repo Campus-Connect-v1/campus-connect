@@ -4,7 +4,8 @@ import Animated, { SlideInLeft, SlideOutLeft, FadeIn, FadeOut } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
-import { spacing } from "@/src/styles/theme";
+import { useAttention } from "@/src/services/AttentionContext";
+import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 export interface ProfileDrawerProps {
@@ -22,6 +23,7 @@ const MENU: { id: string; title: string; icon: IconName }[] = [
   { id: "campus", title: "Campus", icon: "campus" },
   { id: "profile", title: "Your profile", icon: "profile" },
   { id: "messages", title: "Messages", icon: "message" },
+  { id: "connections", title: "Connections", icon: "connectAdd" },
   { id: "saved", title: "Saved posts", icon: "save" },
   { id: "groups", title: "Study groups", icon: "connect" },
   { id: "events", title: "Events", icon: "events" },
@@ -38,6 +40,7 @@ export default function ProfileDrawer({
 }: ProfileDrawerProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const attention = useAttention();
   const { width } = useWindowDimensions();
   const panelWidth = Math.min(320, width * 0.82);
 
@@ -85,27 +88,55 @@ export default function ProfileDrawer({
           contentContainerStyle={{ paddingTop: spacing.xs }}
           showsVerticalScrollIndicator={false}
         >
-          {MENU.map((item) => (
-            <PressableScale
-              key={item.id}
-              accessibilityRole="button"
-              onPress={() => {
-                Haptics.selectionAsync();
-                onNavigate(item.id);
-                onClose();
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.md,
-                paddingHorizontal: spacing.lg,
-                minHeight: 48,
-              }}
-            >
-              <Icon name={item.icon} size={19} color={colors.textSecondary} />
-              <Text variant="body">{item.title}</Text>
-            </PressableScale>
-          ))}
+          {MENU.map((item) => {
+            // The count appears here rather than on the avatar: this is the
+            // row that leads to the thing, so it is where the number is worth
+            // reading.
+            const waiting = item.id === "connections" ? attention.connectionRequests : 0;
+
+            return (
+              <PressableScale
+                key={item.id}
+                accessibilityRole="button"
+                accessibilityLabel={waiting ? `${item.title}, ${waiting} waiting` : item.title}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  onNavigate(item.id);
+                  onClose();
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing.md,
+                  paddingHorizontal: spacing.lg,
+                  minHeight: 48,
+                }}
+              >
+                <Icon name={item.icon} size={19} color={colors.textSecondary} />
+                <Text variant="body" style={{ flex: 1 }}>
+                  {item.title}
+                </Text>
+
+                {waiting ? (
+                  <View
+                    style={{
+                      minWidth: 22,
+                      height: 22,
+                      paddingHorizontal: 6,
+                      borderRadius: radius.full,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: culture.pink,
+                    }}
+                  >
+                    <Text variant="caption" style={{ color: culture.warmWhite, fontSize: 11 }}>
+                      {waiting > 9 ? "9+" : waiting}
+                    </Text>
+                  </View>
+                ) : null}
+              </PressableScale>
+            );
+          })}
         </ScrollView>
 
         <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />

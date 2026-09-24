@@ -26,7 +26,7 @@ import { adaptEvent } from "@/src/features/events/adapt";
 import { adaptStudyGroup } from "@/src/features/events/adaptGroup";
 import { useAsync } from "@/src/hooks/useAsync";
 import { fetchBuildings } from "@/src/services/campusServices";
-import { fetchEvents, rsvpToEvent } from "@/src/services/eventServices";
+import { fetchEvents, fetchMyEvents, rsvpToEvent } from "@/src/services/eventServices";
 import { useSession } from "@/src/services/SessionContext";
 import {
   fetchMyStudyGroups,
@@ -274,10 +274,27 @@ export default function EventsScreen() {
     [buildings.data]
   );
 
+  // The list endpoint carries no per-viewer RSVP flag, so `adaptEvent` marks
+  // everything as not-going. Without this second read the button reset to
+  // "I'll be there" on every reload, however many times you had RSVP'd.
+  const myEvents = useAsync(
+    useCallback(() => fetchMyEvents(), []),
+    []
+  );
+
   const [events, setEvents] = useState<CampusEvent[]>([]);
   useEffect(() => {
-    if (remote.data) setEvents(remote.data.map(adaptEvent));
-  }, [remote.data]);
+    if (!remote.data) return;
+    const going = new Set((myEvents.data ?? []).map((event) => event.event_id));
+    setEvents(
+      remote.data.map((event) => ({
+        ...adaptEvent(event),
+        going: going.has(event.event_id),
+      }))
+    );
+  }, [remote.data, myEvents.data]);
+
+  const [onlyGoing, setOnlyGoing] = useState(false);
 
   // Two reads: every group, and the ones this user already belongs to. The
   // list endpoint carries no per-viewer membership flag, so "Joined" would
@@ -308,10 +325,13 @@ export default function EventsScreen() {
 
   const sections = useMemo(() => {
     const order: CampusEvent["day"][] = ["Today", "Tomorrow", "This week"];
+    const visible = onlyGoing ? events.filter((event) => event.going) : events;
     return order
-      .map((day) => ({ title: day, data: events.filter((e) => e.day === day) }))
+      .map((day) => ({ title: day, data: visible.filter((e) => e.day === day) }))
       .filter((section) => section.data.length > 0);
-  }, [events]);
+  }, [events, onlyGoing]);
+
+  const goingCount = useMemo(() => events.filter((event) => event.going).length, [events]);
 
   const toggle = useCallback((id: string) => {
     let wasGoing = false;
@@ -326,7 +346,19 @@ export default function EventsScreen() {
         };
       })
     );
-    rsvpToEvent(id, wasGoing ? "not_going" : "going");
+    rsvpToEvent(id, wasGoing ? "not_going" : "going").then((result) => {
+      // A failed write would otherwise leave the row claiming a state the
+      // server never accepted.
+      if (!result.success) {
+        setEvents((current) =>
+          current.map((event) =>
+            event.event_id === id
+              ? { ...event, going: wasGoing, attendees: event.attendees + (wasGoing ? 1 : -1) }
+              : event
+          )
+        );
+      }
+    });
   }, []);
 
   const toggleGroup = useCallback((id: string) => {
@@ -557,6 +589,52 @@ export default function EventsScreen() {
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+          ListHeaderComponent={
+            // Only offered once there is something to filter to: a "Going (0)"
+            // chip is a control that cannot do anything.
+            goingCount > 0 ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: spacing.xs,
+                  paddingHorizontal: spacing.lg,
+                  paddingBottom: spacing.md,
+                }}
+              >
+                {[
+                  { value: false, label: "All events" },
+                  { value: true, label: `Going (${goingCount})` },
+                ].map((option) => {
+                  const active = option.value === onlyGoing;
+                  return (
+                    <PressableScale
+                      key={option.label}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={option.label}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setOnlyGoing(option.value);
+                      }}
+                      style={{
+                        minHeight: 38,
+                        paddingHorizontal: spacing.md,
+                        justifyContent: "center",
+                        borderRadius: radius.full,
+                        borderWidth: 1,
+                        borderColor: active ? colors.textPrimary : colors.border,
+                        backgroundColor: active ? colors.textPrimary : "transparent",
+                      }}
+                    >
+                      <Text variant="caption" color={active ? "background" : "textSecondary"}>
+                        {option.label}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={remote.refreshing}
@@ -584,6 +662,13 @@ export default function EventsScreen() {
                 body={remote.error}
                 actionLabel="Try again"
                 onAction={remote.reload}
+              />
+            ) : onlyGoing ? (
+              <EmptyState
+                title="Nothing on your list"
+                body="Events you say you are going to collect here."
+                actionLabel="See all events"
+                onAction={() => setOnlyGoing(false)}
               />
             ) : (
               <EmptyState

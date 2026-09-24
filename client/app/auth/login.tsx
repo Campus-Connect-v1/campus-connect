@@ -9,6 +9,7 @@ import { AuthShell } from "@/src/components/auth/AuthShell";
 import { Button, Field, InlineNotice, PressableScale, Text, Icon } from "@/src/components/ui";
 import GoogleLoginButton, { isGoogleAuthConfigured } from "@/src/components/ui/GoogleLoginButton";
 import { loginSchema, type LoginSchema } from "@/src/schemas/authSchemas";
+import { signedInDestination } from "@/src/features/profile/setup";
 import { EMAIL_UNVERIFIED, signInWithEmail } from "@/src/services/authServices";
 import { useSession } from "@/src/services/SessionContext";
 import { spacing } from "@/src/styles/theme";
@@ -18,7 +19,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const { email: verifiedEmail } = useLocalSearchParams<{ email?: string }>();
   const { colors } = useTheme();
-  const { refresh } = useSession();
+  const { refresh, setupDismissed } = useSession();
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -39,10 +40,15 @@ export default function LoginScreen() {
     if (result.success) {
       // Load the new account BEFORE navigating. Without this the context still
       // holds whoever was signed in last, and the tabs render their details.
-      await refresh();
+      const refreshed = await refresh();
       setSubmitting(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(tabs)/home");
+      router.replace(
+        signedInDestination(
+          refreshed.profile,
+          setupDismissed || refreshed.setupCompleted
+        ) as never
+      );
       return;
     }
     setSubmitting(false);
@@ -147,8 +153,13 @@ export default function LoginScreen() {
 
                 <GoogleLoginButton
                   onSuccess={async () => {
-                    await refresh();
-                    router.replace("/(tabs)/home");
+                    const refreshed = await refresh();
+                    router.replace(
+                      signedInDestination(
+                        refreshed.profile,
+                        setupDismissed || refreshed.setupCompleted
+                      ) as never
+                    );
                   }}
                 />
               </>

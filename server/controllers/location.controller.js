@@ -1,5 +1,7 @@
 // controllers/locationController.js
 
+import { getAcceptedConnectionProfiles } from "../models/user.model.js";
+import { UserLocation } from "../models/location.js";
 import { LocationService } from "../utils/locationService.js";
 import { PrivacyService } from "../utils/privacyService.js";
 import { ProfileService } from "../utils/profileService.js";
@@ -45,8 +47,12 @@ export const getNearbyProfiles = async (req, res) => {
         accuracy: nearbyUser?.accuracy || 50,
         last_seen: profile.last_seen || nearbyUser?.last_seen || new Date(),
         coordinates: nearbyUser?.coordinates || null,
-        latitude: nearbyUser?.coordinates[0] || null, // need not be ...coordinates[0] as it is a 2D array in the locationService. TODO in prod
-        longitude: nearbyUser?.coordinates[1] || null,
+        // GeoJSON stores [longitude, latitude]. Prefer the named values from
+        // the aggregation and only fall back to the correctly ordered tuple.
+        latitude:
+          nearbyUser?.latitude ?? nearbyUser?.coordinates?.[1] ?? null,
+        longitude:
+          nearbyUser?.longitude ?? nearbyUser?.coordinates?.[0] ?? null,
       };
     });
 
@@ -254,3 +260,150 @@ export const updatePrivacySettings = async (req, res) => {
     });
   }
 };
+
+// ---------------------------------------------------------------------------
+// Friend map
+// ---------------------------------------------------------------------------
+
+const EARTH_RADIUS_M = 6371000;
+
+// Precision bands, in metres. `area` covers roughly a city; beyond that a
+// position is only ever reported at city granularity.
+const AREA_MAX_M = 25000;
+
+// How much a coarse position is rounded, in degrees. ~0.005 is a few hundred
+// metres; ~0.05 is a few kilometres. Rounding happens HERE, not on the client:
+// sending an exact coordinate and asking the client to draw a blurry circle
+// still hands out the exact coordinate.
+const ROUNDING = { area: 0.005, city: 0.05 };
+
+function metresBetween(a, b) {
+  if (!a || !b) return null;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
+}
+
+function roundTo(value, step) {
+  return Math.round(value / step) * step;
+}
+
+/**
+ * Every accepted connection who is sharing location, at any distance.
+ *
+ * This exists because `findNearbyUsers` cannot answer it: that is a `$near`
+ * with a `maxDistance`, so a friend outside the radius is never found rather
+ * than merely filtered out.
+ *
+ * Precision is decided here and the coordinates are rounded before they leave
+ * the server. A friend in another city is reported at city granularity, so the
+ * map can say "around Accra" without the client ever holding a precise fix.
+ */
+export const getFriendLocations = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const [connections, viewerLocation] = await Promise.all([
+      getAcceptedConnectionProfiles(userId),
+      locationService.getUserLocationWithFallback(userId),
+    ]);
+
+    if (connections.length === 0) {
+      return res.status(200).json({ success: true, count: 0, friends: [] });
+    }
+
+    const ids = connections.map((row) => row.user_id);
+
+    // Only rows still sharing. Incognito flips `location_sharing_enabled`, so
+    // Ghost Mode is honoured by this filter rather than by a separate check.
+    const locations = await UserLocation.find({
+      user_id: { $in: ids },
+      is_active: true,
+      location_sharing_enabled: true,
+    }).lean();
+
+    const byUser = new Map(locations.map((row) => [row.user_id, row]));
+
+    const viewerPoint = viewerLocation?.location?.coordinates
+      ? {
+          latitude: viewerLocation.location.coordinates[1],
+          longitude: viewerLocation.location.coordinates[0],
+        }
+      : null;
+
+    const settings = await Promise.all(
+      connections.map((row) =>
+        privacyService.getPrivacySettings(row.user_id).catch(() => null)
+      )
+    );
+
+    const friends = [];
+
+    connections.forEach((row, index) => {
+      const location = byUser.get(row.user_id);
+      if (!location?.location?.coordinates) return;
+
+      // A private profile is off the map entirely, whatever their sharing flag
+      // says -- the two settings are independent and the stricter one wins.
+      if (row.privacy_profile === "private") return;
+
+      const privacy = settings[index];
+      if (privacy?.profile_visibility === "private") return;
+
+      const exactAllowed = privacy ? Boolean(Number(privacy.show_exact_location)) : false;
+      const radius = Number(privacy?.custom_radius) || 500;
+
+      const point = {
+        latitude: location.location.coordinates[1],
+        longitude: location.location.coordinates[0],
+      };
+      const distance = metresBetween(viewerPoint, point);
+
+      let precision = "city";
+      if (distance !== null) {
+        if (exactAllowed && distance <= radius) precision = "exact";
+        else if (distance <= AREA_MAX_M) precision = "area";
+      }
+
+      const step = ROUNDING[precision];
+      const latitude = step ? roundTo(point.latitude, step) : point.latitude;
+      const longitude = step ? roundTo(point.longitude, step) : point.longitude;
+
+      friends.push({
+        user_id: row.user_id,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        profile_picture_url: row.profile_picture_url,
+        university_id: row.university_id,
+        latitude,
+        longitude,
+        precision,
+        last_seen: location.last_seen || location.last_updated,
+        is_online: isRecentlySeen(location.last_seen || location.last_updated),
+        has_story: Boolean(Number(row.has_story)),
+        place_label: null,
+      });
+    });
+
+    res.status(200).json({ success: true, count: friends.length, friends });
+  } catch (error) {
+    console.error("Get friend locations error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve friend locations",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+/** Online means seen in the last five minutes, matching ProfileService. */
+function isRecentlySeen(lastSeen) {
+  if (!lastSeen) return false;
+  return Date.now() - new Date(lastSeen).getTime() < 5 * 60 * 1000;
+}

@@ -6,6 +6,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { Icon, Loader, PressableScale, Text } from "@/src/components/ui";
 import type { CampusPin } from "@/src/features/campus/types";
 import { searchFacilities, type ApiFacility } from "@/src/services/campusServices";
+import type { NearbyProfile } from "@/src/services/geolocation";
 import { radius, spacing, inputTextStyle } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -13,12 +14,12 @@ interface Result {
   key: string;
   title: string;
   detail: string;
-  /** The building to select on the map. */
-  buildingId: string;
+  kind: "building" | "room" | "person";
+  targetId: string;
 }
 
 /**
- * Search over buildings AND the rooms inside them.
+ * Search over nearby people, buildings and the rooms inside them.
  *
  * A room has no coordinates, so choosing one selects the building that contains
  * it. That is the honest mapping, and it is also what someone searching for
@@ -27,13 +28,17 @@ interface Result {
 export function MapSearch({
   universityId,
   pins,
+  people = [],
   top,
   onSelect,
+  onSelectPerson,
 }: {
   universityId?: string;
   pins: CampusPin[];
+  people?: NearbyProfile[];
   top: number;
   onSelect: (pin: CampusPin) => void;
+  onSelectPerson?: (person: NearbyProfile) => void;
 }) {
   const { colors } = useTheme();
   const [query, setQuery] = useState("");
@@ -76,7 +81,8 @@ export function MapSearch({
           key: `b-${pin.id}`,
           title: pin.label,
           detail: pin.code ? `Building · ${pin.code}` : "Building",
-          buildingId: pin.id,
+          kind: "building",
+          targetId: pin.id,
         }))
     : [];
 
@@ -90,20 +96,46 @@ export function MapSearch({
       detail: [room.building_name, room.room_number ? `Room ${room.room_number}` : null]
         .filter(Boolean)
         .join(" · "),
-      buildingId: room.building_id,
+      kind: "room",
+      targetId: room.building_id,
     }));
 
-  const results = [...buildingMatches, ...roomMatches].slice(0, 12);
+  const peopleMatches: Result[] = term
+    ? people
+        .filter((person) => {
+          const name = `${person.first_name} ${person.last_name}`.toLowerCase();
+          return (
+            name.includes(term) ||
+            (person.program ?? "").toLowerCase().includes(term) ||
+            (person.building ?? "").toLowerCase().includes(term)
+          );
+        })
+        .map((person) => ({
+          key: `p-${person.user_id}`,
+          title: [person.first_name, person.last_name].filter(Boolean).join(" "),
+          detail: person.program ?? person.building ?? "Nearby student",
+          kind: "person",
+          targetId: person.user_id,
+        }))
+    : [];
+
+  const results = [...peopleMatches, ...buildingMatches, ...roomMatches].slice(0, 12);
   const open = focused && term.length > 0;
 
   const choose = (result: Result) => {
-    const pin = pins.find((p) => p.id === result.buildingId);
-    if (!pin) return;
     Haptics.selectionAsync();
     Keyboard.dismiss();
     setFocused(false);
     setQuery("");
-    onSelect(pin);
+
+    if (result.kind === "person") {
+      const person = people.find((candidate) => candidate.user_id === result.targetId);
+      if (person) onSelectPerson?.(person);
+      return;
+    }
+
+    const pin = pins.find((candidate) => candidate.id === result.targetId);
+    if (pin) onSelect(pin);
   };
 
   return (
@@ -135,8 +167,8 @@ export function MapSearch({
       >
         <Icon name="search" size={18} color={colors.textMuted} />
         <TextInput
-          accessibilityLabel="Search buildings and rooms"
-          placeholder="Search buildings and rooms"
+          accessibilityLabel="Search buildings, rooms or people"
+          placeholder="Search places or people"
           placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={setQuery}
@@ -197,7 +229,13 @@ export function MapSearch({
                   }}
                 >
                   <Icon
-                    name={result.key.startsWith("b-") ? "campus" : "course"}
+                    name={
+                      result.kind === "person"
+                        ? "connect"
+                        : result.kind === "building"
+                          ? "campus"
+                          : "course"
+                    }
                     size={17}
                     color={colors.textMuted}
                   />

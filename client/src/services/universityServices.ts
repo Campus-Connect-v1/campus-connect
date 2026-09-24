@@ -48,12 +48,31 @@ export function matchUniversityByEmail(email: string, universities: UniversityOp
 let cache: UniversityOption[] | null = null;
 
 export async function fetchUniversityById(universityId: string) {
-  if (!cache) {
-    try {
-      cache = await fetchUniversities();
-    } catch {
-      return null;
-    }
-  }
-  return cache.find((uni) => uni.university_id === universityId) ?? null;
+  await primeUniversities();
+  return cache?.find((uni) => uni.university_id === universityId) ?? null;
+}
+
+/**
+ * Loads the university list once per session.
+ *
+ * The promise is cached rather than the value, so several screens mounting at
+ * once share one request instead of racing three.
+ */
+let priming: Promise<void> | null = null;
+
+export function primeUniversities(): Promise<void> {
+  priming ??= fetchUniversities()
+    .then((list) => {
+      cache = list;
+    })
+    .catch(() => {
+      // Left uncached so a later call can retry rather than being stuck empty.
+      priming = null;
+    });
+  return priming;
+}
+
+/** Synchronous read of the primed list. Null until `primeUniversities` lands. */
+export function universityFromCache(universityId: string): UniversityOption | null {
+  return cache?.find((uni) => uni.university_id === universityId) ?? null;
 }

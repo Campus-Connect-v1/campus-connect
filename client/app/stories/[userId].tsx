@@ -1,6 +1,5 @@
-import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { Image } from "expo-image";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -12,17 +11,16 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import BottomModal from "@/src/components/ui/BottomModal";
 import { Avatar, EmptyState, Icon, PressableScale, Text } from "@/src/components/ui";
+import { StoryViewers } from "@/src/components/stories/StoryViewers";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSession } from "@/src/services/SessionContext";
 import {
   fetchStoryFeed,
-  fetchStoryViewers,
+  fetchUserStories,
   viewStory,
   type ApiStory,
   type ApiStoryGroup,
-  type ApiStoryViewer,
 } from "@/src/services/storyServices";
 import { culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
@@ -122,10 +120,47 @@ export default function StoryViewerScreen() {
     []
   );
 
-  const group: ApiStoryGroup | undefined = useMemo(
-    () => (feed.data ?? []).find((g) => g.author.user_id === userId),
-    [feed.data, userId]
+  /**
+   * Falls back to this person's own stories when they are not in the feed.
+   *
+   * The story feed only carries people whose stories reach you through the
+   * feed's own rules, so opening a profile's story directly -- from their
+   * avatar, or from a notification -- found nothing and showed "No stories
+   * here" for someone who plainly had one.
+   */
+  const direct = useAsync(
+    useCallback(() => fetchUserStories(userId), [userId]),
+    [userId]
   );
+
+  const group: ApiStoryGroup | undefined = useMemo(() => {
+    const fromFeed = (feed.data ?? []).find((g) => g.author.user_id === userId);
+    if (fromFeed) return fromFeed;
+
+    const stories = direct.data ?? [];
+    if (stories.length === 0) return undefined;
+
+    // The direct endpoint returns stories, not a group, so the author is
+    // assembled from the first one.
+    const first = stories[0] as (typeof stories)[number] & {
+      author?: ApiStoryGroup["author"];
+    };
+
+    return {
+      author: first.author ?? {
+        user_id: userId,
+        first_name: "",
+        last_name: null,
+        profile_picture_url: null,
+      },
+      story_count: stories.length,
+      unseen_count: stories.filter((story) => !story.has_viewed).length,
+      all_viewed: stories.every((story) => story.has_viewed),
+      is_own: false,
+      latest_story_at: stories[stories.length - 1]?.created_at ?? "",
+      stories,
+    };
+  }, [feed.data, direct.data, userId]);
 
   // Memoised because it feeds a dependency array; a fresh [] each render
   // would restart the "open on first unseen" effect on every frame.
@@ -134,7 +169,15 @@ export default function StoryViewerScreen() {
   // what makes a rail of half-watched stories usable.
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [showViewers, setShowViewers] = useState(false);
   const started = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      setPaused(false);
+      return () => setPaused(true);
+    }, [])
+  );
 
   useEffect(() => {
     if (started.current || stories.length === 0) return;
@@ -150,24 +193,6 @@ export default function StoryViewerScreen() {
     if (current) viewStory(current.story_id);
   }, [current]);
 
-  // Who viewed this story is the author's own metric — only fetched for
-  // stories that belong to the signed-in user, one call per story shown.
-  const [viewers, setViewers] = useState<ApiStoryViewer[] | null>(null);
-  const [viewersOpen, setViewersOpen] = useState(false);
-  const viewersSheetRef = useRef<BottomSheet>(null);
-
-  useEffect(() => {
-    setViewers(null);
-    if (!current || !isOwn) return;
-    let cancelled = false;
-    fetchStoryViewers(current.story_id).then((result) => {
-      if (!cancelled && result.success) setViewers(result.data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [current, isOwn]);
-
   const advance = useCallback(() => {
     setIndex((i) => {
       if (i + 1 < stories.length) return i + 1;
@@ -178,7 +203,7 @@ export default function StoryViewerScreen() {
 
   const back = () => setIndex((i) => Math.max(0, i - 1));
 
-  if (feed.loading) {
+  if (feed.loading || direct.loading) {
     return <View style={{ flex: 1, backgroundColor: "#000" }} />;
   }
 
@@ -215,6 +240,21 @@ export default function StoryViewerScreen() {
           />
         ) : current?.story_type === "repost" && current.reposted_post ? (
           <View style={{ flex: 1, justifyContent: "center", padding: spacing.xl }}>
+            {/*
+              The sharer's own caption, above the post being shared.
+
+              It was saved correctly and simply never rendered: this branch
+              showed reposted_post.content (the ORIGINAL post's text) while
+              current.content (what the sharer typed) was only rendered in the
+              plain-text-story branch below. So the share went out and the
+              comment on it vanished.
+            */}
+            {current.content ? (
+              <Text variant="body" onMedia numberOfLines={4} style={{ marginBottom: spacing.md }}>
+                {current.content}
+              </Text>
+            ) : null}
+
             <View
               style={{
                 borderRadius: radius.lg,
@@ -314,15 +354,55 @@ export default function StoryViewerScreen() {
         />
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          <Avatar uri={group.author.profile_picture_url ?? undefined} size={34} />
-          <View style={{ flex: 1 }}>
-            <Text variant="label" onMedia>
-              {isOwn ? "Your story" : authorName}
-            </Text>
-            <Text variant="caption" onMedia style={{ opacity: 0.8 }}>
-              {current ? timeAgo(current.created_at) : ""}
-            </Text>
-          </View>
+          <PressableScale
+            accessibilityRole="link"
+            accessibilityLabel={isOwn ? "Open your profile" : `Open ${authorName}'s profile`}
+            onPress={() => {
+              router.push(isOwn ? "/(tabs)/profile" : `/person/${group.author.user_id}`);
+            }}
+            style={{
+              flex: 1,
+              minHeight: 44,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm,
+            }}
+          >
+            <Avatar uri={group.author.profile_picture_url ?? undefined} size={34} />
+            <View style={{ flex: 1 }}>
+              <Text variant="label" onMedia>
+                {isOwn ? "Your story" : authorName}
+              </Text>
+              <Text variant="caption" onMedia style={{ opacity: 0.8 }}>
+                {current ? timeAgo(current.created_at) : ""}
+              </Text>
+            </View>
+          </PressableScale>
+
+          {isOwn && current ? (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel="See who viewed this story"
+              onPress={() => {
+                // Paused while the sheet is up, so the story does not advance
+                // out from under the list the user is reading.
+                setPaused(true);
+                setShowViewers(true);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing["3xs"],
+                minHeight: 44,
+                paddingHorizontal: spacing.xs,
+              }}
+            >
+              <Icon name="visible" size={18} color={colors.onMedia} />
+              <Text variant="caption" onMedia>
+                Views
+              </Text>
+            </PressableScale>
+          ) : null}
 
           <PressableScale
             accessibilityRole="button"
@@ -336,84 +416,15 @@ export default function StoryViewerScreen() {
       </View>
 
       {isOwn && current ? (
-        <View
-          style={{
-            position: "absolute",
-            left: spacing.md,
-            right: spacing.md,
-            bottom: insets.bottom + spacing.md,
-            alignItems: "center",
+        <StoryViewers
+          storyId={current.story_id}
+          visible={showViewers}
+          onClose={() => {
+            setShowViewers(false);
+            setPaused(false);
           }}
-          pointerEvents="box-none"
-        >
-          <PressableScale
-            accessibilityRole="button"
-            accessibilityLabel={
-              viewers === null
-                ? "See who viewed this story"
-                : `Seen by ${viewers.length} ${viewers.length === 1 ? "person" : "people"}`
-            }
-            onPress={() => setViewersOpen(true)}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: spacing["2xs"],
-              paddingVertical: spacing.xs,
-              paddingHorizontal: spacing.sm,
-              borderRadius: radius.full,
-              backgroundColor: "rgba(0,0,0,0.35)",
-            }}
-          >
-            <Icon name="visible" size={16} color={colors.onMedia} />
-            <Text variant="caption" onMedia>
-              {viewers === null
-                ? "Seen by…"
-                : viewers.length === 0
-                  ? "No views yet"
-                  : `Seen by ${viewers.length}`}
-            </Text>
-          </PressableScale>
-        </View>
-      ) : null}
-
-      <BottomModal
-        ref={viewersSheetRef}
-        state={viewersOpen}
-        snapPoints={["50%"]}
-        onChange={(i) => setViewersOpen(i >= 0)}
-      >
-        <Text variant="heading" style={{ marginBottom: spacing.sm }}>
-          {viewers?.length === 1 ? "1 view" : `${viewers?.length ?? 0} views`}
-        </Text>
-        <BottomSheetFlatList
-          data={viewers ?? []}
-          keyExtractor={(item) => item.user_id}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <Text variant="body" color="textMuted">
-              No one has viewed this story yet.
-            </Text>
-          }
-          renderItem={({ item }) => (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.sm,
-                paddingVertical: spacing.sm,
-              }}
-            >
-              <Avatar uri={item.profile_picture_url ?? undefined} size={40} />
-              <Text variant="body" style={{ flex: 1 }} numberOfLines={1}>
-                {[item.first_name, item.last_name].filter(Boolean).join(" ")}
-              </Text>
-              <Text variant="caption" color="textMuted">
-                {timeAgo(item.viewed_at)}
-              </Text>
-            </View>
-          )}
         />
-      </BottomModal>
+      ) : null}
     </View>
   );
 }

@@ -1,0 +1,159 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
+import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
+
+import { registerPushToken, unregisterPushToken, type PushPlatform } from "./notificationServices";
+
+const STORED_TOKEN_KEY = "expoPushToken";
+
+const PLATFORM: PushPlatform =
+  Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
+
+/**
+ * Foreground behaviour: still show an alert and increment the badge, rather
+ * than swallowing notifications that arrive while the app is open.
+ */
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+async function ensureAndroidChannel() {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync("default", {
+    name: "default",
+    importance: Notifications.AndroidImportance.DEFAULT,
+    vibrationPattern: [0, 250, 250, 250],
+  });
+}
+
+/**
+ * Requests notification permission and returns a fresh Expo push token, or
+ * null if permission was denied or no EAS project is linked yet.
+ *
+ * `getExpoPushTokenAsync` needs `extra.eas.projectId` in app.json/app.config,
+ * which only exists once the project has been linked with `eas init`. Until
+ * then this resolves to null and the caller should treat push as unavailable
+ * — in-app notifications still work regardless, since those don't depend on
+ * a device token at all.
+ */
+async function getExpoPushToken(): Promise<string | null> {
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+
+  if (!projectId) {
+    console.warn(
+      "[notifications] No EAS projectId configured (app.json extra.eas.projectId). " +
+        "Run `eas init` to link the project before push tokens can be issued."
+    );
+    return null;
+  }
+
+  const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+  return data;
+}
+
+/**
+ * The outcome of registering, so a caller can tell the user what happened.
+ *
+ * "denied" and "unavailable" are different problems: the first is fixed in the
+ * device settings, the second means no EAS project is linked yet and there is
+ * nothing the user can do about it.
+ */
+export type PushRegistration = "registered" | "denied" | "unavailable" | "failed";
+
+/**
+ * Requests permission and registers this device's token.
+ *
+ * Idempotent: safe to call on every app foreground, not just once —
+ * re-registering the same token is a cheap upsert on the server.
+ *
+ * Call it at the moment of intent (the user turning push ON), never on cold
+ * start. A permission prompt fired before someone knows what it buys them is
+ * the fastest route to a permanent denial.
+ */
+export async function registerForPushNotificationsAsync(): Promise<PushRegistration> {
+  try {
+    await ensureAndroidChannel();
+
+    const existing = await Notifications.getPermissionsAsync();
+    let status = existing.status;
+    if (status !== "granted") {
+      const requested = await Notifications.requestPermissionsAsync();
+      status = requested.status;
+    }
+    if (status !== "granted") return "denied";
+
+    const token = await getExpoPushToken();
+    if (!token) return "unavailable";
+
+    const result = await registerPushToken(token, PLATFORM);
+    if (!result.success) return "failed";
+
+    await AsyncStorage.setItem(STORED_TOKEN_KEY, token);
+    return "registered";
+  } catch (error) {
+    // Never let push setup block or crash the session it is attached to.
+    console.warn("[notifications] registration failed:", (error as Error).message);
+    return "failed";
+  }
+}
+
+/** Call on sign-out, so a shared device stops receiving the old account's pushes. */
+export async function unregisterPushNotificationsAsync(): Promise<void> {
+  try {
+    const token = await AsyncStorage.getItem(STORED_TOKEN_KEY);
+    if (!token) return;
+    await unregisterPushToken(token);
+    await AsyncStorage.removeItem(STORED_TOKEN_KEY);
+  } catch (error) {
+    console.warn("[notifications] unregister failed:", (error as Error).message);
+  }
+}
+
+/**
+ * Mirror the app icon badge to the unread count.
+ *
+ * setNotificationHandler already asks for shouldSetBadge, but that only lets
+ * an incoming push increment it -- nothing ever set it from the real count or
+ * cleared it on read, so the number drifted from the app and stayed there
+ * after everything had been seen. The unread count is the single source of
+ * truth; this just reflects it.
+ *
+ * Failures are swallowed: Android launchers vary in whether they support
+ * badges at all, and a missing badge must not surface as an error.
+ */
+export async function syncBadgeCount(count: number): Promise<void> {
+  try {
+    await Notifications.setBadgeCountAsync(Math.max(0, count));
+  } catch {
+    // Not supported here; nothing to do.
+  }
+}
+
+export type NotificationDestination = { resourceType: string | null; resourceId: string | null };
+
+/**
+ * Subscribes to notification taps (app opened from a push, background or
+ * killed). Returns the unsubscribe function; call it from a `useEffect`
+ * cleanup. Kept generic — routing decisions stay with the caller, which
+ * already has `destinationFor` in app/notifications.tsx for this shape.
+ */
+export function addNotificationResponseListener(
+  handler: (destination: NotificationDestination) => void
+): () => void {
+  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    const data = response.notification.request.content.data as
+      { resource_type?: string; resource_id?: string } | undefined;
+    handler({
+      resourceType: data?.resource_type ?? null,
+      resourceId: data?.resource_id ?? null,
+    });
+  });
+  return () => subscription.remove();
+}

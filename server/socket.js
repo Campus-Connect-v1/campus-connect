@@ -5,6 +5,7 @@ import Conversation from "./models/conversation.model.js"; // NEW
 import { findByEmail, findById } from "./models/user.model.js";
 import { verifySocketToken } from "./middleware/verifySocketToken.js";
 import { isOriginAllowed } from "./config/cors.js";
+import { registerRealtime, userRoom, postRoom, campusRoom } from "./realtime.js";
 
 // send_message looked up sender AND receiver with a full MySQL join
 // (findById/findByEmail) on every single message -- the highest-frequency
@@ -56,14 +57,81 @@ export default function socketServer(httpServer) {
     },
   });
 
+  // Controllers and models emit through realtime.js rather than importing this
+  // module, which would be circular. Register before any listener is attached.
+  registerRealtime(io);
+
   io.use(verifySocketToken);
 
   const onlineUsers = new Map(); // userId -> socket.id
 
+  /**
+   * Per-socket throttle.
+   *
+   * The HTTP limiters do not apply here: a socket event is one frame on an
+   * already-open connection, so send_message over the socket bypassed every
+   * control on the REST side. A simple token bucket per socket per event is
+   * enough -- the connection is already authenticated, so this is about
+   * flooding rather than identity.
+   *
+   * Buckets live on the socket and die with it, which is the right lifetime:
+   * a reconnect is cheap for a real client and no help to a flooder, who has
+   * to redo the handshake to get a fresh allowance.
+   */
+  const RATES = {
+    send_message: { max: 30, windowMs: 60_000 },
+    mark_message_read: { max: 200, windowMs: 60_000 },
+    get_conversations: { max: 30, windowMs: 60_000 },
+    join_post: { max: 300, windowMs: 60_000 },
+    leave_post: { max: 300, windowMs: 60_000 },
+    whoami: { max: 30, windowMs: 60_000 },
+  };
+
+  const allow = (socket, event) => {
+    const rate = RATES[event];
+    if (!rate) return true;
+
+    socket.data.buckets ??= {};
+    const now = Date.now();
+    const bucket = (socket.data.buckets[event] ??= { count: 0, resetAt: now + rate.windowMs });
+
+    if (now > bucket.resetAt) {
+      bucket.count = 0;
+      bucket.resetAt = now + rate.windowMs;
+    }
+
+    if (++bucket.count > rate.max) {
+      // Told once per window, not per frame: a client in a loop would
+      // otherwise be handed a second flood back.
+      if (bucket.count === rate.max + 1) {
+        socket.emit("rate_limited", { event, retry_in_ms: bucket.resetAt - now });
+        console.warn(
+          JSON.stringify({ level: "warn", scope: "socket.rate_limit", event, user_id: socket.user?.id })
+        );
+      }
+      return false;
+    }
+    return true;
+  };
+
   io.on("connection", (socket) => {
+    // Applied as a catch-all rather than inside each handler, so an event
+    // added later is covered by default instead of by remembering to.
+    socket.use(([event], next) =>
+      allow(socket, event) ? next() : next(new Error("rate limited"))
+    );
+
     const userId = socket.user?.id;
     if (userId) {
       onlineUsers.set(userId, socket.id);
+      // onlineUsers keeps one socket per user, so a second device evicts the
+      // first. The room holds every live socket; new emits address the room.
+      socket.join(userRoom(userId));
+      // Campus room: how a new post reaches everyone whose discovery feed
+      // would include it, without enumerating them.
+      if (socket.user?.university_id) {
+        socket.join(campusRoom(socket.user.university_id));
+      }
       console.log(`✅ User connected: ${userId} (${socket.id})`);
     }
 
@@ -224,6 +292,29 @@ export default function socketServer(httpServer) {
         socket.emit("conversations_error", "Failed to get conversations");
       }
     });
+
+    // ---- Post rooms ---------------------------------------------------
+    //
+    // A client opening a post subscribes to it; likes and comments from other
+    // people then arrive live. Writes still go over HTTP -- the REST handlers
+    // own validation, ownership checks and notifications, and duplicating that
+    // logic in a socket handler is how the two drift apart. These events are
+    // subscription only, so there is nothing here to authorise beyond the
+    // handshake: post visibility is already enforced by GET /social/posts/:id.
+
+    socket.on("join_post", (postId) => {
+      if (typeof postId !== "string" || !postId) return;
+      socket.join(postRoom(postId));
+    });
+
+    socket.on("leave_post", (postId) => {
+      if (typeof postId !== "string" || !postId) return;
+      socket.leave(postRoom(postId));
+    });
+
+    // Lets the client tell the REST API which socket it is, so its own writes
+    // are not echoed back at it. Sent as the x-socket-id header on requests.
+    socket.on("whoami", () => socket.emit("socket_id", socket.id));
 
     socket.on("disconnect", () => {
       if (userId) onlineUsers.delete(userId);

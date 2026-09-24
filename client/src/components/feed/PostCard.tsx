@@ -58,7 +58,14 @@ function StatPill({
         backgroundColor: active ? tint : "rgba(20,16,12,0.45)",
       }}
     >
-      <Icon name={icon} size={15} color={active ? foreground : colors.onMedia} />
+      {/* Filled when active, so a like reads as on/off at a glance instead of
+          relying on a colour shift the eye has to compare against memory. */}
+      <Icon
+        name={icon}
+        size={15}
+        filled={Boolean(active)}
+        color={active ? foreground : colors.onMedia}
+      />
       <Text variant="caption" style={active ? { color: foreground } : undefined} onMedia={!active}>
         {label}
       </Text>

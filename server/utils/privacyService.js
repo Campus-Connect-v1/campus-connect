@@ -1,6 +1,7 @@
 // utils/privacyService.js
 
 import {
+  areUsersConnected,
   getPrivacySettingsModel,
   getPrivacySettingsModelBatch,
   updatePrivacySettingsModel,
@@ -388,15 +389,22 @@ export class PrivacyService {
     }
   }
 
-  // Placeholder for friendship check
+  /**
+   * Whether two users have an accepted connection.
+   *
+   * This used to return false unconditionally, which meant
+   * `profile_visibility: "friends_only"` denied EVERYONE, including actual
+   * friends -- the mode was unusable rather than merely strict.
+   */
   async areConnected(viewerId, profileOwnerId) {
-    // console.log(
-    //   `   🔍 Checking connection between ${viewerId} and ${profileOwnerId}`
-    // );
-
-    // TODO: Implement actual friendship/connection check
-
-    return false;
+    try {
+      return await areUsersConnected(viewerId, profileOwnerId);
+    } catch (error) {
+      console.error("Connection check failed:", error.message);
+      // Denies on error. A failed lookup must not open a profile that the
+      // owner restricted to friends.
+      return false;
+    }
   }
 
   // Quick incognito mode toggle

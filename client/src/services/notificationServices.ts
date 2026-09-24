@@ -6,8 +6,10 @@ export type NotificationType =
   | "connection_request"
   | "connection_accepted"
   | "event_invite"
+  | "event_created"
   | "group_invite"
   | "story_view"
+  | "new_post"
   | string;
 
 export interface ApiNotification {

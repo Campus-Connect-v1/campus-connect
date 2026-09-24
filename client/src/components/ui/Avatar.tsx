@@ -9,11 +9,21 @@ export interface AvatarProps {
   size?: number;
   /** Draws the accent ring used for unseen stories and active members. */
   ring?: boolean;
+  /**
+   * Overrides the ring colour, for a campus ring drawn in the university's own
+   * brand colour. Pass it already contrast-corrected (see `readableOn`).
+   */
+  ringColor?: string;
+  /** Thinner for the viewer's own campus, so a visitor's ring reads louder. */
+  ringWidth?: number;
 }
 
-export function Avatar({ uri, size = 40, ring = false }: AvatarProps) {
+export function Avatar({ uri, size = 40, ring = false, ringColor, ringWidth = 2 }: AvatarProps) {
   const { colors } = useTheme();
-  const inner = ring ? size - 6 : size;
+  const width = ring ? ringWidth : 0;
+  // The gap between ring and photo scales with the ring, so a heavier ring
+  // does not sit flush against the image.
+  const inner = ring ? size - (width + 1) * 2 : size;
 
   return (
     <View
@@ -23,8 +33,8 @@ export function Avatar({ uri, size = 40, ring = false }: AvatarProps) {
         borderRadius: radius.full,
         alignItems: "center",
         justifyContent: "center",
-        borderWidth: ring ? 2 : 0,
-        borderColor: colors.accent,
+        borderWidth: width,
+        borderColor: ringColor ?? colors.accent,
       }}
     >
       <Image

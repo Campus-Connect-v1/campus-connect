@@ -1,14 +1,18 @@
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { addNotificationResponseListener } from "@/src/services/notifications";
 import { NetworkProvider } from "@/src/services/NetworkContext";
 import { PreferencesProvider, usePreferences } from "@/src/services/PreferencesContext";
 import { SavedPostsProvider } from "@/src/services/SavedPostsContext";
 import { SessionProvider } from "@/src/services/SessionContext";
+import { AttentionProvider } from "@/src/services/AttentionContext";
+import { LocationSharingProvider } from "@/src/services/LocationSharingContext";
+import { UnreadProvider } from "@/src/services/UnreadContext";
 import { ThemeScheme } from "@/src/styles/ThemeScheme";
 
 import "./globals.css";
@@ -43,6 +47,24 @@ export default function RootLayout() {
     if (fontsLoaded || fontError) SplashScreen.hideAsync();
   }, [fontsLoaded, fontError]);
 
+  useEffect(() => {
+    // Tapping a push (background or killed state) lands here. The payload
+    // only carries resource_type/resource_id (see server deliverPush), not a
+    // full actor, so routing stays limited to what that can address; anything
+    // else falls back to the in-app notification list.
+    return addNotificationResponseListener(({ resourceType, resourceId }) => {
+      if (resourceType === "post" && resourceId) {
+        router.push({ pathname: "/post/[id]", params: { id: resourceId } });
+      } else if (resourceType === "event") {
+        router.push("/(tabs)/events");
+      } else if (resourceType === "user" && resourceId) {
+        router.push({ pathname: "/person/[id]", params: { id: resourceId } });
+      } else {
+        router.push("/notifications");
+      }
+    });
+  }, []);
+
   if (!fontsLoaded && !fontError) return null;
 
   return (
@@ -60,9 +82,17 @@ export default function RootLayout() {
           <NetworkProvider>
             <SessionProvider>
               <SavedPostsProvider>
-                <Themed>
-                  <Stack screenOptions={{ headerShown: false }} />
-                </Themed>
+                {/* Inside SessionProvider: it reads the token and opens its
+                    subscription against the signed-in user's socket. */}
+                <UnreadProvider>
+                  <AttentionProvider>
+                    <LocationSharingProvider>
+                      <Themed>
+                        <Stack screenOptions={{ headerShown: false }} />
+                      </Themed>
+                    </LocationSharingProvider>
+                  </AttentionProvider>
+                </UnreadProvider>
               </SavedPostsProvider>
             </SessionProvider>
           </NetworkProvider>

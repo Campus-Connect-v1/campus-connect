@@ -1,7 +1,8 @@
 import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
 import { PostOptionsSheet } from "@/src/components/feed/PostOptionsSheet";
@@ -11,6 +12,7 @@ import {
   Avatar,
   EmptyState,
   Icon,
+  Loader,
   OfflineBanner,
   SkeletonList,
   Media,
@@ -28,14 +30,17 @@ import { type FeedPost } from "@/src/features/feed/types";
 import { adaptProfile } from "@/src/features/profile/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
 import { fetchEvents } from "@/src/services/eventServices";
+import { useAttention } from "@/src/services/AttentionContext";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
-import { fetchFeed, likePost, unlikePost } from "@/src/services/socialServices";
+import { fetchFeed, likePost, unlikePost, type ApiPost } from "@/src/services/socialServices";
+import { useFeedRealtime } from "@/src/hooks/useFeedRealtime";
+import { onNewPost } from "@/src/services/socket";
 import { fetchUniversityById } from "@/src/services/universityServices";
-import { fetchUnreadCount } from "@/src/services/notificationServices";
+import { useUnread } from "@/src/services/UnreadContext";
 import { fetchStoryFeed } from "@/src/services/storyServices";
 import { fetchRecommendations, type ApiUserCard } from "@/src/services/userServices";
-import { TAB_BAR_CLEARANCE } from "@/src/styles/layout";
+import { TAB_BAR_CLEARANCE, tabBarTop } from "@/src/styles/layout";
 import { culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -155,22 +160,134 @@ function FeaturedEvent({ event }: { event: CampusEvent }) {
   );
 }
 
+/**
+ * The suggestions block: heading plus strip.
+ *
+ * Extracted because it now appears in two places — inline in the feed, and at
+ * the top only when the feed is too short to interleave into.
+ */
+/**
+ * What the bottom of the feed says once there is nothing left.
+ *
+ * An infinite list that simply stops is ambiguous -- the reader cannot tell
+ * whether they have caught up or whether it failed to load. Saying so
+ * explicitly turns an unsatisfying dead end into a finished state, and the
+ * action turns the moment someone has run out of things to read into the
+ * moment they are most likely to write something.
+ */
+function FeedEnd({ postCount }: { postCount: number }) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xl }}>
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          borderColor: colors.border,
+          padding: spacing.xl,
+          alignItems: "center",
+          gap: spacing.sm,
+        }}
+      >
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: radius.full,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: culture.lime,
+          }}
+        >
+          <Icon name="check" size={22} color={foregroundOn(culture.lime)} />
+        </View>
+
+        <Text variant="heading" style={{ textAlign: "center" }}>
+          You are all caught up
+        </Text>
+        <Text variant="body" color="textMuted" style={{ textAlign: "center" }}>
+          {postCount === 0
+            ? "Nothing on your campus yet. Be the first to say something."
+            : `That is all ${postCount} ${postCount === 1 ? "post" : "posts"} from your campus. Got something to add?`}
+        </Text>
+
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Write a post"
+          onPress={() => router.push("/compose/post")}
+          style={{
+            marginTop: spacing.xs,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.xs,
+            paddingHorizontal: spacing.lg,
+            minHeight: 44,
+            borderRadius: radius.full,
+            backgroundColor: colors.accent,
+          }}
+        >
+          <Icon name="add" size={17} color={colors.accentFg} />
+          <Text variant="label" style={{ color: colors.accentFg }}>
+            Post now
+          </Text>
+        </PressableScale>
+      </View>
+    </View>
+  );
+}
+
+function PeopleSection({ people }: { people: ApiUserCard[] }) {
+  return (
+    // gap separates the heading from the strip; the vertical padding separates
+    // the whole block from the posts above and below it, so it reads as an
+    // interruption in the feed rather than as part of the preceding post.
+    <View style={{ gap: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.lg }}>
+      <View style={{ paddingHorizontal: spacing.lg }}>
+        <SectionHeader
+          eyebrow="AROUND CAMPUS"
+          title="People you might know"
+          actionLabel="Explore"
+          onAction={() => router.push("/(tabs)/connect")}
+        />
+      </View>
+      <PeopleStrip people={people} />
+    </View>
+  );
+}
+
+type FeedRow = { kind: "post"; post: FeedPost } | { kind: "people"; slot: number };
+
 function PeopleStrip({ people }: { people: ApiUserCard[] }) {
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(154, width * 0.39);
+
+  const matchColor = (percentage: number) => {
+    if (percentage >= 75) return culture.lime;
+    if (percentage >= 40) return culture.yellow;
+    return culture.pink;
+  };
 
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       style={{ flexGrow: 0 }}
-      contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}
+      contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
     >
-      {people.slice(0, 5).map((person, index) => (
+      {people.slice(0, 5).map((person) => (
         <PressableScale
           key={person.user_id}
           accessibilityRole="button"
-          accessibilityLabel={`View ${person.first_name} ${person.last_name ?? ""}`.trim()}
+          accessibilityLabel={[
+            `View ${person.first_name} ${person.last_name ?? ""}`.trim(),
+            typeof person.match_percentage === "number"
+              ? `${person.match_percentage}% match`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(", ")}
           onPress={() => router.push(`/person/${person.user_id}`)}
           style={{ width: cardWidth }}
         >
@@ -181,12 +298,10 @@ function PeopleStrip({ people }: { people: ApiUserCard[] }) {
             style={{ height: 190 }}
           >
             <View style={{ flex: 1, justifyContent: "space-between", padding: spacing.sm }}>
-              {/* The API ranks recommendations, so the top one is the strongest
-                  match rather than an arbitrary "new here" badge. */}
-              {index === 0 && person.match_percentage ? (
+              {typeof person.match_percentage === "number" ? (
                 <Sticker
                   label={`${person.match_percentage}% MATCH`}
-                  backgroundColor={culture.pink}
+                  backgroundColor={matchColor(person.match_percentage)}
                 />
               ) : (
                 <View />
@@ -211,6 +326,7 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const { user, profile, signOut } = useSession();
   const saved = useSavedPosts();
+  const attention = useAttention();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [options, setOptions] = useState<FeedPost | null>(null);
   const [category, setCategory] = useState("Trending");
@@ -234,10 +350,11 @@ export default function HomeScreen() {
     []
   );
 
-  const unread = useAsync(
-    useCallback(() => fetchUnreadCount(), []),
-    []
-  );
+  // Shared, socket-fed count rather than a one-shot fetch: this was
+  // useAsync(fetchUnreadCount) and so only ever reflected the moment the
+  // screen mounted, which meant the badge sat stale while notifications
+  // arrived in the background.
+  const unread = useUnread();
 
   const universityId = profile?.university_id ?? user?.university_id;
   const events = useAsync(
@@ -266,10 +383,62 @@ export default function HomeScreen() {
 
   // Local copy so a like reflects on the row immediately; the server is told
   // after.
+  const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Guards the append: onEndReached fires repeatedly while the list settles,
+  // and a ref is read synchronously where a state flag would still be false on
+  // the second call and fetch the same page twice.
+  const fetching = useRef(false);
+  const listRef = useRef<FlatList<FeedRow>>(null);
+
+  /**
+   * Posts published while this feed is open, held back rather than inserted.
+   *
+   * Instagram's behaviour, and for a reason: silently splicing rows into a
+   * list someone is reading moves the thing under their thumb. Buffering and
+   * offering "N new posts" lets the reader choose the interruption, and the
+   * tap doubles as the scroll-to-top they would otherwise do by hand.
+   */
+  const [pending, setPending] = useState<FeedPost[]>([]);
+
   useEffect(() => {
-    if (feed.data) setPosts(feed.data.map(adaptPost));
+    if (!feed.data) return;
+    setPosts(feed.data.posts.map(adaptPost));
+    setCursor(feed.data.nextCursor);
+    setHasMore(feed.data.hasMore);
   }, [feed.data]);
+
+  const loadMore = useCallback(async () => {
+    if (fetching.current || !hasMore || feed.loading) return;
+    fetching.current = true;
+    setLoadingMore(true);
+
+    // Offset is the fallback for a server that has not issued a cursor; it is
+    // what posts.length means here.
+    const page = await fetchFeed(20, posts.length, cursor);
+
+    if (page.success) {
+      setPosts((current) => {
+        // The server excludes nothing on a page boundary, but a refresh racing
+        // a page append can still overlap. De-duplicating by id is cheaper
+        // than reasoning about which of the two won.
+        const seen = new Set(current.map((post) => post.id));
+        const added = page.data.posts.map(adaptPost).filter((post) => !seen.has(post.id));
+        return [...current, ...added];
+      });
+      setCursor(page.data.nextCursor);
+      setHasMore(page.data.hasMore);
+    } else {
+      // Stop asking on failure rather than retrying on every scroll tick.
+      setHasMore(false);
+    }
+
+    setLoadingMore(false);
+    fetching.current = false;
+  }, [cursor, hasMore, posts.length, feed.loading]);
 
   const toggleLike = useCallback((id: string) => {
     let wasLiked = false;
@@ -285,6 +454,74 @@ export default function HomeScreen() {
     (wasLiked ? unlikePost : likePost)(id);
   }, []);
 
+  // Other people's activity on the posts currently listed. Counts arrive as
+  // absolute totals, so they are applied rather than added to -- a client that
+  // was backgrounded through an event would otherwise drift with no way to
+  // notice. Our own actions are excluded server-side by the x-socket-id
+  // header, so nothing here fights the optimistic update in toggleLike.
+  useFeedRealtime(
+    useMemo(() => posts.map((post) => post.id), [posts]),
+    {
+      onCounts: (postId, counts) =>
+        setPosts((current) =>
+          current.map((post) =>
+            post.id === postId
+              ? {
+                  ...post,
+                  likes: counts.like_count ?? post.likes,
+                  comments: counts.comment_count ?? post.comments,
+                }
+              : post
+          )
+        ),
+      // The author removed it. Dropping the row is better than leaving one
+      // whose every action would 404.
+      onPostDeleted: (postId) =>
+        setPosts((current) => current.filter((post) => post.id !== postId)),
+      onPostUpdated: (postId, content) =>
+        setPosts((current) =>
+          current.map((post) =>
+            post.id === postId && content !== undefined ? { ...post, body: content } : post
+          )
+        ),
+    }
+  );
+
+  useEffect(() => {
+    const unsubscribe = onNewPost(({ post }) => {
+      // Our own post is already on screen optimistically after composing, and
+      // being told your own post is "new" is nonsense.
+      if (post.author.user_id === user?.id) return;
+
+      const adapted = adaptPost(post as unknown as ApiPost);
+
+      setPending((current) => {
+        // The same frame can arrive twice -- campus room and follower fan-out.
+        if (current.some((p) => p.id === adapted.id)) return current;
+        return [adapted, ...current];
+      });
+    });
+
+    return unsubscribe;
+  }, [user?.id]);
+
+  // Drop anything from the buffer that a refresh has already pulled in, so the
+  // count never promises posts the reader can already see.
+  useEffect(() => {
+    if (pending.length === 0) return;
+    setPending((current) => current.filter((p) => !posts.some((existing) => existing.id === p.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts]);
+
+  const showPending = useCallback(() => {
+    setPosts((current) => {
+      const seen = new Set(current.map((post) => post.id));
+      return [...pending.filter((post) => !seen.has(post.id)), ...current];
+    });
+    setPending([]);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [pending]);
+
   const toggleSave = saved.toggle;
 
   // Hidden and deleted posts leave the list immediately; both are irreversible
@@ -294,6 +531,38 @@ export default function HomeScreen() {
   }, []);
 
   const recommendations = people.data ?? [];
+
+  /**
+   * The feed, with suggestions woven in rather than parked above it.
+   *
+   * Pinned to the top, the strip spent the most valuable space on the screen
+   * on people rather than on the posts someone opened the app to read, and it
+   * was only ever seen once — scroll past it and it is gone for the session.
+   *
+   * The cadence is fixed, not random. A block that lands somewhere different
+   * on every render cannot be scrolled back to, and re-shuffling on each
+   * refresh reads as a glitch rather than as variety. After the third post,
+   * then every eighth, puts it past the first screenful and then at a rhythm
+   * that is predictable without being frequent enough to nag.
+   */
+  const FIRST_SLOT = 2;
+  const REPEAT_EVERY = 8;
+
+  const rows = useMemo(() => {
+    const out: FeedRow[] = [];
+    posts.forEach((post, index) => {
+      out.push({ kind: "post", post });
+      if (!recommendations.length) return;
+      const isSlot =
+        index === FIRST_SLOT || (index > FIRST_SLOT && (index - FIRST_SLOT) % REPEAT_EVERY === 0);
+      if (isSlot) out.push({ kind: "people", slot: index });
+    });
+    return out;
+  }, [posts, recommendations.length]);
+
+  // Too few posts to interleave into — without this the strip would simply
+  // never appear for a new account, which is exactly who needs it most.
+  const peopleAtTop = recommendations.length > 0 && posts.length <= FIRST_SLOT;
 
   return (
     <Screen>
@@ -314,6 +583,7 @@ export default function HomeScreen() {
             campus: "/(tabs)/campus",
             profile: "/(tabs)/profile",
             messages: "/messages",
+            connections: "/connections",
             saved: "/saved",
             groups: "/(tabs)/events?section=groups",
             events: "/(tabs)/events",
@@ -331,6 +601,13 @@ export default function HomeScreen() {
           postId={options.id}
           authorName={options.author.name}
           isOwnPost={options.author.id === user?.id}
+          content={options.caption}
+          pollId={options.pollId}
+          onEdited={(id, content) =>
+            setPosts((current) =>
+              current.map((post) => (post.id === id ? { ...post, caption: content } : post))
+            )
+          }
           saved={saved.isSaved(options.id)}
           visible
           onClose={() => setOptions(null)}
@@ -340,8 +617,12 @@ export default function HomeScreen() {
       ) : null}
 
       <FlatList
-        data={posts}
-        keyExtractor={(item) => item.id}
+        ref={listRef}
+        data={rows}
+        // The slot index keys the injected rows: two suggestion blocks in one
+        // feed would otherwise collide on a constant key and FlatList would
+        // recycle one over the other.
+        keyExtractor={(item) => (item.kind === "post" ? item.post.id : `people-${item.slot}`)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
         refreshControl={
@@ -391,13 +672,13 @@ export default function HomeScreen() {
               <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel={
-                  unread.data ? `Notifications, ${unread.data} unread` : "Notifications"
+                  unread.count ? `Notifications, ${unread.count} unread` : "Notifications"
                 }
                 onPress={() => router.push("/notifications")}
                 style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
               >
                 <Icon name="notification" size={21} color={colors.textPrimary} />
-                {unread.data ? (
+                {unread.count ? (
                   <View
                     style={{
                       position: "absolute",
@@ -422,17 +703,38 @@ export default function HomeScreen() {
                         lineHeight: 11,
                       }}
                     >
-                      {unread.data > 9 ? "9+" : unread.data}
+                      {unread.count > 9 ? "9+" : unread.count}
                     </Text>
                   </View>
                 ) : null}
               </PressableScale>
               <PressableScale
                 accessibilityRole="button"
-                accessibilityLabel="Open profile menu"
+                accessibilityLabel={
+                  attention.hasAny
+                    ? `Open profile menu, ${attention.connectionRequests} waiting`
+                    : "Open profile menu"
+                }
                 onPress={() => setDrawerOpen(true)}
               >
                 <Avatar uri={display?.avatar ?? undefined} size={42} />
+                {/* A plain dot, not a count. This is a nudge to open the menu;
+                    the number belongs on the row that leads to the thing. */}
+                {attention.hasAny ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -1,
+                      right: -1,
+                      width: 13,
+                      height: 13,
+                      borderRadius: radius.full,
+                      backgroundColor: culture.pink,
+                      borderWidth: 2,
+                      borderColor: colors.background,
+                    }}
+                  />
+                ) : null}
               </PressableScale>
             </View>
 
@@ -460,19 +762,7 @@ export default function HomeScreen() {
               </>
             ) : null}
 
-            {recommendations.length ? (
-              <>
-                <View style={{ paddingHorizontal: spacing.lg }}>
-                  <SectionHeader
-                    eyebrow="AROUND CAMPUS"
-                    title="People you might know"
-                    actionLabel="Explore"
-                    onAction={() => router.push("/(tabs)/connect")}
-                  />
-                </View>
-                <PeopleStrip people={recommendations} />
-              </>
-            ) : null}
+            {peopleAtTop ? <PeopleSection people={recommendations} /> : null}
 
             <View style={{ paddingHorizontal: spacing.lg }}>
               <SectionHeader eyebrow="FOR YOU" title="From your campus" />
@@ -499,17 +789,113 @@ export default function HomeScreen() {
             />
           )
         }
-        renderItem={({ item, index }) => (
-          <Animated.View entering={index < 4 ? FadeIn.delay(index * 45).duration(200) : undefined}>
-            <PostCard
-              post={{ ...item, saved: saved.isSaved(item.id) }}
-              onToggleLike={toggleLike}
-              onToggleSave={toggleSave}
-              onOpenOptions={setOptions}
-            />
-          </Animated.View>
-        )}
+        onEndReached={loadMore}
+        // Half a screen of runway: enough that the next page is usually there
+        // before the reader arrives, without fetching pages nobody reaches.
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          posts.length === 0 ? null : loadingMore ? (
+            <View style={{ paddingVertical: spacing.xl }}>
+              <Loader />
+            </View>
+          ) : hasMore ? null : (
+            <FeedEnd postCount={posts.length} />
+          )
+        }
+        renderItem={({ item, index }) => {
+          if (item.kind === "people") {
+            return <PeopleSection people={recommendations} />;
+          }
+
+          return (
+            <Animated.View
+              entering={index < 4 ? FadeIn.delay(index * 45).duration(200) : undefined}
+            >
+              <PostCard
+                post={{ ...item.post, saved: saved.isSaved(item.post.id) }}
+                onToggleLike={toggleLike}
+                onToggleSave={toggleSave}
+                onOpenOptions={setOptions}
+              />
+            </Animated.View>
+          );
+        }}
       />
+
+      {/*
+        New posts arrived while reading. Offered rather than inserted: the
+        reader decides when the list moves, and the tap also takes them to the
+        top, which is where the new rows are.
+      */}
+      {pending.length > 0 ? (
+        <View
+          style={{
+            position: "absolute",
+            top: insets.top + 4,
+            left: 0,
+            right: 0,
+            alignItems: "center",
+            zIndex: 10,
+          }}
+          pointerEvents="box-none"
+        >
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={`Show ${pending.length} new ${pending.length === 1 ? "post" : "posts"}`}
+            onPress={showPending}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.xs,
+              paddingHorizontal: spacing.lg,
+              minHeight: 40,
+              borderRadius: radius.full,
+              backgroundColor: colors.accent,
+              shadowColor: "#000",
+              shadowOpacity: 0.18,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 5,
+            }}
+          >
+            <Icon name="forward" size={14} color={colors.accentFg} />
+            <Text variant="label" style={{ color: colors.accentFg }}>
+              {pending.length === 1 ? "1 new post" : `${pending.length} new posts`}
+            </Text>
+          </PressableScale>
+        </View>
+      ) : null}
+
+      {/*
+        Composing is the one thing someone opens this screen to do that the
+        feed itself cannot offer. It sits above the tab bar rather than inside
+        it because the tab bar is a navigation row -- an action wedged in
+        between destinations reads as a sixth place to go.
+      */}
+      <PressableScale
+        accessibilityRole="button"
+        accessibilityLabel="Write a post"
+        onPress={() => router.push("/compose/post")}
+        style={{
+          position: "absolute",
+          right: spacing.lg,
+          bottom: tabBarTop(insets.bottom) + spacing.md,
+          width: 56,
+          height: 56,
+          borderRadius: radius.full,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.accent,
+          // Lifted off the feed so it stays legible over a photo post.
+          shadowColor: "#000",
+          shadowOpacity: 0.22,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 6,
+        }}
+      >
+        <Icon name="add" size={26} color={colors.accentFg} />
+      </PressableScale>
     </Screen>
   );
 }

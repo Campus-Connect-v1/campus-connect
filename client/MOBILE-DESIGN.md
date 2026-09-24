@@ -113,6 +113,15 @@ Pushed routes: `post/[id]` (the post, then its comments), `person/[id]`,
 `group/[id]/edit`, `compose/post`, `compose/poll`, `compose/event`,
 `compose/group`, `settings/*`, `legal/*`.
 
+Authenticated accounts with `is_profile_complete = false` enter `setup` before
+the tabs. Step one collects programme, year, a short profile and 3–6 interests;
+step two uses those signals to offer connection recommendations. Completion is
+persisted per account on-device and synced to the profile when the deployed API
+supports the completion field. That local fallback prevents an older API from
+trapping a finished user in setup. Both steps offer “Skip for now”; dismissal
+lasts for the current session so setup is an invitation, not a lockout, while a
+later login can offer it again.
+
 A mid-path dynamic segment (`/group/[id]/edit`) must be pushed in object form -
 `router.push({ pathname: "/group/[id]/edit", params: { id } })`. The template
 string form does not typecheck, because Expo Router can only infer

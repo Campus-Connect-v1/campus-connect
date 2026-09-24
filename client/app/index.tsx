@@ -5,16 +5,17 @@ import { View } from "react-native";
 
 import { Loader } from "@/src/components/ui";
 import { BYPASS_AUTH } from "@/src/constants/env";
+import { signedInDestination } from "@/src/features/profile/setup";
 import { useSession } from "@/src/services/SessionContext";
 import { useTheme } from "@/src/styles/useTheme";
 
 import "./globals.css";
 
-type Destination = "/onboarding" | "/auth" | "/(tabs)/home";
+type Destination = "/onboarding" | "/auth" | "/setup" | "/(tabs)/home";
 
 export default function Index() {
   const { colors } = useTheme();
-  const { user, booting } = useSession();
+  const { user, profile, booting, setupDismissed, setupCompleted } = useSession();
   const [seenOnboarding, setSeenOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export default function Index() {
   const destination: Destination = BYPASS_AUTH
     ? "/(tabs)/home"
     : user
-      ? "/(tabs)/home"
+      ? signedInDestination(profile, setupDismissed || setupCompleted)
       : seenOnboarding
         ? "/auth"
         : "/onboarding";

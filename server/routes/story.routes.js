@@ -1,5 +1,6 @@
 // routes/story.routes.js
 import express from "express";
+import { createContentLimiter, reactionLimiter } from "../utils/rateLimiter.js";
 import {
   createStory,
   getStoryFeed,
@@ -30,7 +31,7 @@ router.use(authenticate);
  *     tags: [Stories]
  *     summary: Create a story (image, video, text, or repost)
  */
-router.post("/", createStory);
+router.post("/", createContentLimiter, createStory);
 
 /**
  * @swagger
@@ -69,7 +70,7 @@ router.get("/:story_id", getStory);
  *     tags: [Stories]
  *     summary: Record a view of a story
  */
-router.post("/:story_id/view", viewStory);
+router.post("/:story_id/view", reactionLimiter, viewStory);
 
 /**
  * @swagger

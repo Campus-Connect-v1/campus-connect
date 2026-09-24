@@ -8,12 +8,17 @@ import { EmptyState, Loader, Media, PressableScale, Tag, Text, Icon } from "@/sr
 import { adaptPublicUser } from "@/src/features/profile/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
 import { createConversation, fetchConversationWith } from "@/src/services/conversationServices";
+import { fetchUserStories } from "@/src/services/storyServices";
 import { useSession } from "@/src/services/SessionContext";
 import {
   fetchUserById,
   respondToConnection,
   sendConnectionRequest,
+  followUser,
+  unfollowUser,
+  fetchFollowStats,
   type ApiConnectionSummary,
+  type FollowStats,
 } from "@/src/services/userServices";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
@@ -37,6 +42,71 @@ export default function PersonScreen() {
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+
+  // Whether this person has an unexpired story, so the profile can offer it.
+  // The story feed does not necessarily carry them, hence the direct read.
+  const stories = useAsync(
+    useCallback(() => fetchUserStories(id), [id]),
+    [id]
+  );
+  const hasStory = (stories.data ?? []).length > 0;
+
+  /**
+   * Follow state.
+   *
+   * Separate from connections on purpose: a connection is mutual and needs
+   * accepting, a follow is one-directional and instant. The feed reads the
+   * follow graph, so without this control on a profile there was no way for a
+   * user to build one -- every account stayed pinned to discovery mode while
+   * the empty feed told them to "follow a few people".
+   */
+  const [follow, setFollow] = useState<FollowStats | null>(null);
+  const [followBusy, setFollowBusy] = useState(false);
+
+  useEffect(() => {
+    // Compared directly rather than via isSelf, which is derived from the
+    // fetched profile further down and is not in scope yet.
+    if (!id || id === user?.id) return;
+    let active = true;
+    void fetchFollowStats(id).then((result) => {
+      if (active && result.success) setFollow(result.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [id, user?.id]);
+
+  const toggleFollow = async () => {
+    if (!follow || followBusy) return;
+
+    const wasFollowing = follow.is_following;
+    setFollowBusy(true);
+    // Optimistic, so the button answers the tap immediately; reverted below if
+    // the write fails, rather than left stating something untrue.
+    setFollow({
+      ...follow,
+      is_following: !wasFollowing,
+      follower_count: Math.max(0, follow.follower_count + (wasFollowing ? -1 : 1)),
+    });
+    Haptics.selectionAsync();
+
+    const result = await (wasFollowing ? unfollowUser : followUser)(id);
+    setFollowBusy(false);
+
+    if (result.success) {
+      // The server returns the authoritative counts; two devices acting at
+      // once would otherwise each keep their own guess.
+      setFollow({
+        follower_count: result.data.follower_count,
+        following_count: result.data.following_count,
+        is_following: result.data.is_following,
+        follows_you: result.data.follows_you,
+      });
+    } else {
+      setFollow(follow);
+      setRequestError(result.error);
+    }
+  };
 
   const remote = useAsync(
     useCallback(() => fetchUserById(id), [id]),
@@ -264,6 +334,59 @@ export default function PersonScreen() {
         </View>
 
         <View style={{ padding: spacing.xl, gap: spacing.md }}>
+          {/* Counts read from the follow state that is already loaded, so this
+              adds no request. Both are tappable, because a number nobody can
+              open is decoration. */}
+          {hasStory ? (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`View ${person.name}'s story`}
+              onPress={() => router.push({ pathname: "/stories/[userId]", params: { userId: id } })}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.xs,
+                minHeight: 46,
+                borderRadius: radius.full,
+                borderWidth: 1.5,
+                borderColor: culture.pink,
+              }}
+            >
+              <Icon name="play" size={15} color={culture.pink} />
+              <Text variant="label" style={{ color: culture.pink }}>
+                View story
+              </Text>
+            </PressableScale>
+          ) : null}
+
+          {follow ? (
+            <View style={{ flexDirection: "row", gap: spacing["2xl"] }}>
+              {[
+                { tab: "followers" as const, label: "FOLLOWERS", value: follow.follower_count },
+                { tab: "following" as const, label: "FOLLOWING", value: follow.following_count },
+              ].map((entry) => (
+                <PressableScale
+                  key={entry.tab}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${entry.value} ${entry.label.toLowerCase()}`}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/person/[id]/follows",
+                      params: { id, tab: entry.tab, name: person.name },
+                    })
+                  }
+                  style={{ gap: 2 }}
+                >
+                  <Text variant="heading">{entry.value.toLocaleString()}</Text>
+                  <Text variant="micro" color="textMuted">
+                    {entry.label}
+                  </Text>
+                </PressableScale>
+              ))}
+            </View>
+          ) : null}
+
           {person.bio ? (
             <Text variant="body" color="textSecondary">
               {person.bio}
@@ -313,6 +436,43 @@ export default function PersonScreen() {
           </PressableScale>
         ) : (
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            {follow ? (
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityState={{ selected: follow.is_following, disabled: followBusy }}
+                accessibilityLabel={
+                  follow.is_following
+                    ? `Unfollow ${person.name}`
+                    : `Follow ${person.name}${follow.follows_you ? ", follows you" : ""}`
+                }
+                disabled={followBusy}
+                onPress={toggleFollow}
+                style={{
+                  width: 58,
+                  height: 58,
+                  borderRadius: radius.full,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  // Following reads as a settled state, not a call to action,
+                  // so it loses the accent fill once it is on.
+                  backgroundColor: follow.is_following ? colors.surface : culture.violet,
+                  borderWidth: 1,
+                  borderColor: follow.is_following ? colors.borderStrong : culture.violet,
+                  opacity: followBusy ? 0.6 : 1,
+                }}
+              >
+                {followBusy ? (
+                  <Loader size={20} color={colors.textPrimary} />
+                ) : (
+                  <Icon
+                    name={follow.is_following ? "check" : "connectAdd"}
+                    size={20}
+                    color={follow.is_following ? colors.textPrimary : culture.ink}
+                  />
+                )}
+              </PressableScale>
+            ) : null}
+
             <PressableScale
               accessibilityRole="button"
               accessibilityLabel={`Message ${person.name}`}

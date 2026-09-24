@@ -1,6 +1,11 @@
 // routes/social.routes.js
 import express from "express";
 import {
+  createContentLimiter,
+  conversationLimiter,
+  reactionLimiter,
+} from "../utils/rateLimiter.js";
+import {
   createPost,
   getFeedPosts,
   getPost,
@@ -9,6 +14,15 @@ import {
   addComment,
   getPostComments,
   deletePost,
+  updatePost,
+  updateComment,
+  deleteComment,
+  likeComment,
+  unlikeComment,
+  savePost,
+  unsavePost,
+  getSavedPostIds,
+  getSavedPosts,
 } from "../controllers/social.controller.js";
 import authenticate from "../middleware/auth.js";
 
@@ -31,7 +45,7 @@ router.use(authenticate);
  *     tags: [Social]
  *     summary: Create a new post
  */
-router.post("/posts", createPost);
+router.post("/posts", createContentLimiter, createPost);
 
 /**
  * @swagger
@@ -41,6 +55,24 @@ router.post("/posts", createPost);
  *     summary: Get feed posts from connections
  */
 router.get("/posts/feed", getFeedPosts);
+
+/**
+ * @swagger
+ * /social/posts/saved:
+ *   get:
+ *     tags: [Social]
+ *     summary: Saved posts for the current user
+ */
+router.get("/posts/saved", getSavedPosts);
+
+/**
+ * @swagger
+ * /social/posts/saved/ids:
+ *   get:
+ *     tags: [Social]
+ *     summary: Ids of saved posts, for hydrating bookmark state
+ */
+router.get("/posts/saved/ids", getSavedPostIds);
 
 /**
  * @swagger
@@ -62,12 +94,21 @@ router.delete("/posts/:post_id", deletePost);
 
 /**
  * @swagger
+ * /social/posts/{post_id}:
+ *   patch:
+ *     tags: [Social]
+ *     summary: Edit a post's text (author only)
+ */
+router.patch("/posts/:post_id", updatePost);
+
+/**
+ * @swagger
  * /social/posts/{post_id}/like:
  *   post:
  *     tags: [Social]
  *     summary: Like a post
  */
-router.post("/posts/:post_id/like", likePost);
+router.post("/posts/:post_id/like", reactionLimiter, likePost);
 
 /**
  * @swagger
@@ -76,7 +117,7 @@ router.post("/posts/:post_id/like", likePost);
  *     tags: [Social]
  *     summary: Unlike a post
  */
-router.delete("/posts/:post_id/like", unlikePost);
+router.delete("/posts/:post_id/like", reactionLimiter, unlikePost);
 
 /**
  * @swagger
@@ -85,7 +126,7 @@ router.delete("/posts/:post_id/like", unlikePost);
  *     tags: [Social]
  *     summary: Add comment to post
  */
-router.post("/posts/:post_id/comments", addComment);
+router.post("/posts/:post_id/comments", conversationLimiter, addComment);
 
 /**
  * @swagger
@@ -95,5 +136,59 @@ router.post("/posts/:post_id/comments", addComment);
  *     summary: Get post comments
  */
 router.get("/posts/:post_id/comments", getPostComments);
+
+/**
+ * @swagger
+ * /social/posts/{post_id}/comments/{comment_id}:
+ *   patch:
+ *     tags: [Social]
+ *     summary: Edit a comment (author only)
+ */
+router.patch("/posts/:post_id/comments/:comment_id", updateComment);
+
+/**
+ * @swagger
+ * /social/posts/{post_id}/comments/{comment_id}:
+ *   delete:
+ *     tags: [Social]
+ *     summary: Delete a comment (comment author or post author)
+ */
+router.delete("/posts/:post_id/comments/:comment_id", deleteComment);
+
+/**
+ * @swagger
+ * /social/comments/{comment_id}/like:
+ *   post:
+ *     tags: [Social]
+ *     summary: Like a comment
+ */
+router.post("/comments/:comment_id/like", reactionLimiter, likeComment);
+
+/**
+ * @swagger
+ * /social/comments/{comment_id}/like:
+ *   delete:
+ *     tags: [Social]
+ *     summary: Unlike a comment
+ */
+router.delete("/comments/:comment_id/like", reactionLimiter, unlikeComment);
+
+/**
+ * @swagger
+ * /social/posts/{post_id}/save:
+ *   post:
+ *     tags: [Social]
+ *     summary: Save (bookmark) a post
+ */
+router.post("/posts/:post_id/save", reactionLimiter, savePost);
+
+/**
+ * @swagger
+ * /social/posts/{post_id}/save:
+ *   delete:
+ *     tags: [Social]
+ *     summary: Remove a bookmark
+ */
+router.delete("/posts/:post_id/save", reactionLimiter, unsavePost);
 
 export default router;

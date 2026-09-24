@@ -6,6 +6,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BuildingSheet } from "@/src/components/campus/BuildingSheet";
+import { FriendSheet } from "@/src/components/campus/FriendSheet";
 import { CampusMap } from "@/src/components/campus/CampusMap";
 import { MapSearch } from "@/src/components/campus/MapSearch";
 import { PeopleGrid } from "@/src/components/connect/PeopleGrid";
@@ -30,9 +31,10 @@ import {
   getPermissionStatus,
   publishCurrentLocation,
   requestLocationPermission,
-  setIncognito,
   type NearbyProfile,
 } from "@/src/services/geolocation";
+import { fetchFriendLocations, type FriendLocation } from "@/src/services/friendMapServices";
+import { useLocationSharing } from "@/src/services/LocationSharingContext";
 import { useSession } from "@/src/services/SessionContext";
 import { TAB_BAR_CLEARANCE } from "@/src/styles/layout";
 import { culture, SECTION_HUE, radius, spacing } from "@/src/styles/theme";
@@ -58,6 +60,7 @@ export default function ConnectScreen() {
   const [blocked, setBlocked] = useState(false);
   const [mode, setMode] = useState<Mode>("people");
   const [pin, setPin] = useState<CampusPin | null>(null);
+  const [friend, setFriend] = useState<FriendLocation | null>(null);
   const [range, setRange] = useState(500);
   const [people, setPeople] = useState<NearbyProfile[]>([]);
   // Distinct from `refreshing`: this is the first load, and without it the
@@ -66,7 +69,8 @@ export default function ConnectScreen() {
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hidden, setHidden] = useState(false);
+  const locationSharing = useLocationSharing();
+  const hidden = !locationSharing.sharing;
 
   const universityId = profile?.university_id ?? user?.university_id;
 
@@ -86,6 +90,13 @@ export default function ConnectScreen() {
   const pins = useMemo(
     () => (buildings.data ?? []).map(adaptBuilding).filter(Boolean) as CampusPin[],
     [buildings.data]
+  );
+
+  // Independent of `range`: a friend's position is not a proximity result, and
+  // narrowing the radius must not make your friends disappear from the map.
+  const friends = useAsync(
+    useCallback(() => fetchFriendLocations(), []),
+    []
   );
 
   // Opened from Facilities with a building in hand: land on the map with that
@@ -207,11 +218,9 @@ export default function ConnectScreen() {
             accessibilityLabel={
               hidden ? "You are hidden. Become visible" : "You are visible. Go invisible"
             }
-            onPress={async () => {
+            onPress={() => {
               Haptics.selectionAsync();
-              const next = !hidden;
-              setHidden(next);
-              await setIncognito(next).catch(() => {});
+              void locationSharing.setGhost(!hidden);
             }}
             style={{
               flexDirection: "row",
@@ -281,17 +290,29 @@ export default function ConnectScreen() {
         <View style={{ flex: 1 }}>
           <CampusMap
             pins={pins}
+            people={people}
+            friends={friends.data ?? []}
             selectedId={pin?.id}
             focusId={pin?.id}
-            onSelect={setPin}
+            onSelect={(next) => {
+              setFriend(null);
+              setPin(next);
+            }}
+            onSelectPerson={(person) => router.push(`/person/${person.user_id}`)}
+            onSelectFriend={(next) => {
+              setPin(null);
+              setFriend(next);
+            }}
             hue={HUE}
           />
 
           <MapSearch
             universityId={universityId}
             pins={pins}
+            people={people}
             top={insets.top + spacing.xs}
             onSelect={setPin}
+            onSelectPerson={(person) => router.push(`/person/${person.user_id}`)}
           />
 
           <PressableScale
@@ -320,7 +341,59 @@ export default function ConnectScreen() {
             </Text>
           </PressableScale>
 
-          {pin ? (
+          <PressableScale
+            accessibilityRole="switch"
+            accessibilityState={{ checked: hidden }}
+            accessibilityLabel={
+              hidden
+                ? "You are hidden from the map. Become visible"
+                : "You are visible on the map. Hide yourself"
+            }
+            onPress={() => {
+              Haptics.selectionAsync();
+              // Reverting on failure is handled in the shared context.
+              void locationSharing.setGhost(!hidden);
+            }}
+            style={{
+              position: "absolute",
+              top: insets.top + spacing.xs + 60,
+              right: spacing.lg,
+              zIndex: 1,
+              elevation: 1,
+              minHeight: 44,
+              paddingHorizontal: spacing.md,
+              borderRadius: radius.full,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing["2xs"],
+              backgroundColor: hidden ? culture.ink : "rgba(11,14,18,0.75)",
+              borderWidth: 1,
+              borderColor: hidden ? culture.lime : "rgba(255,255,255,0.18)",
+            }}
+          >
+            <Icon
+              name={hidden ? "hidden" : "visible"}
+              size={16}
+              color={hidden ? culture.lime : colors.onMedia}
+            />
+            <Text
+              variant="caption"
+              onMedia={!hidden}
+              style={hidden ? { color: culture.lime } : undefined}
+            >
+              {hidden ? "Hidden" : "Visible"}
+            </Text>
+          </PressableScale>
+
+          {friend ? (
+            <FriendSheet
+              friend={friend}
+              bottom={TAB_BAR_CLEARANCE - spacing.xl}
+              onClose={() => setFriend(null)}
+            />
+          ) : null}
+
+          {pin && !friend ? (
             <BuildingSheet
               pin={pin}
               bottom={TAB_BAR_CLEARANCE - spacing.xl}

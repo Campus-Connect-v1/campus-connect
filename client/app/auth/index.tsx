@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, PhotoCollage, PressableScale, Text } from "@/src/components/ui";
 import GoogleLoginButton from "@/src/components/ui/GoogleLoginButton";
 import { COLLAGE_IMAGES } from "@/src/features/auth/collage";
+import { signedInDestination } from "@/src/features/profile/setup";
 import { useSession } from "@/src/services/SessionContext";
 import { palette, spacing } from "@/src/styles/theme";
 
@@ -21,7 +22,7 @@ import { palette, spacing } from "@/src/styles/theme";
  */
 export default function AuthLanding() {
   const router = useRouter();
-  const { refresh } = useSession();
+  const { refresh, setupDismissed } = useSession();
   const insets = useSafeAreaInsets();
   const colors = palette.dark;
 
@@ -63,8 +64,13 @@ export default function AuthLanding() {
 
           <GoogleLoginButton
             onSuccess={async () => {
-              await refresh();
-              router.replace("/(tabs)/home");
+              const refreshed = await refresh();
+              router.replace(
+                signedInDestination(
+                  refreshed.profile,
+                  setupDismissed || refreshed.setupCompleted
+                ) as never
+              );
             }}
           />
 

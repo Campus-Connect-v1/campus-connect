@@ -1,4 +1,13 @@
 import express from "express";
+import { socialGraphLimiter } from "../utils/rateLimiter.js";
+import { getUserPosts } from "../controllers/social.controller.js";
+import {
+  followUser,
+  unfollowUser,
+  getFollowStats,
+  getFollowers,
+  getFollowing,
+} from "../controllers/follow.controller.js";
 import {
   getProfile,
   updateUserProfile,
@@ -117,7 +126,7 @@ router.get("/connections/:status", getConnections);
  *     tags: [Connections]
  *     summary: Send connection request
  */
-router.post("/connections/request", sendConnectionRequest);
+router.post("/connections/request", socialGraphLimiter, sendConnectionRequest);
 
 /** Respond to a request received by the signed-in user. */
 router.post("/connections/respond", respondToConnection);
@@ -207,6 +216,60 @@ router.delete("/courses/:courseId", courseIdParamValidation, removeCourse);
  *     tags: [Discovery]
  *     summary: Search user
  */
+/**
+ * @swagger
+ * /user/{user_id}/follow:
+ *   post:
+ *     tags: [User]
+ *     summary: Follow a user
+ */
+router.post("/:user_id/follow", socialGraphLimiter, followUser);
+
+/**
+ * @swagger
+ * /user/{user_id}/follow:
+ *   delete:
+ *     tags: [User]
+ *     summary: Unfollow a user
+ */
+router.delete("/:user_id/follow", socialGraphLimiter, unfollowUser);
+
+/**
+ * @swagger
+ * /user/{user_id}/follow-stats:
+ *   get:
+ *     tags: [User]
+ *     summary: Follower/following counts and this viewer's relationship
+ */
+router.get("/:user_id/follow-stats", getFollowStats);
+
+/**
+ * @swagger
+ * /user/{user_id}/posts:
+ *   get:
+ *     tags: [User]
+ *     summary: Posts by one user, visibility-filtered for the viewer
+ */
+router.get("/:user_id/posts", getUserPosts);
+
+/**
+ * @swagger
+ * /user/{user_id}/followers:
+ *   get:
+ *     tags: [User]
+ *     summary: Who follows this user
+ */
+router.get("/:user_id/followers", getFollowers);
+
+/**
+ * @swagger
+ * /user/{user_id}/following:
+ *   get:
+ *     tags: [User]
+ *     summary: Who this user follows
+ */
+router.get("/:user_id/following", getFollowing);
+
 router.get("/search", searchValidation, searchUsers);
 
 /**

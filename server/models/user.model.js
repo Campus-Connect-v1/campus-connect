@@ -141,6 +141,7 @@ export const updateUserProfileModel = async (userId, updateData) => {
       "notification_push",
       "privacy_profile",
       "year_of_study",
+      "is_profile_complete",
     ];
 
     const updates = {};
@@ -281,8 +282,8 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
     // sanitize limit safely
     const safeLimit = Math.min(parseInt(limit, 10) || 10, 50);
 
-    // Placeholder order matters: shared courses, shared groups, then the three
-    // occurrences in the mutual-connections block, then the caller themselves.
+    // Placeholder order matters: shared interests, courses, groups, then the
+    // three mutual-connections occurrences, then the caller themselves.
     const query = `
       SELECT
         u2.user_id,
@@ -292,19 +293,74 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
         u2.profile_headline,
         u2.program,
         u2.graduation_year,
-        (
-          COALESCE(shared_courses.score, 0) +
-          COALESCE(shared_groups.score, 0) +
-          COALESCE(mutuals.score, 0) +
-          CASE WHEN u1.program = u2.program THEN 1 ELSE 0 END +
-          CASE WHEN u1.graduation_year = u2.graduation_year THEN 1 ELSE 0 END
-        ) AS match_score
+        -- Returned so the client can say WHY two people match ("3 shared
+        -- interests, 2 mutual friends") instead of only showing a number.
+        COALESCE(shared_interests.score, 0) AS shared_interests,
+        COALESCE(shared_courses.score, 0)   AS shared_courses,
+        COALESCE(shared_groups.score, 0)    AS shared_groups,
+        COALESCE(mutuals.score, 0)          AS mutual_connections,
+        CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 1 ELSE 0 END AS same_program,
+        CASE WHEN u1.graduation_year IS NOT NULL
+              AND u1.graduation_year = u2.graduation_year THEN 1 ELSE 0 END AS same_year,
+        /*
+         * Match score, 0-100, computed here rather than derived downstream.
+         *
+         * The previous formula summed raw counts and the controller divided by
+         * a hardcoded 5, so the score was unbounded while the denominator was
+         * not: three shared interests scored 6 and clamped to 100%, and every
+         * strong match looked identical to every other. Two people sharing
+         * three interests and nothing else were indistinguishable from two who
+         * shared interests, courses, a study group and nine mutual friends.
+         *
+         * Each signal is now saturated individually, then weighted. Saturating
+         * first is the important part: it stops any single dimension running
+         * away with the total, so the score rewards breadth of overlap rather
+         * than depth in one place -- which is what actually predicts whether
+         * two students would get on.
+         *
+         * Weights, and why:
+         *   interests 30 - the only signal a brand-new account has
+         *   mutuals   25 - the strongest real-world predictor of a connection
+         *   courses   20 - you already share a room twice a week
+         *   groups    12 - deliberate, but a smaller population
+         *   program    8 - same department, weak on its own
+         *   year       5 - weakest; cohort alone says little
+         *
+         * Caps are set where the signal stops being informative: a fourth
+         * shared interest says much less than the first, and beyond five
+         * mutuals you are simply in the same circle.
+         */
+        LEAST(100, ROUND(
+          LEAST(COALESCE(shared_interests.score, 0) / 3.0, 1.0) * 30 +
+          LEAST(COALESCE(mutuals.score, 0)          / 5.0, 1.0) * 25 +
+          LEAST(COALESCE(shared_courses.score, 0)   / 2.0, 1.0) * 20 +
+          LEAST(COALESCE(shared_groups.score, 0)    / 2.0, 1.0) * 12 +
+          CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 8 ELSE 0 END +
+          CASE WHEN u1.graduation_year IS NOT NULL
+                AND u1.graduation_year = u2.graduation_year THEN 5 ELSE 0 END
+        )) AS match_score
       FROM users u1
       JOIN users u2
         ON u2.university_id = u1.university_id
        AND u2.user_id <> u1.user_id
        AND u2.is_active = 1
-       AND u2.privacy_profile IN ('public', 'university')
+       -- New accounts default to friends. They still need to appear as a
+       -- lightweight discovery card so the first-run matching flow can work;
+       -- private is the explicit opt-out from discovery.
+       AND u2.privacy_profile <> 'private'
+
+      -- Interests are the strongest first-run signal: a new account has no
+      -- friends, groups or courses yet, but it has just told us what it likes.
+      LEFT JOIN (
+        SELECT ui2.user_id, COUNT(*) AS score
+        FROM user_interests ui1
+        JOIN user_interests ui2
+          ON LOWER(ui2.interest_name) = LOWER(ui1.interest_name)
+         AND ui2.user_id <> ui1.user_id
+        WHERE ui1.user_id = ?
+        GROUP BY ui2.user_id
+      ) AS shared_interests
+        ON shared_interests.user_id = u2.user_id
 
       -- Courses the caller currently takes, and who else currently takes them.
       LEFT JOIN (
@@ -367,6 +423,7 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
     `;
 
     const [rows] = await db.execute(query, [
+      userId, // shared_interests
       userId, // shared_courses
       userId, // shared_groups
       userId, // mutuals: normalise direction
@@ -714,6 +771,21 @@ export const getUserConnections = async (userId, status = "accepted") => {
   return rows;
 };
 
+// Lightweight companion to getUserConnections: just the other side's ids, for
+// fan-out (e.g. notifying connections about a new post). No joined profile
+// columns, since the caller only wants recipient ids.
+export const getConnectionUserIds = async (userId) => {
+  const [rows] = await db.execute(
+    `SELECT
+       CASE WHEN requester_id = ? THEN receiver_id ELSE requester_id END AS connection_user_id
+     FROM connections
+     WHERE (requester_id = ? OR receiver_id = ?)
+       AND status = 'accepted'`,
+    [userId, userId, userId]
+  );
+  return rows.map((row) => row.connection_user_id);
+};
+
 export const getAllUserConnectionsModel = async (
   userId,
   status,
@@ -786,7 +858,14 @@ export const getUserProfile = async (userId) => {
       linkedin_url, website_url,
       date_of_birth, gender, year_of_study, graduation_year,
       social_links, privacy_settings, is_profile_complete,
-      is_email_verified, created_at, updated_at
+      is_email_verified, created_at, updated_at,
+      -- The notification and privacy screens read these off the session
+      -- profile. They were writable (updateUserProfileModel allows them) but
+      -- never selected, so every toggle saved correctly and then read back as
+      -- its default: switch one off, reopen the screen, it is on again.
+      notification_email, notification_push,
+      privacy_profile, show_status_preference, show_location_preference,
+      timezone
      FROM users WHERE user_id = ? AND is_active = TRUE`,
     [userId]
     ),
@@ -901,11 +980,23 @@ export const deleteProfileModel = async (
   try {
     await db.beginTransaction();
 
-    // 1. Archive the user data with expiration date
+    // 1. Archive the user data.
+    //
+    // The trailing values must line up with user_archive's own columns, which
+    // are the 35 columns of `users` followed by archived_at (36) then
+    // deletion_reason (37) -- in that order. This previously supplied three
+    // values (reason, timestamp, and an expiry) in the wrong order, so every
+    // delete died on "Column count doesn't match value count" and rolled the
+    // whole transaction back. There is no expires_at column and no need for
+    // one: recoverProfileModel derives the 30-day window from archived_at.
+    //
+    // SELECT * carries new columns across automatically, which is why it is
+    // kept -- but it means a column added to `users` must also be added to
+    // `user_archive` in the same position, ahead of these two.
     const [archiveResult] = await db.execute(
-      `INSERT INTO user_archive 
-       SELECT *, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 DAY)
-       FROM users 
+      `INSERT INTO user_archive
+       SELECT *, CURRENT_TIMESTAMP, ?
+       FROM users
        WHERE user_id = ?`,
       [deletionReason, userId]
     );
@@ -1097,4 +1188,55 @@ export const updatePrivacySettingsModel = async (userId, settings) => {
     console.error("Update privacy settings model error:", error);
     throw error;
   }
+};
+
+/**
+ * Whether two users have an accepted connection.
+ *
+ * `connections` stores ONE directed row per pair, so the test has to look at
+ * both orientations. Checking only (requester = viewer) would report a
+ * connection as absent for whichever side did not send the request.
+ */
+export const areUsersConnected = async (userIdA, userIdB) => {
+  if (!userIdA || !userIdB || userIdA === userIdB) return false;
+
+  const [rows] = await db.execute(
+    `SELECT 1 FROM connections
+      WHERE status = 'accepted'
+        AND ((requester_id = ? AND receiver_id = ?)
+          OR (requester_id = ? AND receiver_id = ?))
+      LIMIT 1`,
+    [userIdA, userIdB, userIdB, userIdA]
+  );
+  return rows.length > 0;
+};
+
+/**
+ * Every user with an accepted connection to this one, with the fields the map
+ * needs. Returns the OTHER side of each row, whichever orientation it is in.
+ */
+export const getAcceptedConnectionProfiles = async (userId) => {
+  const [rows] = await db.execute(
+    `SELECT
+       u.user_id,
+       u.first_name,
+       u.last_name,
+       u.profile_picture_url,
+       u.university_id,
+       u.privacy_profile,
+       EXISTS(
+         SELECT 1 FROM stories s
+          WHERE s.user_id = u.user_id
+            AND s.is_active = 1
+            AND s.expires_at > NOW()
+       ) AS has_story
+     FROM connections c
+     JOIN users u
+       ON u.user_id = CASE WHEN c.requester_id = ? THEN c.receiver_id ELSE c.requester_id END
+     WHERE c.status = 'accepted'
+       AND (c.requester_id = ? OR c.receiver_id = ?)
+       AND u.is_active = 1`,
+    [userId, userId, userId]
+  );
+  return rows;
 };

@@ -1,7 +1,8 @@
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import { useCallback, useState } from "react";
-import { FlatList, RefreshControl, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, FlatList, RefreshControl, View } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import {
@@ -16,12 +17,21 @@ import {
 } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
 import {
+  clearNotifications,
+  deleteNotification,
   markAllNotificationsRead,
   markNotificationRead,
   fetchNotifications,
   type ApiNotification,
 } from "@/src/services/notificationServices";
-import { respondToConnection } from "@/src/services/userServices";
+import {
+  fetchConnections,
+  respondToConnection,
+  type ConnectionStatus,
+} from "@/src/services/userServices";
+import type { Result } from "@/src/services/api";
+import { onNotification } from "@/src/services/socket";
+import { useUnread } from "@/src/services/UnreadContext";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -32,8 +42,10 @@ const ICON_FOR: Record<string, IconName> = {
   connection_request: "connectAdd",
   connection_accepted: "connect",
   event_invite: "events",
+  event_created: "events",
   group_invite: "connect",
   story_view: "visible",
+  new_post: "home",
 };
 
 function since(iso: string) {
@@ -78,6 +90,37 @@ type ResponseState =
   | { status: "idle" | "accepting" | "declining" | "accepted" | "declined" }
   | { status: "error"; message: string };
 
+interface NotificationFeed {
+  notifications: ApiNotification[];
+  connectionStatuses: Record<string, ConnectionStatus>;
+}
+
+/**
+ * A notification is historical, while its connection is live state. Loading
+ * both prevents an old request notification from growing Accept/Decline
+ * buttons again after a refresh or after the app is reopened.
+ */
+async function fetchNotificationFeed(): Promise<Result<NotificationFeed>> {
+  const notificationResult = await fetchNotifications(30, 0);
+  if (!notificationResult.success) return notificationResult;
+
+  const connectionResult = await fetchConnections();
+  const connectionStatuses: Record<string, ConnectionStatus> = {};
+
+  if (connectionResult.success) {
+    Object.values(connectionResult.data)
+      .flat()
+      .forEach((connection) => {
+        connectionStatuses[connection.connection_id] = connection.status;
+      });
+  }
+
+  return {
+    success: true,
+    data: { notifications: notificationResult.data, connectionStatuses },
+  };
+}
+
 function Row({
   notification,
   response,
@@ -105,7 +148,9 @@ function Row({
         gap: spacing.sm,
         // The unread marker is a tinted ground, not a dot: the whole row is
         // the thing you have not dealt with.
-        backgroundColor: notification.is_read ? "transparent" : colors.surface,
+        // Opaque, not transparent: the row slides over a red delete action,
+        // and a see-through row would show it bleeding under every read item.
+        backgroundColor: notification.is_read ? colors.background : colors.surface,
       }}
     >
       <PressableScale
@@ -251,32 +296,107 @@ function Row({
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
+  const unreadBadge = useUnread();
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const [responses, setResponses] = useState<Record<string, ResponseState>>({});
 
   const feed = useAsync(
-    useCallback(() => fetchNotifications(30, 0), []),
+    useCallback(() => fetchNotificationFeed(), []),
     []
   );
+  const refreshFeed = useRef(feed.refresh);
+  const hasFocused = useRef(false);
+  refreshFeed.current = feed.refresh;
 
-  const notifications = (feed.data ?? []).map((n) =>
-    readIds.has(n.notification_id) ? { ...n, is_read: true } : n
+  // A notification arriving over the socket refreshes the list rather than
+  // being prepended: notifyMany's payload carries no notification_id (the
+  // server sends a bare signal precisely because the client refetches), so
+  // there is no safe key to render a row from or to de-duplicate against.
+  //
+  // Debounced because a fan-out — an event announcement to a whole group —
+  // lands as a burst of frames, and one refetch per frame would hammer the
+  // API to display the same list.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const unsubscribe = onNotification(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void refreshFeed.current(), 400);
+    });
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+  }, []);
+
+  // Stack screens remain mounted while a profile is open. Re-read connection
+  // state when the user comes back so a request accepted on that profile does
+  // not keep stale action buttons here.
+  useFocusEffect(
+    useCallback(() => {
+      if (hasFocused.current) void refreshFeed.current();
+      else hasFocused.current = true;
+    }, [])
   );
-  const unread = notifications.filter((n) => !n.is_read).length;
+
+  const notifications = (feed.data?.notifications ?? [])
+    .filter((n) => !removedIds.has(n.notification_id))
+    .map((n) => (readIds.has(n.notification_id) ? { ...n, is_read: true } : n));
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const open = (notification: ApiNotification) => {
     if (!notification.is_read) {
       setReadIds((current) => new Set(current).add(notification.notification_id));
-      markNotificationRead(notification.notification_id);
+      void markNotificationRead(notification.notification_id).then(() => unreadBadge.refresh());
     }
 
     const destination = destinationFor(notification);
     if (destination) router.push(destination as never);
   };
 
+  const remove = async (notification: ApiNotification) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRemovedIds((current) => new Set(current).add(notification.notification_id));
+
+    const result = await deleteNotification(notification.notification_id);
+    if (!result.success) {
+      // Put it back rather than leaving the list claiming a delete that failed.
+      setRemovedIds((current) => {
+        const next = new Set(current);
+        next.delete(notification.notification_id);
+        return next;
+      });
+      return;
+    }
+    if (!notification.is_read) void unreadBadge.refresh();
+  };
+
+  const confirmClear = () =>
+    Alert.alert(
+      "Clear all notifications?",
+      "This removes every notification, read and unread. It cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear all",
+          style: "destructive",
+          onPress: async () => {
+            const result = await clearNotifications();
+            if (!result.success) return;
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            unreadBadge.clear();
+            await feed.reload();
+          },
+        },
+      ]
+    );
+
   const markAll = async () => {
     Haptics.selectionAsync();
     setReadIds(new Set(notifications.map((n) => n.notification_id)));
+    unreadBadge.clear();
     await markAllNotificationsRead();
   };
 
@@ -302,7 +422,7 @@ export default function NotificationsScreen() {
       [id]: { status: action === "accept" ? "accepted" : "declined" },
     }));
     setReadIds((currentIds) => new Set(currentIds).add(id));
-    markNotificationRead(id);
+    void markNotificationRead(id).then(() => unreadBadge.refresh());
 
     if (action === "accept") {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -313,16 +433,39 @@ export default function NotificationsScreen() {
 
   return (
     <SettingsShell title="Notifications">
-      {unread > 0 ? (
-        <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
+      {notifications.length > 0 ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.lg,
+            paddingHorizontal: spacing.lg,
+            paddingBottom: spacing.sm,
+          }}
+        >
+          {unreadCount > 0 ? (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`Mark all ${unreadCount} as read`}
+              onPress={markAll}
+              style={{ minHeight: 40, justifyContent: "center" }}
+            >
+              <Text variant="label" style={{ color: colors.accent }}>
+                Mark all as read
+              </Text>
+            </PressableScale>
+          ) : null}
+
+          <View style={{ flex: 1 }} />
+
           <PressableScale
             accessibilityRole="button"
-            accessibilityLabel={`Mark all ${unread} as read`}
-            onPress={markAll}
-            style={{ alignSelf: "flex-start", minHeight: 40, justifyContent: "center" }}
+            accessibilityLabel="Clear all notifications"
+            onPress={confirmClear}
+            style={{ minHeight: 40, justifyContent: "center" }}
           >
-            <Text variant="label" style={{ color: colors.accent }}>
-              Mark all as read
+            <Text variant="label" color="destructive">
+              Clear all
             </Text>
           </PressableScale>
         </View>
@@ -359,14 +502,52 @@ export default function NotificationsScreen() {
             />
           )
         }
-        renderItem={({ item }) => (
-          <Row
-            notification={item}
-            response={responses[item.notification_id] ?? { status: "idle" }}
-            onPress={() => open(item)}
-            onRespond={(action) => respond(item, action)}
-          />
-        )}
+        renderItem={({ item }) => {
+          const persistedStatus = item.resource_id
+            ? feed.data?.connectionStatuses[item.resource_id]
+            : undefined;
+          const persistedResponse: ResponseState =
+            persistedStatus === "accepted" || persistedStatus === "declined"
+              ? { status: persistedStatus }
+              : { status: "idle" };
+          const response =
+            persistedStatus === "accepted" || persistedStatus === "declined"
+              ? persistedResponse
+              : (responses[item.notification_id] ?? persistedResponse);
+
+          return (
+            <Swipeable
+              // Right-to-left only: a left swipe on a row that can also be
+              // tapped is too easy to trigger while scrolling.
+              renderRightActions={() => (
+                <PressableScale
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete notification: ${item.title}`}
+                  onPress={() => remove(item)}
+                  style={{
+                    width: 84,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: colors.destructive,
+                  }}
+                >
+                  <Icon name="alert" size={20} color={colors.onMedia} />
+                  <Text variant="caption" onMedia style={{ marginTop: 2 }}>
+                    Delete
+                  </Text>
+                </PressableScale>
+              )}
+              overshootRight={false}
+            >
+              <Row
+                notification={item}
+                response={response}
+                onPress={() => open(item)}
+                onRespond={(action) => respond(item, action)}
+              />
+            </Swipeable>
+          );
+        }}
       />
     </SettingsShell>
   );

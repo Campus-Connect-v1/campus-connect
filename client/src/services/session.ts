@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const TOKEN_KEY = "cc.auth.token";
 const USER_KEY = "cc.auth.user";
+const SETUP_COMPLETE_PREFIX = "cc.setup.complete.";
 
 export interface SessionUser {
   id: string;
@@ -52,6 +53,19 @@ export function getToken() {
 
 export function getUser() {
   return user;
+}
+
+/** Profile setup is also remembered on-device so an older deployed API cannot
+ * trap someone in onboarding just because it does not accept the completion
+ * flag yet. The user id keeps accounts on the same device independent. */
+export async function getSetupCompleted(userId = user?.id) {
+  if (!userId) return false;
+  return (await AsyncStorage.getItem(`${SETUP_COMPLETE_PREFIX}${userId}`)) === "true";
+}
+
+export async function saveSetupCompleted(userId = user?.id) {
+  if (!userId) return;
+  await AsyncStorage.setItem(`${SETUP_COMPLETE_PREFIX}${userId}`, "true");
 }
 
 /**
