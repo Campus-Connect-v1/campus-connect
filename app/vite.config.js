@@ -13,7 +13,20 @@ export default defineConfig(({ mode }) => {
     // Express mounts this bundle at /admin, so every asset URL needs the
     // prefix. See the OPERATOR WEB APP block in server/server.js.
     base: "/admin/",
-    build: { outDir: "dist", emptyOutDir: true },
+    build: {
+      outDir: "dist",
+      emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          // Vendor libs change far less often than app code; splitting them
+          // into their own chunk lets that chunk stay cached across deploys
+          // instead of being invalidated by every app change.
+          manualChunks: {
+            vendor: ["react", "react-dom", "react-router-dom"],
+          },
+        },
+      },
+    },
     server: {
       port: 5174,
       // The production bundle shares an origin with the API, so /api is

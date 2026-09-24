@@ -2,6 +2,7 @@
 
 import express from "express";
 import {
+  getFriendLocations,
   updateLocation,
   getNearbyProfiles,
   getPrivacySettings,
@@ -206,6 +207,22 @@ router.post("/location", updateLocation);
  *         description: Internal server error
  */
 router.get("/nearby", getNearbyProfiles);
+
+/**
+ * @swagger
+ * /geofencing/friends:
+ *   get:
+ *     tags: [Geofencing]
+ *     summary: Accepted connections who are sharing location, at any distance
+ *     description: >
+ *       Unlike /nearby, this is not bounded by a radius. Coordinates are
+ *       rounded server-side to the reported precision, so a distant friend is
+ *       never sent as an exact fix.
+ *     responses:
+ *       200:
+ *         description: Friend locations retrieved successfully
+ */
+router.get("/friends", getFriendLocations);
 
 /**
  * @swagger

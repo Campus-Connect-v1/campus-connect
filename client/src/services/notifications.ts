@@ -91,8 +91,7 @@ async function ensureAndroidChannel() {
  * a device token at all.
  */
 async function getExpoPushToken(): Promise<string | null> {
-  const projectId =
-    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
 
   if (!projectId) {
     console.warn(
@@ -107,11 +106,25 @@ async function getExpoPushToken(): Promise<string | null> {
 }
 
 /**
- * Call once the user is signed in (e.g. from SessionContext once `user` is
- * set). Idempotent: safe to call on every app foreground, not just once —
- * re-registering the same token is a cheap upsert on the server.
+ * The outcome of registering, so a caller can tell the user what happened.
+ *
+ * "denied" and "unavailable" are different problems: the first is fixed in the
+ * device settings, the second means no EAS project is linked yet and there is
+ * nothing the user can do about it.
  */
-export async function registerForPushNotificationsAsync(): Promise<void> {
+export type PushRegistration = "registered" | "denied" | "unavailable" | "failed";
+
+/**
+ * Requests permission and registers this device's token.
+ *
+ * Idempotent: safe to call on every app foreground, not just once —
+ * re-registering the same token is a cheap upsert on the server.
+ *
+ * Call it at the moment of intent (the user turning push ON), never on cold
+ * start. A permission prompt fired before someone knows what it buys them is
+ * the fastest route to a permanent denial.
+ */
+export async function registerForPushNotificationsAsync(): Promise<PushRegistration> {
   try {
     await ensureAndroidChannel();
 
@@ -128,6 +141,7 @@ export async function registerForPushNotificationsAsync(): Promise<void> {
       const requested = await Notifications.requestPermissionsAsync();
       status = requested.status;
     }
+<<<<<<< HEAD
     if (status !== "granted") {
       await recordStatus("denied");
       return;
@@ -146,10 +160,23 @@ export async function registerForPushNotificationsAsync(): Promise<void> {
     } else {
       await recordStatus("server_rejected");
     }
+=======
+    if (status !== "granted") return "denied";
+
+    const token = await getExpoPushToken();
+    if (!token) return "unavailable";
+
+    const result = await registerPushToken(token, PLATFORM);
+    if (!result.success) return "failed";
+
+    await AsyncStorage.setItem(STORED_TOKEN_KEY, token);
+    return "registered";
+>>>>>>> origin/main
   } catch (error) {
     // Never let push setup block or crash the session it is attached to.
     await recordStatus("error");
     console.warn("[notifications] registration failed:", (error as Error).message);
+    return "failed";
   }
 }
 
@@ -198,8 +225,7 @@ export function addNotificationResponseListener(
 ): () => void {
   const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data as
-      | { resource_type?: string; resource_id?: string }
-      | undefined;
+      { resource_type?: string; resource_id?: string } | undefined;
     handler({
       resourceType: data?.resource_type ?? null,
       resourceId: data?.resource_id ?? null,

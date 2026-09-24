@@ -21,6 +21,10 @@ const BottomModal = forwardRef<BottomSheet, BottomModalProps>(
         ref={ref}
         index={state ? 0 : -1}
         snapPoints={snapPointsMemo}
+        // Dynamic sizing defaults to true in v5 and fights explicit
+        // snapPoints — the sheet can end up with an indeterminate frame that
+        // still covers (and blocks touches on) the screen while "closed".
+        enableDynamicSizing={false}
         enablePanDownToClose
         enableOverDrag={false}
         onChange={onChange}

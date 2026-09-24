@@ -18,6 +18,25 @@ export const findById = async (userId) => {
   }
 };
 
+// Batched variant of findById for lists (e.g. conversation participants)
+// that would otherwise fire one SELECT per row.
+export const findByIdsModel = async (userIds) => {
+  if (!userIds.length) return [];
+  try {
+    const placeholders = userIds.map(() => "?").join(",");
+    const [rows] = await db.execute(
+      `SELECT u.*, uni.name as university_name, uni.domain as university_domain
+       FROM users u
+       LEFT JOIN universities uni ON u.university_id = uni.university_id
+       WHERE u.user_id IN (${placeholders})`,
+      userIds
+    );
+    return rows;
+  } catch (error) {
+    throw new Error(`Database error in findByIdsModel: ${error.message}`);
+  }
+};
+
 // Get user by email
 export const findByEmail = async (email) => {
   try {
@@ -1093,12 +1112,12 @@ export const recoverProfileModel = async (userId) => {
 export const getPrivacySettingsModel = async (userId) => {
   try {
     const query = `
-      SELECT 
+      SELECT
         profile_visibility,
         custom_radius,
         show_exact_location,
         visible_fields
-      FROM user_privacy_settings 
+      FROM user_privacy_settings
       WHERE user_id = ?
     `;
 
@@ -1106,6 +1125,36 @@ export const getPrivacySettingsModel = async (userId) => {
     return rows[0] || null;
   } catch (error) {
     console.error("Get privacy settings model error:", error);
+    throw error;
+  }
+};
+
+// Batched variant of getPrivacySettingsModel for the nearby-profiles pipeline,
+// which otherwise fires one query per uncached user on every request.
+export const getPrivacySettingsModelBatch = async (userIds) => {
+  if (!userIds.length) return {};
+
+  try {
+    const placeholders = userIds.map(() => "?").join(",");
+    const query = `
+      SELECT
+        user_id,
+        profile_visibility,
+        custom_radius,
+        show_exact_location,
+        visible_fields
+      FROM user_privacy_settings
+      WHERE user_id IN (${placeholders})
+    `;
+
+    const [rows] = await db.execute(query, userIds);
+    const map = {};
+    rows.forEach((row) => {
+      map[row.user_id] = row;
+    });
+    return map;
+  } catch (error) {
+    console.error("Get privacy settings model batch error:", error);
     throw error;
   }
 };
@@ -1139,4 +1188,55 @@ export const updatePrivacySettingsModel = async (userId, settings) => {
     console.error("Update privacy settings model error:", error);
     throw error;
   }
+};
+
+/**
+ * Whether two users have an accepted connection.
+ *
+ * `connections` stores ONE directed row per pair, so the test has to look at
+ * both orientations. Checking only (requester = viewer) would report a
+ * connection as absent for whichever side did not send the request.
+ */
+export const areUsersConnected = async (userIdA, userIdB) => {
+  if (!userIdA || !userIdB || userIdA === userIdB) return false;
+
+  const [rows] = await db.execute(
+    `SELECT 1 FROM connections
+      WHERE status = 'accepted'
+        AND ((requester_id = ? AND receiver_id = ?)
+          OR (requester_id = ? AND receiver_id = ?))
+      LIMIT 1`,
+    [userIdA, userIdB, userIdB, userIdA]
+  );
+  return rows.length > 0;
+};
+
+/**
+ * Every user with an accepted connection to this one, with the fields the map
+ * needs. Returns the OTHER side of each row, whichever orientation it is in.
+ */
+export const getAcceptedConnectionProfiles = async (userId) => {
+  const [rows] = await db.execute(
+    `SELECT
+       u.user_id,
+       u.first_name,
+       u.last_name,
+       u.profile_picture_url,
+       u.university_id,
+       u.privacy_profile,
+       EXISTS(
+         SELECT 1 FROM stories s
+          WHERE s.user_id = u.user_id
+            AND s.is_active = 1
+            AND s.expires_at > NOW()
+       ) AS has_story
+     FROM connections c
+     JOIN users u
+       ON u.user_id = CASE WHEN c.requester_id = ? THEN c.receiver_id ELSE c.requester_id END
+     WHERE c.status = 'accepted'
+       AND (c.requester_id = ? OR c.receiver_id = ?)
+       AND u.is_active = 1`,
+    [userId, userId, userId]
+  );
+  return rows;
 };

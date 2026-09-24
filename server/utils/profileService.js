@@ -99,35 +99,52 @@ export class ProfileService {
         return [];
       }
 
-      // Batch fetch user data from MySQL
-      const users = await this.batchGetUsers(visibleUserIds);
+      // Batch fetch user data from MySQL, and privacy settings once here so
+      // buildFilteredProfile below doesn't re-fetch identical settings per user.
+      const [users, privacySettingsMap] = await Promise.all([
+        this.batchGetUsers(visibleUserIds),
+        privacyService.batchGetPrivacySettings(visibleUserIds),
+      ]);
       console.log(`📊 MySQL users found: ${users.length}`);
 
-      const profiles = [];
+      // Process every user in parallel instead of one at a time -- each user
+      // here does 3-4 independent awaits (privacy settings, location,
+      // building), so serializing the loop meant total latency scaled
+      // linearly with the number of nearby users.
+      const profiles = (
+        await Promise.all(
+          users.map(async (user) => {
+            try {
+              const privacySettings = privacySettingsMap[user.user_id];
+              // Fetch the building once and hand it to buildFilteredProfile,
+              // which previously fetched it again itself when
+              // show_exact_location was set.
+              const building = await locationService.getUserBuilding(
+                user.user_id
+              );
+              const profile = await this.buildFilteredProfile(
+                user,
+                viewerId,
+                privacySettings,
+                building
+              );
+              if (!profile) return null;
 
-      // Process each user with error handling
-      for (const user of users) {
-        try {
-          const profile = await this.buildFilteredProfile(user, viewerId);
-          if (profile) {
-            // Add campus context
-            const building = await locationService.getUserBuilding(
-              user.user_id
-            );
-            if (building) {
-              profile.building = building.building_name;
-              profile.area = building.building_name;
+              if (building) {
+                profile.building = building.building_name;
+                profile.area = building.building_name;
+              }
+              return profile;
+            } catch (error) {
+              console.error(
+                `⚠️ Error processing user ${user.user_id}:`,
+                error.message
+              );
+              return null;
             }
-            profiles.push(profile);
-          }
-        } catch (error) {
-          console.error(
-            `⚠️ Error processing user ${user.user_id}:`,
-            error.message
-          );
-          continue;
-        }
-      }
+          })
+        )
+      ).filter(Boolean);
 
       console.log(`🎯 Final profiles returned: ${profiles.length}`);
       return profiles;
@@ -137,8 +154,14 @@ export class ProfileService {
     }
   }
 
-  // Enhanced profile building
-  async buildFilteredProfile(user, viewerId) {
+  // Enhanced profile building.
+  //
+  // `privacySettings` and `building` are optional: batchGetFilteredProfiles
+  // (the hot path) fetches them once for the whole batch and passes them in
+  // to avoid re-fetching identical data per user. Callers that build a single
+  // profile in isolation (debug scripts, tests) can omit them and this falls
+  // back to fetching them itself.
+  async buildFilteredProfile(user, viewerId, privacySettings, building) {
     try {
       if (!user || !user.user_id) {
         console.log(`⚠️ Invalid user data received`);
@@ -147,20 +170,26 @@ export class ProfileService {
 
       // console.log(`🔧 Building profile for user ${user.user_id}`);
 
-      const privacySettings = await privacyService.getPrivacySettings(
-        user.user_id
-      );
+      if (privacySettings === undefined) {
+        privacySettings = await privacyService.getPrivacySettings(
+          user.user_id
+        );
+      }
       if (!privacySettings) {
         // console.log(`❌ No privacy settings for user ${user.user_id}`);
         return null;
       }
 
-      // Create base profile
+      // Online status and last-seen both derive from the same cached
+      // location record -- fetch it once instead of twice.
+      const location = await locationService.getCachedUserLocation(
+        user.user_id
+      );
       const filteredProfile = {
         user_id: user.user_id,
         university_id: user.university_id || "",
-        online: await this.isUserOnline(user.user_id),
-        last_seen: await this.getLastSeen(user.user_id),
+        online: this.isOnlineFromLocation(location),
+        last_seen: location ? location.last_seen : new Date(),
       };
 
       // Parse visible fields
@@ -191,12 +220,15 @@ export class ProfileService {
 
       // Add location context
       if (privacySettings.show_exact_location) {
-        const building = await locationService.getUserBuilding(user.user_id);
-        if (building) {
-          filteredProfile.location_context = building.building_name;
-        } else {
-          filteredProfile.location_context = "On Campus";
-        }
+        // Use the pre-fetched building when the caller supplied one;
+        // otherwise (single-profile callers) fetch it here.
+        const resolvedBuilding =
+          building !== undefined
+            ? building
+            : await locationService.getUserBuilding(user.user_id);
+        filteredProfile.location_context = resolvedBuilding
+          ? resolvedBuilding.building_name
+          : "On Campus";
       } else {
         filteredProfile.location_context = "On Campus";
       }
@@ -214,15 +246,20 @@ export class ProfileService {
     }
   }
 
+  // Derive online status from an already-fetched cached location record,
+  // shared by isUserOnline and the buildFilteredProfile hot path so neither
+  // has to re-fetch the same Redis key.
+  isOnlineFromLocation(location) {
+    if (!location) return false;
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    return new Date(location.last_seen) > fifteenMinutesAgo;
+  }
+
   // Check if user is currently online
   async isUserOnline(userId) {
     try {
       const location = await locationService.getCachedUserLocation(userId);
-      if (!location) return false;
-
-      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
-      const lastSeen = new Date(location.last_seen);
-      return lastSeen > fifteenMinutesAgo;
+      return this.isOnlineFromLocation(location);
     } catch (error) {
       console.error(`Error checking online status for ${userId}:`, error);
       return false;

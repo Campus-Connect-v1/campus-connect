@@ -114,7 +114,8 @@ export default function ExploreScreen() {
           <Text variant="title">Explore</Text>
           <PressableScale
             accessibilityRole="search"
-            accessibilityLabel="Search campus"
+            accessibilityLabel="Search for people"
+            onPress={() => router.push("/search")}
             style={{
               minHeight: 50,
               borderRadius: radius.full,
@@ -129,7 +130,7 @@ export default function ExploreScreen() {
           >
             <Icon name="search" size={20} color={colors.textMuted} />
             <Text variant="body" color="textMuted">
-              Search events, clubs, people…
+              Search for people
             </Text>
           </PressableScale>
         </View>

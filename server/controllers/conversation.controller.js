@@ -1,7 +1,7 @@
 // controllers/conversationController.js
 import Conversation from "../models/conversation.model.js";
 import Message from "../models/message.model.js";
-import { findById } from "../models/user.model.js";
+import { findById, findByIdsModel } from "../models/user.model.js";
 import mongoose from "mongoose";
 
 const participantIdentity = (participant, mysqlUser) => ({
@@ -43,28 +43,42 @@ export const getConversations = async (req, res) => {
       .limit(limit)
       .lean();
 
-    // Enhance conversations with additional data
-    const enhancedConversations = await Promise.all(
-      conversations.map(async (conversation) => {
-        const otherParticipant = conversation.participants.find(
-          (p) => p.userId !== userId
-        );
+    // Enhance conversations with additional data. Fetch every participant's
+    // MySQL row in one batched query instead of one query per conversation.
+    const otherParticipantIds = [
+      ...new Set(
+        conversations
+          .map(
+            (conversation) =>
+              conversation.participants.find((p) => p.userId !== userId)
+                ?.userId
+          )
+          .filter(Boolean)
+      ),
+    ];
 
-        // Get MySQL user data for additional info
-        let mysqlUser = null;
-        try {
-          mysqlUser = await findById(otherParticipant.userId);
-        } catch (error) {
-          console.error("Error fetching MySQL user:", error);
-        }
+    let mysqlUsersById = new Map();
+    try {
+      const mysqlUsers = await findByIdsModel(otherParticipantIds);
+      mysqlUsersById = new Map(
+        mysqlUsers.map((user) => [String(user.user_id), user])
+      );
+    } catch (error) {
+      console.error("Error fetching MySQL users:", error);
+    }
 
-        return {
-          ...conversation,
-          otherParticipant: participantIdentity(otherParticipant, mysqlUser),
-          unreadCount: unreadFor(conversation.unreadCount, userId),
-        };
-      })
-    );
+    const enhancedConversations = conversations.map((conversation) => {
+      const otherParticipant = conversation.participants.find(
+        (p) => p.userId !== userId
+      );
+      const mysqlUser = mysqlUsersById.get(String(otherParticipant?.userId)) ?? null;
+
+      return {
+        ...conversation,
+        otherParticipant: participantIdentity(otherParticipant, mysqlUser),
+        unreadCount: unreadFor(conversation.unreadCount, userId),
+      };
+    });
 
     const total = await Conversation.countDocuments({
       "participants.userId": userId,

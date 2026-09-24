@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -12,11 +12,12 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar, EmptyState, Icon, PressableScale, Text } from "@/src/components/ui";
+import { StoryViewers } from "@/src/components/stories/StoryViewers";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSession } from "@/src/services/SessionContext";
 import {
-  deleteStory,
   fetchStoryFeed,
+  fetchUserStories,
   viewStory,
   type ApiStory,
   type ApiStoryGroup,
@@ -111,7 +112,6 @@ function VideoStory({ uri, paused }: { uri: string; paused: boolean }) {
 export default function StoryViewerScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { user } = useSession();
 
@@ -120,10 +120,47 @@ export default function StoryViewerScreen() {
     []
   );
 
-  const group: ApiStoryGroup | undefined = useMemo(
-    () => (feed.data ?? []).find((g) => g.author.user_id === userId),
-    [feed.data, userId]
+  /**
+   * Falls back to this person's own stories when they are not in the feed.
+   *
+   * The story feed only carries people whose stories reach you through the
+   * feed's own rules, so opening a profile's story directly -- from their
+   * avatar, or from a notification -- found nothing and showed "No stories
+   * here" for someone who plainly had one.
+   */
+  const direct = useAsync(
+    useCallback(() => fetchUserStories(userId), [userId]),
+    [userId]
   );
+
+  const group: ApiStoryGroup | undefined = useMemo(() => {
+    const fromFeed = (feed.data ?? []).find((g) => g.author.user_id === userId);
+    if (fromFeed) return fromFeed;
+
+    const stories = direct.data ?? [];
+    if (stories.length === 0) return undefined;
+
+    // The direct endpoint returns stories, not a group, so the author is
+    // assembled from the first one.
+    const first = stories[0] as (typeof stories)[number] & {
+      author?: ApiStoryGroup["author"];
+    };
+
+    return {
+      author: first.author ?? {
+        user_id: userId,
+        first_name: "",
+        last_name: null,
+        profile_picture_url: null,
+      },
+      story_count: stories.length,
+      unseen_count: stories.filter((story) => !story.has_viewed).length,
+      all_viewed: stories.every((story) => story.has_viewed),
+      is_own: false,
+      latest_story_at: stories[stories.length - 1]?.created_at ?? "",
+      stories,
+    };
+  }, [feed.data, direct.data, userId]);
 
   // Memoised because it feeds a dependency array; a fresh [] each render
   // would restart the "open on first unseen" effect on every frame.
@@ -132,6 +169,7 @@ export default function StoryViewerScreen() {
   // what makes a rail of half-watched stories usable.
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [showViewers, setShowViewers] = useState(false);
   const started = useRef(false);
 
   useFocusEffect(
@@ -149,6 +187,7 @@ export default function StoryViewerScreen() {
   }, [stories]);
 
   const current: ApiStory | undefined = stories[index];
+  const isOwn = group?.author.user_id === user?.id;
 
   useEffect(() => {
     if (current) viewStory(current.story_id);
@@ -164,7 +203,7 @@ export default function StoryViewerScreen() {
 
   const back = () => setIndex((i) => Math.max(0, i - 1));
 
-  if (feed.loading) {
+  if (feed.loading || direct.loading) {
     return <View style={{ flex: 1, backgroundColor: "#000" }} />;
   }
 
@@ -184,7 +223,6 @@ export default function StoryViewerScreen() {
   // The author picked this colour, so the text follows it rather than assuming
   // a dark ground: white on lime is 1.12:1 and cannot be read at all.
   const textStoryBackground = current?.background_color ?? culture.violet;
-  const isOwn = group.author.user_id === user?.id;
   const authorName = [group.author.first_name, group.author.last_name].filter(Boolean).join(" ");
 
   return (
@@ -212,12 +250,7 @@ export default function StoryViewerScreen() {
               comment on it vanished.
             */}
             {current.content ? (
-              <Text
-                variant="body"
-                onMedia
-                numberOfLines={4}
-                style={{ marginBottom: spacing.md }}
-              >
+              <Text variant="body" onMedia numberOfLines={4} style={{ marginBottom: spacing.md }}>
                 {current.content}
               </Text>
             ) : null}
@@ -279,18 +312,20 @@ export default function StoryViewerScreen() {
         )}
       </View>
 
-      {/* Tap zones: left third goes back, the rest advances. Holding pauses,
-          which is the gesture every story UI has trained people to expect. */}
+      {/* Tap zones: the left half of the screen goes back, the right half
+          advances — no dead zone in the middle. Holding anywhere pauses. */}
       <View style={[StyleSheet.absoluteFill, { flexDirection: "row" }]} pointerEvents="box-none">
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Previous story"
           onPress={back}
           onLongPress={() => setPaused(true)}
           onPressOut={() => setPaused(false)}
           delayLongPress={180}
-          style={{ width: width / 3 }}
+          style={{ flex: 1 }}
         />
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Next story"
           onPress={advance}
           onLongPress={() => setPaused(true)}
@@ -347,14 +382,25 @@ export default function StoryViewerScreen() {
           {isOwn && current ? (
             <PressableScale
               accessibilityRole="button"
-              accessibilityLabel="Delete this story"
-              onPress={async () => {
-                await deleteStory(current.story_id);
-                router.back();
+              accessibilityLabel="See who viewed this story"
+              onPress={() => {
+                // Paused while the sheet is up, so the story does not advance
+                // out from under the list the user is reading.
+                setPaused(true);
+                setShowViewers(true);
               }}
-              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing["3xs"],
+                minHeight: 44,
+                paddingHorizontal: spacing.xs,
+              }}
             >
-              <Icon name="alert" size={19} color={colors.onMedia} />
+              <Icon name="visible" size={18} color={colors.onMedia} />
+              <Text variant="caption" onMedia>
+                Views
+              </Text>
             </PressableScale>
           ) : null}
 
@@ -368,6 +414,17 @@ export default function StoryViewerScreen() {
           </PressableScale>
         </View>
       </View>
+
+      {isOwn && current ? (
+        <StoryViewers
+          storyId={current.story_id}
+          visible={showViewers}
+          onClose={() => {
+            setShowViewers(false);
+            setPaused(false);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

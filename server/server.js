@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import compression from "compression";
 import http from "http";
 import path from "node:path";
 import fs from "node:fs";
@@ -55,6 +56,8 @@ console.log(COLORS[process.env.SUCCESS], "NODE_ENV:", process.env.NODE_ENV);
 // coming from the proxy and throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR, so
 // rate limiting is effectively disabled. 1 = trust exactly one hop.
 app.set("trust proxy", 1);
+
+app.use(compression());
 
 // Security headers. The API serves JSON to a native client and an /admin page,
 // never third-party frames, so the defaults are right except CSP: helmet's
@@ -117,9 +120,12 @@ if (fs.existsSync(path.join(adminDist, "index.html"))) {
     express.static(adminDist, {
       index: false,
       setHeaders: (res, filePath) => {
-        if (filePath.endsWith("index.html")) {
-          res.setHeader("Cache-Control", "no-store");
-        }
+        res.setHeader(
+          "Cache-Control",
+          filePath.endsWith("index.html")
+            ? "no-store"
+            : "public, max-age=31536000, immutable"
+        );
       },
     })
   );

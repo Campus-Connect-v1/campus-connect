@@ -11,8 +11,9 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { Avatar, PressableScale, Text } from "@/src/components/ui";
+import { useCampusLookup } from "@/src/hooks/useCampusRing";
 import type { NearbyProfile } from "@/src/services/geolocation";
-import { radius as radiusToken, spacing } from "@/src/styles/theme";
+import { culture, radius as radiusToken, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 interface Props {
@@ -79,6 +80,7 @@ function PulseRing({ delay, size }: { delay: number; size: number }) {
 
 export function RadarView({ profiles, range, size, onSelect }: Props) {
   const { colors } = useTheme();
+  const campusOf = useCampusLookup();
   const center = size / 2;
   // Keep avatars off the exact centre and inside the outer ring.
   const usable = center - AVATAR / 2 - spacing.xs;
@@ -119,12 +121,17 @@ export function RadarView({ profiles, range, size, onSelect }: Props) {
         const ratio = Math.min(profile.distance / range, 1);
         const distanceFromCentre = Math.max(Math.sqrt(ratio), 0.18) * usable;
         const angle = angleFor(profile.user_id);
+        const campus = campusOf(profile.universityId);
+        const away = campus && !campus.isOwn;
 
         return (
           <PressableScale
             key={profile.user_id}
             accessibilityRole="button"
-            accessibilityLabel={`${profile.first_name} ${profile.last_name}, ${Math.round(profile.distance)} metres away`}
+            accessibilityLabel={
+              `${profile.first_name} ${profile.last_name}, ${Math.round(profile.distance)} metres away` +
+              (away ? `, from ${campus.label}` : "")
+            }
             onPress={() => onSelect(profile)}
             style={{
               position: "absolute",
@@ -136,8 +143,28 @@ export function RadarView({ profiles, range, size, onSelect }: Props) {
             <Avatar
               uri={profile.profile_picture ?? undefined}
               size={AVATAR}
-              ring={profile.is_online}
+              // The campus ring outranks the online ring: which campus someone
+              // is from is the durable fact, online is a transient one and is
+              // already carried by the dot below.
+              ring={Boolean(campus) || profile.is_online}
+              ringColor={campus?.color}
+              ringWidth={away ? 2.5 : 1.5}
             />
+            {profile.is_online && campus ? (
+              <View
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  bottom: 0,
+                  width: 10,
+                  height: 10,
+                  borderRadius: radiusToken.full,
+                  backgroundColor: culture.lime,
+                  borderWidth: 1.5,
+                  borderColor: colors.background,
+                }}
+              />
+            ) : null}
           </PressableScale>
         );
       })}
