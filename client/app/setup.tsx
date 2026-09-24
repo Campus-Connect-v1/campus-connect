@@ -28,6 +28,7 @@ import {
   type StudyYear,
 } from "@/src/features/profile/setup";
 import { useAsync } from "@/src/hooks/useAsync";
+import { useCampusLookup } from "@/src/hooks/useCampusRing";
 import { useSession } from "@/src/services/SessionContext";
 import {
   addInterest,
@@ -37,7 +38,7 @@ import {
   updateProfile,
   type ApiUserCard,
 } from "@/src/services/userServices";
-import { culture, radius, spacing } from "@/src/styles/theme";
+import { culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 type Stage = "profile" | "people";
@@ -112,9 +113,16 @@ function PersonCard({
   onConnect: () => void;
 }) {
   const { colors } = useTheme();
+  const campusOf = useCampusLookup();
   const hue = CARD_HUES[index % CARD_HUES.length];
   const name = [person.first_name, person.last_name].filter(Boolean).join(" ");
   const sent = status === "sent";
+
+  // Suggestions cross universities, so this card cannot call everyone a
+  // classmate. Only a visitor's campus is named -- the same rule UserRow and
+  // the home strip follow.
+  const campus = campusOf(person.university_id);
+  const away = campus ? !campus.isOwn : false;
 
   return (
     <View
@@ -130,7 +138,7 @@ function PersonCard({
     >
       <PressableScale
         accessibilityRole="button"
-        accessibilityLabel={`View ${name}`}
+        accessibilityLabel={away && campus ? `View ${name}, at ${campus.label}` : `View ${name}`}
         onPress={() => router.push(`/person/${person.user_id}`)}
         style={{
           minHeight: 132,
@@ -163,8 +171,26 @@ function PersonCard({
             {name}
           </Text>
           <Text variant="caption" color="textMuted" numberOfLines={2}>
-            {person.program ?? person.profile_headline ?? "On your campus"}
+            {person.program ??
+              person.profile_headline ??
+              (away && campus ? campus.label : "On your campus")}
           </Text>
+          {away && campus ? (
+            <View
+              style={{
+                alignSelf: "flex-start",
+                marginTop: 2,
+                paddingHorizontal: spacing.xs,
+                paddingVertical: 1,
+                borderRadius: radius.full,
+                backgroundColor: campus.color,
+              }}
+            >
+              <Text variant="caption" style={{ color: foregroundOn(campus.color), fontSize: 10 }}>
+                {campus.label}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <PressableScale
           accessibilityRole="button"
@@ -487,9 +513,9 @@ export default function SetupScreen() {
             <Text variant="label" color="textSecondary">← Back</Text>
           </PressableScale>
           <Text variant="micro" color="textMuted">STEP 2 OF 2</Text>
-          <Text variant="title">Your campus already has your kind of people.</Text>
+          <Text variant="title">There are already people here for you.</Text>
           <Text variant="body" color="textSecondary">
-            These matches use your interests and profile. Send a few requests now—you can always find more later.
+            These matches use your interests and profile, from your campus and others nearby. Send a few requests now—you can always find more later.
           </Text>
         </View>
         {error ? <InlineNotice message={error} /> : null}
@@ -518,7 +544,7 @@ export default function SetupScreen() {
           ) : (
             <EmptyState
               title="You’re early"
-              body="There are no new matches on your campus yet. Your profile is ready for when they arrive."
+              body="No matches yet, here or on the other campuses. Your profile is ready for when they arrive."
             />
           )
         }

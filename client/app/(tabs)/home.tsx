@@ -30,6 +30,7 @@ import { adaptPost } from "@/src/features/feed/adapt";
 import { type FeedPost } from "@/src/features/feed/types";
 import { adaptProfile } from "@/src/features/profile/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
+import { useCampusLookup } from "@/src/hooks/useCampusRing";
 import { fetchEvents } from "@/src/services/eventServices";
 import { useAttention } from "@/src/services/AttentionContext";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
@@ -247,7 +248,11 @@ function PeopleSection({ people }: { people: ApiUserCard[] }) {
     <View style={{ gap: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.lg }}>
       <View style={{ paddingHorizontal: spacing.lg }}>
         <SectionHeader
-          eyebrow="AROUND CAMPUS"
+          // Was "AROUND CAMPUS". These matches are built from interests,
+          // courses and mutuals, not proximity, and they now cross
+          // universities -- so a location eyebrow claimed something the list
+          // does not deliver.
+          eyebrow="WORTH KNOWING"
           title="People you might know"
           actionLabel="Explore"
           onAction={() => router.push("/(tabs)/connect")}
@@ -262,6 +267,7 @@ type FeedRow = { kind: "post"; post: FeedPost } | { kind: "people"; slot: number
 
 function PeopleStrip({ people }: { people: ApiUserCard[] }) {
   const { width } = useWindowDimensions();
+  const campusOf = useCampusLookup();
   const cardWidth = Math.min(154, width * 0.39);
 
   const matchColor = (percentage: number) => {
@@ -277,48 +283,82 @@ function PeopleStrip({ people }: { people: ApiUserCard[] }) {
       style={{ flexGrow: 0 }}
       contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
     >
-      {people.slice(0, 5).map((person) => (
-        <PressableScale
-          key={person.user_id}
-          accessibilityRole="button"
-          accessibilityLabel={[
-            `View ${person.first_name} ${person.last_name ?? ""}`.trim(),
-            typeof person.match_percentage === "number"
-              ? `${person.match_percentage}% match`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(", ")}
-          onPress={() => router.push(`/person/${person.user_id}`)}
-          style={{ width: cardWidth }}
-        >
-          <Media
-            source={person.profile_picture_url ?? undefined}
-            scrim
-            rounded="md"
-            style={{ height: 190 }}
+      {people.slice(0, 5).map((person) => {
+        // Recommendations cross universities now, so a card can no longer
+        // assume the person is a classmate.
+        const campus = campusOf(person.university_id);
+        const away = campus ? !campus.isOwn : false;
+
+        return (
+          <PressableScale
+            key={person.user_id}
+            accessibilityRole="button"
+            accessibilityLabel={[
+              `View ${person.first_name} ${person.last_name ?? ""}`.trim(),
+              away && campus ? `at ${campus.label}` : null,
+              typeof person.match_percentage === "number"
+                ? `${person.match_percentage}% match`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(", ")}
+            onPress={() => router.push(`/person/${person.user_id}`)}
+            style={{ width: cardWidth }}
           >
-            <View style={{ flex: 1, justifyContent: "space-between", padding: spacing.sm }}>
-              {typeof person.match_percentage === "number" ? (
-                <Sticker
-                  label={`${person.match_percentage}% MATCH`}
-                  backgroundColor={matchColor(person.match_percentage)}
-                />
-              ) : (
-                <View />
-              )}
-              <View>
-                <Text variant="label" onMedia numberOfLines={1}>
-                  {[person.first_name, person.last_name].filter(Boolean).join(" ")}
-                </Text>
-                <Text variant="caption" onMedia style={{ opacity: 0.82 }} numberOfLines={1}>
-                  {person.program ?? person.profile_headline ?? "On campus"}
-                </Text>
+            <Media
+              source={person.profile_picture_url ?? undefined}
+              scrim
+              rounded="md"
+              style={{ height: 190 }}
+            >
+              <View style={{ flex: 1, justifyContent: "space-between", padding: spacing.sm }}>
+                {typeof person.match_percentage === "number" ? (
+                  <Sticker
+                    label={`${person.match_percentage}% MATCH`}
+                    backgroundColor={matchColor(person.match_percentage)}
+                  />
+                ) : (
+                  <View />
+                )}
+                <View style={{ gap: 4, alignItems: "flex-start" }}>
+                  {/* Above the name rather than beside the match sticker: this
+                      card is ~154pt wide and two stickers on one row collide.
+                      Only a visitor's campus is named, the rule UserRow already
+                      follows -- labelling your own campus on a list that is
+                      mostly your own campus is noise. Drawn in the university's
+                      own colour so the same person reads the same here, on the
+                      map and in search. */}
+                  {away && campus ? (
+                    <View
+                      style={{
+                        paddingHorizontal: spacing.xs,
+                        paddingVertical: 1,
+                        borderRadius: radius.full,
+                        backgroundColor: campus.color,
+                      }}
+                    >
+                      <Text
+                        variant="caption"
+                        style={{ color: foregroundOn(campus.color), fontSize: 10 }}
+                      >
+                        {campus.label}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <Text variant="label" onMedia numberOfLines={1}>
+                    {[person.first_name, person.last_name].filter(Boolean).join(" ")}
+                  </Text>
+                  <Text variant="caption" onMedia style={{ opacity: 0.82 }} numberOfLines={1}>
+                    {person.program ??
+                      person.profile_headline ??
+                      (away && campus ? campus.label : "On campus")}
+                  </Text>
+                </View>
               </View>
-            </View>
-          </Media>
-        </PressableScale>
-      ))}
+            </Media>
+          </PressableScale>
+        );
+      })}
     </ScrollView>
   );
 }
