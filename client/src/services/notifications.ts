@@ -1,11 +1,58 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
+import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 import { registerPushToken, unregisterPushToken, type PushPlatform } from "./notificationServices";
 
 const STORED_TOKEN_KEY = "expoPushToken";
+const STATUS_KEY = "cc.pushStatus";
+
+/**
+ * Why push is or is not working on this device.
+ *
+ * Registration deliberately never throws -- push setup must not break the
+ * session it is attached to -- but that meant every failure vanished into a
+ * console warning nobody sees on a phone. Recording the outcome turns "is push
+ * broken?" into something the settings screen can answer.
+ */
+export type PushStatus =
+  | "active"
+  | "denied"
+  | "unsupported_device"
+  | "no_project"
+  | "server_rejected"
+  | "error"
+  | "unknown";
+
+export const PUSH_STATUS_COPY: Record<PushStatus, string> = {
+  active: "Push notifications are on for this device.",
+  denied: "Notifications are turned off for Campus Connect in your device settings.",
+  unsupported_device:
+    "Push needs a real device. Simulators and emulators cannot receive them.",
+  no_project: "This build is not linked to an Expo project, so no token can be issued.",
+  server_rejected: "The device registered, but the server did not accept the token.",
+  error: "Push setup failed. Reopen the app to try again.",
+  unknown: "Push has not been set up yet on this device.",
+};
+
+const recordStatus = async (status: PushStatus) => {
+  try {
+    await AsyncStorage.setItem(STATUS_KEY, status);
+  } catch {
+    // Diagnostics must never be the thing that breaks.
+  }
+};
+
+/** The last known push outcome, for the settings screen to display. */
+export async function getPushStatus(): Promise<PushStatus> {
+  try {
+    return ((await AsyncStorage.getItem(STATUS_KEY)) as PushStatus | null) ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 const PLATFORM: PushPlatform =
   Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
@@ -81,24 +128,42 @@ export async function registerForPushNotificationsAsync(): Promise<PushRegistrat
   try {
     await ensureAndroidChannel();
 
+    if (!Device.isDevice) {
+      // Expo will not issue a token to a simulator, so this is the single most
+      // likely reason push "does not work" during development.
+      await recordStatus("unsupported_device");
+      return;
+    }
+
     const existing = await Notifications.getPermissionsAsync();
     let status = existing.status;
     if (status !== "granted") {
       const requested = await Notifications.requestPermissionsAsync();
       status = requested.status;
     }
-    if (status !== "granted") return "denied";
+    if (status !== "granted") {
+      await recordStatus("denied");
+      return "denied";
+    }
 
     const token = await getExpoPushToken();
-    if (!token) return "unavailable";
+    if (!token) {
+      await recordStatus("no_project");
+      return "unavailable";
+    }
 
     const result = await registerPushToken(token, PLATFORM);
-    if (!result.success) return "failed";
-
-    await AsyncStorage.setItem(STORED_TOKEN_KEY, token);
-    return "registered";
+    if (result.success) {
+      await AsyncStorage.setItem(STORED_TOKEN_KEY, token);
+      await recordStatus("active");
+      return "registered";
+    } else {
+      await recordStatus("server_rejected");
+      return "failed";
+    }
   } catch (error) {
     // Never let push setup block or crash the session it is attached to.
+    await recordStatus("error");
     console.warn("[notifications] registration failed:", (error as Error).message);
     return "failed";
   }
