@@ -939,6 +939,13 @@ export const getConnectionRecommendations = async (req, res) => {
         profile_headline: user.profile_headline,
         program: user.program,
         graduation_year: user.graduation_year,
+        // Recommendations cross universities now, so a card has to be able to
+        // say which campus it is showing you. The client already colours the
+        // ring by university and renders a campus badge for anyone off yours;
+        // without these two fields every suggestion would silently read as a
+        // classmate.
+        university_id: user.university_id ?? null,
+        same_campus: Number(user.same_campus ?? 0) > 0,
         match_score: user.match_score,
         // Already 0-100 from the query. It used to be divided by a hardcoded
         // 5 here while the score itself was unbounded, which is how three
@@ -952,6 +959,7 @@ export const getConnectionRecommendations = async (req, res) => {
           mutual_connections: Number(user.mutual_connections ?? 0),
           same_program: Number(user.same_program ?? 0) > 0,
           same_year: Number(user.same_year ?? 0) > 0,
+          same_campus: Number(user.same_campus ?? 0) > 0,
         },
       })),
     });

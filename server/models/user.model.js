@@ -299,6 +299,8 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
         COALESCE(shared_courses.score, 0)   AS shared_courses,
         COALESCE(shared_groups.score, 0)    AS shared_groups,
         COALESCE(mutuals.score, 0)          AS mutual_connections,
+        u2.university_id,
+        CASE WHEN u2.university_id = u1.university_id THEN 1 ELSE 0 END AS same_campus,
         CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 1 ELSE 0 END AS same_program,
         CASE WHEN u1.graduation_year IS NOT NULL
               AND u1.graduation_year = u2.graduation_year THEN 1 ELSE 0 END AS same_year,
@@ -319,35 +321,62 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
          * two students would get on.
          *
          * Weights, and why:
-         *   interests 30 - the only signal a brand-new account has
-         *   mutuals   25 - the strongest real-world predictor of a connection
-         *   courses   20 - you already share a room twice a week
-         *   groups    12 - deliberate, but a smaller population
-         *   program    8 - same department, weak on its own
-         *   year       5 - weakest; cohort alone says little
+         *   interests 27 - the only signal a brand-new account has
+         *   mutuals   23 - the strongest real-world predictor of a connection
+         *   courses   18 - you already share a room twice a week
+         *   groups    11 - deliberate, but a smaller population
+         *   campus    10 - see below
+         *   program    7 - same department, weak on its own
+         *   year       4 - weakest; cohort alone says little
+         *
+         * Campus is WEIGHTED, not a filter, and deliberately not a hard tier.
+         * Ranking every same-campus account above every other one would mean
+         * never meeting anyone off your campus until you had exhausted it,
+         * which is the behaviour this change exists to remove. At 10 it breaks
+         * ties among similar matches and steps aside for a clearly better one:
+         * a stranger elsewhere sharing three interests and two courses still
+         * outranks a same-campus account sharing nothing.
+         *
+         * The other six were scaled from their previous values to make room
+         * while keeping their order and rough proportions, so the total is
+         * still 100 and a saturated score still means the same thing.
          *
          * Caps are set where the signal stops being informative: a fourth
          * shared interest says much less than the first, and beyond five
          * mutuals you are simply in the same circle.
          */
         LEAST(100, ROUND(
-          LEAST(COALESCE(shared_interests.score, 0) / 3.0, 1.0) * 30 +
-          LEAST(COALESCE(mutuals.score, 0)          / 5.0, 1.0) * 25 +
-          LEAST(COALESCE(shared_courses.score, 0)   / 2.0, 1.0) * 20 +
-          LEAST(COALESCE(shared_groups.score, 0)    / 2.0, 1.0) * 12 +
-          CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 8 ELSE 0 END +
+          LEAST(COALESCE(shared_interests.score, 0) / 3.0, 1.0) * 27 +
+          LEAST(COALESCE(mutuals.score, 0)          / 5.0, 1.0) * 23 +
+          LEAST(COALESCE(shared_courses.score, 0)   / 2.0, 1.0) * 18 +
+          LEAST(COALESCE(shared_groups.score, 0)    / 2.0, 1.0) * 11 +
+          CASE WHEN u2.university_id = u1.university_id THEN 10 ELSE 0 END +
+          CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 7 ELSE 0 END +
           CASE WHEN u1.graduation_year IS NOT NULL
-                AND u1.graduation_year = u2.graduation_year THEN 5 ELSE 0 END
+                AND u1.graduation_year = u2.graduation_year THEN 4 ELSE 0 END
         )) AS match_score
       FROM users u1
       JOIN users u2
-        ON u2.university_id = u1.university_id
-       AND u2.user_id <> u1.user_id
+        ON u2.user_id <> u1.user_id
        AND u2.is_active = 1
        -- New accounts default to friends. They still need to appear as a
        -- lightweight discovery card so the first-run matching flow can work;
        -- private is the explicit opt-out from discovery.
        AND u2.privacy_profile <> 'private'
+       /*
+        * Recommendations now cross universities, following the same split the
+        * feed made: WHO may be suggested is decided here, HOW RELEVANT they
+        * are is decided by the score below. Confining suggestions to one
+        * school meant you could read another campus but never be introduced
+        * to anyone on it.
+        *
+        * 'university' is the one privacy value whose meaning is campus scope,
+        * so it has to actually bound this. Before, it was moot -- the join
+        * never left the campus. Opening the join without this line would
+        * surface exactly the people who asked not to be seen off it.
+        */
+       AND (u2.university_id = u1.university_id
+            OR u2.privacy_profile <> 'university')
 
       -- Interests are the strongest first-run signal: a new account has no
       -- friends, groups or courses yet, but it has just told us what it likes.
@@ -418,7 +447,11 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
           WHERE (c.requester_id = u1.user_id AND c.receiver_id = u2.user_id)
              OR (c.requester_id = u2.user_id AND c.receiver_id = u1.user_id)
         )
-      ORDER BY match_score DESC
+      -- Ties were rare while everyone shared a campus; opening the join makes
+      -- them common, and an unordered tie means the list reshuffles on every
+      -- refresh. Same campus breaks a tie -- the one place a hard preference
+      -- for your own school costs nothing, because the match is equal anyway.
+      ORDER BY match_score DESC, same_campus DESC, u2.user_id
       LIMIT ${safeLimit};
     `;
 
