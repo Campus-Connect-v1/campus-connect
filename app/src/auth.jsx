@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api, getToken, setToken } from "./api.js";
 
 const AuthContext = createContext(null);
@@ -28,28 +28,30 @@ export function AuthProvider({ children }) {
       });
   }, []);
 
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     const data = await api.post("/auth/login", { email, password });
     setToken(data.token);
     setOperator(data.operator);
     setPermissions(data.permissions);
     setStatus("authenticated");
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setToken(null);
     setOperator(null);
     setPermissions(null);
     setStatus("anonymous");
-  };
+  }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{ operator, permissions, status, login, logout }}
-    >
-      {children}
-    </AuthContext.Provider>
+  // Without this, every AuthProvider render (including ones unrelated to
+  // auth state) created a new context value object, re-rendering every
+  // useAuth() consumer in the app.
+  const value = useMemo(
+    () => ({ operator, permissions, status, login, logout }),
+    [operator, permissions, status, login, logout]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

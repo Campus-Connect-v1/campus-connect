@@ -3,6 +3,7 @@
 import {
   areUsersConnected,
   getPrivacySettingsModel,
+  getPrivacySettingsModelBatch,
   updatePrivacySettingsModel,
 } from "../models/user.model.js";
 import { LocationService } from "./locationService.js";
@@ -16,40 +17,25 @@ export class PrivacyService {
   async fetchPrivacySettingsFromDB(userIds) {
     try {
       const settingsMap = {};
+      // Single batched query instead of one SELECT per user.
+      const rawSettingsByUserId = await getPrivacySettingsModelBatch(userIds);
 
       for (const userId of userIds) {
-        try {
-          const settings = await getPrivacySettingsModel(userId);
+        const settings = rawSettingsByUserId[userId];
 
-          if (settings) {
-            // FIXED: Use consistent field naming
-            const visibilityRadius =
-              settings.visibility_radius || settings.custom_radius || 100;
+        if (settings) {
+          // FIXED: Use consistent field naming
+          const visibilityRadius =
+            settings.visibility_radius || settings.custom_radius || 100;
 
-            settingsMap[userId] = {
-              profile_visibility: settings.profile_visibility || "geofenced",
-              visibility_radius: visibilityRadius,
-              custom_radius: visibilityRadius, // Keep both for compatibility
-              show_exact_location: settings.show_exact_location || false,
-              visible_fields:
-                settings.visible_fields ||
-                JSON.stringify({
-                  name: true,
-                  photo: true,
-                  bio: true,
-                  program: true,
-                  courses: false,
-                  contact: false,
-                }),
-            };
-          } else {
-            // Create default settings if none exist
-            settingsMap[userId] = {
-              profile_visibility: "geofenced",
-              visibility_radius: 100,
-              custom_radius: 100,
-              show_exact_location: false,
-              visible_fields: JSON.stringify({
+          settingsMap[userId] = {
+            profile_visibility: settings.profile_visibility || "geofenced",
+            visibility_radius: visibilityRadius,
+            custom_radius: visibilityRadius, // Keep both for compatibility
+            show_exact_location: settings.show_exact_location || false,
+            visible_fields:
+              settings.visible_fields ||
+              JSON.stringify({
                 name: true,
                 photo: true,
                 bio: true,
@@ -57,14 +43,23 @@ export class PrivacyService {
                 courses: false,
                 contact: false,
               }),
-            };
-          }
-        } catch (error) {
-          console.log(
-            `⚠️ Error fetching privacy for ${userId}:`,
-            error.message
-          );
-          settingsMap[userId] = this.getDefaultPrivacySettings();
+          };
+        } else {
+          // Create default settings if none exist
+          settingsMap[userId] = {
+            profile_visibility: "geofenced",
+            visibility_radius: 100,
+            custom_radius: 100,
+            show_exact_location: false,
+            visible_fields: JSON.stringify({
+              name: true,
+              photo: true,
+              bio: true,
+              program: true,
+              courses: false,
+              contact: false,
+            }),
+          };
         }
       }
 
@@ -136,40 +131,39 @@ export class PrivacyService {
       //   } users`
       // );
 
-      // Process each user
-      for (const profileOwnerId of profileOwnerIds) {
-        try {
-          const settings = privacySettingsMap[profileOwnerId];
+      // Process each user in parallel -- these checks are independent, and
+      // the geofenced/friends_only branches each involve their own
+      // await-heavy lookups, so running them sequentially serialized the
+      // whole batch.
+      await Promise.all(
+        profileOwnerIds.map(async (profileOwnerId) => {
+          try {
+            const settings = privacySettingsMap[profileOwnerId];
 
-          if (!settings) {
-            console.log(
-              `❌ No privacy settings found for user ${profileOwnerId}`
+            if (!settings) {
+              console.log(
+                `❌ No privacy settings found for user ${profileOwnerId}`
+              );
+              results[profileOwnerId] = false;
+              return;
+            }
+
+            const canView = await this.evaluatePrivacyAccess(
+              viewerId,
+              profileOwnerId,
+              settings
+            );
+
+            results[profileOwnerId] = canView;
+          } catch (error) {
+            console.error(
+              `⚠️ Error processing ${profileOwnerId}:`,
+              error.message
             );
             results[profileOwnerId] = false;
-            continue;
           }
-
-          const canView = await this.evaluatePrivacyAccess(
-            viewerId,
-            profileOwnerId,
-            settings
-          );
-
-          results[profileOwnerId] = canView;
-
-          if (canView) {
-            // console.log(`✅ ALLOWED: ${viewerId} can view ${profileOwnerId}`);
-          } else {
-            // console.log(`❌ DENIED: ${viewerId} cannot view ${profileOwnerId}`);
-          }
-        } catch (error) {
-          console.error(
-            `⚠️ Error processing ${profileOwnerId}:`,
-            error.message
-          );
-          results[profileOwnerId] = false;
-        }
-      }
+        })
+      );
 
       // Cache batch results for 1 minute
       try {
@@ -194,30 +188,36 @@ export class PrivacyService {
     const uncachedUsers = [];
     const cachedSettings = {};
 
-    // Check Redis cache for each user
-    for (const userId of userIds) {
-      const cacheKey = `user_privacy:${userId}`;
-      const cached = await redisClient.get(cacheKey);
+    // Check Redis cache for each user in parallel instead of one round trip
+    // per user, sequentially.
+    const cacheResults = await Promise.all(
+      userIds.map((userId) => redisClient.get(`user_privacy:${userId}`))
+    );
+
+    userIds.forEach((userId, index) => {
+      const cached = cacheResults[index];
       if (cached) {
         cachedSettings[userId] = JSON.parse(cached);
       } else {
         uncachedUsers.push(userId);
       }
-    }
+    });
 
     // Batch fetch uncached settings from MySQL
     if (uncachedUsers.length > 0) {
       const dbSettings = await this.fetchPrivacySettingsFromDB(uncachedUsers);
 
-      // Cache each setting individually
-      for (const [userId, settings] of Object.entries(dbSettings)) {
-        await redisClient.setex(
-          `user_privacy:${userId}`,
-          300,
-          JSON.stringify(settings)
-        );
-        settingsMap[userId] = settings;
-      }
+      // Cache each setting individually, in parallel.
+      await Promise.all(
+        Object.entries(dbSettings).map(async ([userId, settings]) => {
+          await redisClient.setex(
+            `user_privacy:${userId}`,
+            300,
+            JSON.stringify(settings)
+          );
+          settingsMap[userId] = settings;
+        })
+      );
     }
 
     // Combine cached and newly fetched settings

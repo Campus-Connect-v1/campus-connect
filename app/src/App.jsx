@@ -1,13 +1,18 @@
+import { Suspense, lazy } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth.jsx";
 import Login from "./pages/Login.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
-import Resource from "./pages/Resource.jsx";
-import Operators from "./pages/Operators.jsx";
-import Activity from "./pages/Activity.jsx";
-import Populate from "./pages/Populate.jsx";
-import Approvals from "./pages/Approvals.jsx";
-import Ask from "./pages/Ask.jsx";
+
+// Lazy-loaded: none of these are needed for the pre-auth Login screen, so
+// eagerly importing them made every visitor pay for the whole app's bundle
+// before they even sign in.
+const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
+const Resource = lazy(() => import("./pages/Resource.jsx"));
+const Operators = lazy(() => import("./pages/Operators.jsx"));
+const Activity = lazy(() => import("./pages/Activity.jsx"));
+const Populate = lazy(() => import("./pages/Populate.jsx"));
+const Approvals = lazy(() => import("./pages/Approvals.jsx"));
+const Ask = lazy(() => import("./pages/Ask.jsx"));
 
 const CAMPUS = [
   ["universities", "Universities"],
@@ -89,21 +94,23 @@ export default function App() {
         </header>
 
         <main className="content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/r/:resource" element={<Resource />} />
-            <Route path="/activity" element={<Activity />} />
-            <Route path="/approvals" element={<Approvals />} />
-            <Route path="/populate" element={<Populate />} />
-            <Route path="/ask" element={<Ask />} />
-            <Route
-              path="/operators"
-              element={
-                permissions?.manageOperators ? <Operators /> : <Navigate to="/" replace />
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<div className="dim">Loading…</div>}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/r/:resource" element={<Resource />} />
+              <Route path="/activity" element={<Activity />} />
+              <Route path="/approvals" element={<Approvals />} />
+              <Route path="/populate" element={<Populate />} />
+              <Route path="/ask" element={<Ask />} />
+              <Route
+                path="/operators"
+                element={
+                  permissions?.manageOperators ? <Operators /> : <Navigate to="/" replace />
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>

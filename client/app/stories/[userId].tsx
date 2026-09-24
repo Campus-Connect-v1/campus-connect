@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -16,7 +16,6 @@ import { StoryViewers } from "@/src/components/stories/StoryViewers";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSession } from "@/src/services/SessionContext";
 import {
-  deleteStory,
   fetchStoryFeed,
   fetchUserStories,
   viewStory,
@@ -113,7 +112,6 @@ function VideoStory({ uri, paused }: { uri: string; paused: boolean }) {
 export default function StoryViewerScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { user } = useSession();
 
@@ -189,6 +187,7 @@ export default function StoryViewerScreen() {
   }, [stories]);
 
   const current: ApiStory | undefined = stories[index];
+  const isOwn = group?.author.user_id === user?.id;
 
   useEffect(() => {
     if (current) viewStory(current.story_id);
@@ -224,7 +223,6 @@ export default function StoryViewerScreen() {
   // The author picked this colour, so the text follows it rather than assuming
   // a dark ground: white on lime is 1.12:1 and cannot be read at all.
   const textStoryBackground = current?.background_color ?? culture.violet;
-  const isOwn = group.author.user_id === user?.id;
   const authorName = [group.author.first_name, group.author.last_name].filter(Boolean).join(" ");
 
   return (
@@ -314,18 +312,20 @@ export default function StoryViewerScreen() {
         )}
       </View>
 
-      {/* Tap zones: left third goes back, the rest advances. Holding pauses,
-          which is the gesture every story UI has trained people to expect. */}
+      {/* Tap zones: the left half of the screen goes back, the right half
+          advances — no dead zone in the middle. Holding anywhere pauses. */}
       <View style={[StyleSheet.absoluteFill, { flexDirection: "row" }]} pointerEvents="box-none">
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Previous story"
           onPress={back}
           onLongPress={() => setPaused(true)}
           onPressOut={() => setPaused(false)}
           delayLongPress={180}
-          style={{ width: width / 3 }}
+          style={{ flex: 1 }}
         />
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Next story"
           onPress={advance}
           onLongPress={() => setPaused(true)}
@@ -401,20 +401,6 @@ export default function StoryViewerScreen() {
               <Text variant="caption" onMedia>
                 Views
               </Text>
-            </PressableScale>
-          ) : null}
-
-          {isOwn && current ? (
-            <PressableScale
-              accessibilityRole="button"
-              accessibilityLabel="Delete this story"
-              onPress={async () => {
-                await deleteStory(current.story_id);
-                router.back();
-              }}
-              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
-            >
-              <Icon name="alert" size={19} color={colors.onMedia} />
             </PressableScale>
           ) : null}
 

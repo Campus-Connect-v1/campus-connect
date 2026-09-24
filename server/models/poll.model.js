@@ -295,13 +295,17 @@ export const votePollModel = async (pollId, userId, optionIds) => {
       );
     }
 
-    for (const optionId of optionIds) {
-      await conn.execute(
-        `INSERT INTO poll_votes (vote_id, poll_id, option_id, user_id)
-         VALUES (?, ?, ?, ?)`,
-        [`vote_${uuidv4()}`, pollId, optionId, userId]
-      );
-    }
+    const voteRows = optionIds.map((optionId) => [
+      `vote_${uuidv4()}`,
+      pollId,
+      optionId,
+      userId,
+    ]);
+
+    await conn.query(
+      `INSERT INTO poll_votes (vote_id, poll_id, option_id, user_id) VALUES ?`,
+      [voteRows]
+    );
 
     await conn.commit();
 

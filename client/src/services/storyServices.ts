@@ -85,15 +85,17 @@ export function deleteStory(storyId: string) {
   return request(() => api.delete(`/stories/${storyId}`));
 }
 
+export interface ApiStoryViewer {
+  user_id: string;
+  first_name: string;
+  last_name: string | null;
+  profile_picture_url: string | null;
+  viewed_at: string;
+}
+
 export async function fetchStoryViewers(storyId: string) {
-  const result = await request<{
-    viewers?: {
-      user_id: string;
-      first_name: string;
-      last_name: string | null;
-      profile_picture_url: string | null;
-      viewed_at: string;
-    }[];
-  }>(() => api.get(`/stories/${storyId}/viewers`));
+  const result = await request<{ viewers?: ApiStoryViewer[] }>(() =>
+    api.get(`/stories/${storyId}/viewers`)
+  );
   return result.success ? { ...result, data: result.data.viewers ?? [] } : result;
 }

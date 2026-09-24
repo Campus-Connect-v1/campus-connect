@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api, humanize } from "../api.js";
 import { Cell, orderColumns, headerClass } from "../columns.jsx";
@@ -53,18 +53,34 @@ export default function Resource() {
     }
   }, [resource, offset, query]);
 
+  // Tracks whether this render's `resource` is a change from last time, so a
+  // resource switch resets paging/search and fetches exactly once -- instead
+  // of once immediately with the old resource's stale offset/query, then a
+  // second corrective fetch once the reset landed.
+  const prevResourceRef = useRef(resource);
+
   useEffect(() => {
+    const resourceChanged = prevResourceRef.current !== resource;
+    prevResourceRef.current = resource;
+
+    if (resourceChanged) {
+      setOffset(0);
+      setSearch("");
+      setQuery("");
+      setNotice("");
+      // If offset/query were already at these values, the sets above are
+      // no-ops and this effect won't be scheduled to run again, so fetch
+      // directly here instead of waiting for a reset that won't happen.
+      if (offset === 0 && query === "") {
+        setRows(null);
+        load();
+      }
+      return;
+    }
+
     setRows(null);
     load();
-  }, [load]);
-
-  // Reset paging and filters when switching resource.
-  useEffect(() => {
-    setOffset(0);
-    setSearch("");
-    setQuery("");
-    setNotice("");
-  }, [resource]);
+  }, [load, resource]);
 
   // Primary key first and pinned, then names, then flags, then timestamps.
   const pkColumn = useMemo(() => {

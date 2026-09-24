@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { Cell, orderColumns, headerClass } from "../columns.jsx";
@@ -25,6 +25,14 @@ export default function Ask() {
   useEffect(() => {
     api.get("/ai/status").then(setInfo).catch(() => setInfo({ configured: false }));
   }, []);
+
+  // Hooks must run unconditionally (before the read-only early return below),
+  // and this used to recompute/re-sort on every render -- including every
+  // keystroke in the question textarea above, which is unrelated to `result`.
+  const columns = useMemo(
+    () => (result?.rows?.length ? orderColumns(Object.keys(result.rows[0]), null) : []),
+    [result]
+  );
 
   const run = async (q) => {
     const text = (q ?? question).trim();
@@ -56,10 +64,6 @@ export default function Ask() {
       </>
     );
   }
-
-  const columns = result?.rows?.length
-    ? orderColumns(Object.keys(result.rows[0]), null)
-    : [];
 
   return (
     <>

@@ -34,7 +34,7 @@ const configFallbacks = isWindows
 export const db = mysql.createPool({
   ...configFallbacks,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: Number(process.env.DB_CONNECTION_LIMIT) || 25,
   queueLimit: 0,
   // acquireTimeout: 30000,
   // connectTimeout: 10000,

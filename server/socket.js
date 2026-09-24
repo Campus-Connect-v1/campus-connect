@@ -7,6 +7,42 @@ import { verifySocketToken } from "./middleware/verifySocketToken.js";
 import { isOriginAllowed } from "./config/cors.js";
 import { registerRealtime, userRoom, postRoom, campusRoom } from "./realtime.js";
 
+// send_message looked up sender AND receiver with a full MySQL join
+// (findById/findByEmail) on every single message -- the highest-frequency
+// event in the app. Only first/last name are actually used from that row, and
+// they change rarely, so cache the lookup briefly instead of hitting MySQL
+// every time the same pair of users chats.
+const IDENTITY_CACHE_TTL_MS = 5 * 60 * 1000;
+const userIdentityCache = new Map(); // "id:<id>" | "email:<email>" -> { data, expiresAt }
+
+function cacheUserIdentity(user) {
+  const expiresAt = Date.now() + IDENTITY_CACHE_TTL_MS;
+  userIdentityCache.set(`id:${user.user_id}`, { data: user, expiresAt });
+  if (user.email) {
+    userIdentityCache.set(`email:${user.email}`, { data: user, expiresAt });
+  }
+}
+
+async function getCachedUserById(userId) {
+  const key = `id:${userId}`;
+  const cached = userIdentityCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const user = await findById(userId);
+  if (user) cacheUserIdentity(user);
+  return user;
+}
+
+async function getCachedUserByEmail(email) {
+  const key = `email:${email}`;
+  const cached = userIdentityCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const user = await findByEmail(email);
+  if (user) cacheUserIdentity(user);
+  return user;
+}
+
 export default function socketServer(httpServer) {
   const io = new Server(httpServer, {
     cors: {
@@ -104,14 +140,14 @@ export default function socketServer(httpServer) {
         const senderId = socket.user.id;
         console.log(`📨 Message from ${senderId} to ${receiverId}`);
 
-        const sender = await findById(senderId);
+        const sender = await getCachedUserById(senderId);
 
-        // Find receiver in MySQL (EXISTING CODE - UNCHANGED)
+        // Find receiver in MySQL (cached -- see getCachedUserById/ByEmail above)
         let receiver;
         if (receiverId.includes("@")) {
-          receiver = await findByEmail(receiverId);
+          receiver = await getCachedUserByEmail(receiverId);
         } else {
-          receiver = await findById(receiverId);
+          receiver = await getCachedUserById(receiverId);
         }
 
         if (!receiver) {

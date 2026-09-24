@@ -18,6 +18,25 @@ export const findById = async (userId) => {
   }
 };
 
+// Batched variant of findById for lists (e.g. conversation participants)
+// that would otherwise fire one SELECT per row.
+export const findByIdsModel = async (userIds) => {
+  if (!userIds.length) return [];
+  try {
+    const placeholders = userIds.map(() => "?").join(",");
+    const [rows] = await db.execute(
+      `SELECT u.*, uni.name as university_name, uni.domain as university_domain
+       FROM users u
+       LEFT JOIN universities uni ON u.university_id = uni.university_id
+       WHERE u.user_id IN (${placeholders})`,
+      userIds
+    );
+    return rows;
+  } catch (error) {
+    throw new Error(`Database error in findByIdsModel: ${error.message}`);
+  }
+};
+
 // Get user by email
 export const findByEmail = async (email) => {
   try {
@@ -1093,12 +1112,12 @@ export const recoverProfileModel = async (userId) => {
 export const getPrivacySettingsModel = async (userId) => {
   try {
     const query = `
-      SELECT 
+      SELECT
         profile_visibility,
         custom_radius,
         show_exact_location,
         visible_fields
-      FROM user_privacy_settings 
+      FROM user_privacy_settings
       WHERE user_id = ?
     `;
 
@@ -1106,6 +1125,36 @@ export const getPrivacySettingsModel = async (userId) => {
     return rows[0] || null;
   } catch (error) {
     console.error("Get privacy settings model error:", error);
+    throw error;
+  }
+};
+
+// Batched variant of getPrivacySettingsModel for the nearby-profiles pipeline,
+// which otherwise fires one query per uncached user on every request.
+export const getPrivacySettingsModelBatch = async (userIds) => {
+  if (!userIds.length) return {};
+
+  try {
+    const placeholders = userIds.map(() => "?").join(",");
+    const query = `
+      SELECT
+        user_id,
+        profile_visibility,
+        custom_radius,
+        show_exact_location,
+        visible_fields
+      FROM user_privacy_settings
+      WHERE user_id IN (${placeholders})
+    `;
+
+    const [rows] = await db.execute(query, userIds);
+    const map = {};
+    rows.forEach((row) => {
+      map[row.user_id] = row;
+    });
+    return map;
+  } catch (error) {
+    console.error("Get privacy settings model batch error:", error);
     throw error;
   }
 };
