@@ -18,16 +18,17 @@ const base = require("./app.json").expo;
  * push on Android rather than the entire Android build. When it is present it
  * is picked up exactly as before.
  */
-const googleServices = path.resolve(__dirname, "google-services.json");
-const hasGoogleServices = fs.existsSync(googleServices);
+const hasGoogleServices = fs.existsSync(path.resolve(__dirname, "google-services.json"));
+const hasGoogleServicesIos = fs.existsSync(path.resolve(__dirname, "GoogleService-Info.plist"));
 
-if (!hasGoogleServices) {
+if (!hasGoogleServices || !hasGoogleServicesIos) {
   // Printed during config resolution so the reason is visible in the build log
   // rather than discovered when push silently fails on a device.
   console.warn(
-    "[app.config] google-services.json not found — building without FCM. " +
-      "Android push notifications will not be delivered in this build. " +
-      "Add the file from the Firebase console to enable them."
+    "[app.config] Firebase config missing — " +
+      (hasGoogleServices ? "" : "google-services.json (Android) ") +
+      (hasGoogleServicesIos ? "" : "GoogleService-Info.plist (iOS) ") +
+      "not found. Add from the Firebase console to enable Firebase features."
   );
 }
 
@@ -35,7 +36,8 @@ module.exports = ({ config }) => {
   // Pulled OUT of the spread rather than overridden after it: Expo validates
   // the path whenever the key exists at all, so leaving it in place and
   // setting it to undefined still fails.
-  const { googleServicesFile, ...android } = base.android ?? {};
+  const { googleServicesFile: _android, ...android } = base.android ?? {};
+  const { googleServicesFile: _ios, ...ios } = base.ios ?? {};
 
   return {
     ...config,
@@ -43,5 +45,8 @@ module.exports = ({ config }) => {
     android: hasGoogleServices
       ? { ...android, googleServicesFile: "./google-services.json" }
       : android,
+    ios: hasGoogleServicesIos
+      ? { ...ios, googleServicesFile: "./GoogleService-Info.plist" }
+      : ios,
   };
 };
