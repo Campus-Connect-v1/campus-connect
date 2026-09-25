@@ -24,7 +24,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.campusconnect.app",
+      "package": "com.lesliepaulajayi.campusconnect",
       "googleServicesFile": "./google-services.json"
     },
     "web": {

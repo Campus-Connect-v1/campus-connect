@@ -13,7 +13,9 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
-google-services.json
+# Any variant: a backup or a per-environment copy is still a credential.
+google-services*.json
+google-services*.json.bak
 GoogleService-Info.plist
 *.p8
 *.p12
