@@ -6,13 +6,35 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://campus-connect-api-o0xt.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://campus-connect-api-o0xt.onrender.com",
+        "EXPO_PUBLIC_ENV": "development",
+        "EXPO_PUBLIC_ENABLE_GEOFENCING": "true",
+        "EXPO_PUBLIC_BYPASS_AUTH": "false"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://campus-connect-api-o0xt.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://campus-connect-api-o0xt.onrender.com",
+        "EXPO_PUBLIC_ENV": "preview",
+        "EXPO_PUBLIC_ENABLE_GEOFENCING": "true",
+        "EXPO_PUBLIC_BYPASS_AUTH": "false"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://campus-connect-api-o0xt.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://campus-connect-api-o0xt.onrender.com",
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_ENABLE_GEOFENCING": "true",
+        "EXPO_PUBLIC_BYPASS_AUTH": "false"
+      }
     }
   },
   "submit": {

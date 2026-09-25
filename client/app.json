@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.campusconnect.app"
+      "bundleIdentifier": "com.lesliepaulajayi.campusconnect",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +24,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.campusconnect.app",
+      "package": "com.lesliepaulajayi.campusconnect",
       "googleServicesFile": "./google-services.json"
     },
     "web": {
@@ -74,9 +77,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "9f6dadfc-e553-4855-8cb8-688dfe5fa41f"
+        "projectId": "1565d730-4f88-4944-88fd-5bfa0fe51445"
       }
     },
-    "owner": "joycelli"
+    "owner": "lesliepaul-23"
   }
 }
