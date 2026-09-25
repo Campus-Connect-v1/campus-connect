@@ -1,4 +1,4 @@
-/* global __dirname */
+/* global __dirname, process */
 const fs = require("fs");
 const path = require("path");
 
@@ -13,22 +13,41 @@ const base = require("./app.json").expo;
  * on a missing file, including CI and any machine that is not the one it was
  * first set up on.
  *
- * The file is only needed for Android push delivery via FCM. Everything else
- * in the app builds and runs without it, so a missing credential now costs
- * push on Android rather than the entire Android build. When it is present it
- * is picked up exactly as before.
+ * Because the files are gitignored, EAS does not upload them either: a cloud
+ * build saw them as absent and produced an Android app that could not register
+ * with FCM. They are supplied there as secret file environment variables
+ * instead, which arrive as an absolute path on the builder. Locally the files
+ * sit in this directory. Either way nothing lands in version control.
+ *
+ *   eas env:create --environment production \
+ *     --name GOOGLE_SERVICES_JSON --type file \
+ *     --value ./google-services.json --visibility secret
+ *
+ * The file is only needed for Android push delivery via FCM -- iOS push goes
+ * to APNs directly and does not require Firebase. Everything else in the app
+ * builds and runs without either file, so a missing credential costs push on
+ * Android rather than the entire Android build.
  */
-const hasGoogleServices = fs.existsSync(path.resolve(__dirname, "google-services.json"));
-const hasGoogleServicesIos = fs.existsSync(path.resolve(__dirname, "GoogleService-Info.plist"));
+const localAndroid = path.resolve(__dirname, "google-services.json");
+const localIos = path.resolve(__dirname, "GoogleService-Info.plist");
 
-if (!hasGoogleServices || !hasGoogleServicesIos) {
+const googleServicesAndroid =
+  process.env.GOOGLE_SERVICES_JSON ||
+  (fs.existsSync(localAndroid) ? "./google-services.json" : null);
+
+const googleServicesIos =
+  process.env.GOOGLE_SERVICES_INFO_PLIST ||
+  (fs.existsSync(localIos) ? "./GoogleService-Info.plist" : null);
+
+if (!googleServicesAndroid || !googleServicesIos) {
   // Printed during config resolution so the reason is visible in the build log
   // rather than discovered when push silently fails on a device.
   console.warn(
     "[app.config] Firebase config missing — " +
-      (hasGoogleServices ? "" : "google-services.json (Android) ") +
-      (hasGoogleServicesIos ? "" : "GoogleService-Info.plist (iOS) ") +
-      "not found. Add from the Firebase console to enable Firebase features."
+      (googleServicesAndroid ? "" : "google-services.json (Android) ") +
+      (googleServicesIos ? "" : "GoogleService-Info.plist (iOS) ") +
+      "not found locally or in the build environment. Android push requires " +
+      "google-services.json; see the eas env:create note above."
   );
 }
 
@@ -42,11 +61,11 @@ module.exports = ({ config }) => {
   return {
     ...config,
     ...base,
-    android: hasGoogleServices
-      ? { ...android, googleServicesFile: "./google-services.json" }
+    android: googleServicesAndroid
+      ? { ...android, googleServicesFile: googleServicesAndroid }
       : android,
-    ios: hasGoogleServicesIos
-      ? { ...ios, googleServicesFile: "./GoogleService-Info.plist" }
+    ios: googleServicesIos
+      ? { ...ios, googleServicesFile: googleServicesIos }
       : ios,
   };
 };
