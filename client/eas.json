@@ -17,7 +17,9 @@
     },
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://campus-connect-api-o0xt.onrender.com/api",
         "EXPO_PUBLIC_SOCKET_URL": "https://campus-connect-api-o0xt.onrender.com",
@@ -38,6 +40,13 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6816054262"
+      },
+      "android": {
+        "track": "internal"
+      }
+    }
   }
 }
