@@ -15,4 +15,5 @@ export { Skeleton, SkeletonList, PostSkeleton, EventSkeleton, PeopleSkeleton } f
 export { SectionHeader } from "./SectionHeader";
 export { Sticker } from "./Sticker";
 export { Tag } from "./Tag";
+export { CountBadge } from "./CountBadge";
 export { Text } from "./Text";

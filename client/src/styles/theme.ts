@@ -286,7 +286,22 @@ export type TypeVariant = keyof typeof type;
  */
 export function inputTextStyle(multiline = false): TextStyle {
   const { lineHeight, ...withoutLineHeight } = type.body.style;
-  return multiline ? { ...type.body.style } : { ...withoutLineHeight };
+  return multiline
+    ? {
+        ...type.body.style,
+        /**
+         * A multiline TextInput top-aligns its text and its placeholder. In a
+         * composer that is one line most of the time but can grow, that put
+         * both against the top of a 44pt box and left a gap underneath.
+         *
+         * Honoured natively on Android. On iOS it is ignored, which is why
+         * composers wrap the input in a centring View and let it size to its
+         * content instead of carrying a minHeight of its own -- doing both is
+         * what makes the two platforms agree.
+         */
+        textAlignVertical: "center",
+      }
+    : { ...withoutLineHeight };
 }
 
 export const elevation = {

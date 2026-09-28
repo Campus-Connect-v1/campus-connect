@@ -19,7 +19,20 @@ export function conversationPreview(
   viewerId?: string
 ): string {
   const last = conversation.lastMessage;
-  if (!last?.content) return "No messages yet";
+
+  /**
+   * An attachment is named before anything else.
+   *
+   * An image-only message carries a blank body, so without this the row would
+   * read "No messages yet" on a conversation whose last message was a photo.
+   */
+  if (last?.mediaType) {
+    const label = last.mediaType === "video" ? "Video" : "Photo";
+    const caption = last.content?.trim();
+    return caption ? `${label}: ${caption}` : label;
+  }
+
+  if (!last?.content?.trim()) return "No messages yet";
   if (last.contextKind !== "story") return last.content;
 
   const mine = Boolean(viewerId) && last.senderId === viewerId;

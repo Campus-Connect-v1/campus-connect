@@ -9,6 +9,16 @@ export interface SocketMessage {
   senderId: { _id: string; username?: string; email?: string };
   receiverId: { _id: string; username?: string; email?: string };
   content: string;
+  /** Mirrors ApiMessageContext; present when the message answers a story. */
+  context?: {
+    kind: "story";
+    refId: string;
+    authorId: string;
+    mediaUrl: string | null;
+    text: string | null;
+    expiresAt?: string | null;
+  } | null;
+  media?: { url: string; type: "image" | "video" } | null;
   createdAt: string;
 }
 
@@ -59,11 +69,12 @@ export function disconnectSocket() {
 export function sendMessage(
   receiverId: string,
   content: string,
-  context?: { kind: "story"; refId: string }
+  context?: { kind: "story"; refId: string },
+  media?: { url: string; type: "image" | "video" }
 ) {
   const active = getSocket();
   if (!active) return false;
-  active.emit("send_message", { receiverId, content, context });
+  active.emit("send_message", { receiverId, content, context, media });
   return true;
 }
 

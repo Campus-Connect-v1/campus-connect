@@ -5,7 +5,6 @@ import { MentionSuggestions } from "@/src/components/social/MentionSuggestions";
 import { useMentionAutocomplete } from "@/src/features/mentions/useMentionAutocomplete";
 import { useCallback, useRef, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
 import { PostOptionsSheet } from "@/src/components/feed/PostOptionsSheet";
@@ -172,7 +171,6 @@ function CommentRow({
 
 export default function PostCommentsScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile } = useSession();
   const saved = useSavedPosts();
@@ -418,7 +416,19 @@ export default function PostCommentsScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={insets.top + 56}
+        /**
+         * No keyboardVerticalOffset.
+         *
+         * SettingsShell renders its header IN FLOW and this sits below it, so
+         * the frame React Native measures already excludes the top inset and
+         * the header. The offset it used to pass described both again, and a
+         * larger offset makes RN think the keyboard reaches higher than it
+         * does -- so it padded ~100pt too much and left a band of background
+         * between the composer and the keyboard.
+         *
+         * An offset is for a KeyboardAvoidingView that is the root with a
+         * header floating OVER it. That is not this.
+         */
       >
         <FlatList
           data={all}
@@ -525,34 +535,43 @@ export default function PostCommentsScreen() {
           }}
         >
           <Avatar uri={profile?.profile_picture_url ?? undefined} size={34} />
-          <TextInput
-            ref={inputRef}
-            accessibilityLabel={editingComment ? "Edit your comment" : "Write a comment"}
-            placeholder={editingComment ? "Edit your comment" : "Write a comment"}
-            placeholderTextColor={colors.textMuted}
-            multiline
-            autoCapitalize="sentences"
-            value={draft}
-            onChangeText={mentions.handleChangeText}
-            onSelectionChange={mentions.onSelectionChange}
-            // Controlled for exactly the one render after a mention is
-            // inserted, so the caret lands past the marker; undefined the rest
-            // of the time, because a permanently controlled selection fights
-            // the user for the caret on every keystroke.
-            selection={mentions.selection}
+          {/* The box carries the height and the centring; the input sizes to
+              its own text. A minHeight on the TextInput itself top-aligns the
+              first line on iOS and leaves a gap beneath it, which is what made
+              the placeholder sit high. */}
+          <View
             style={{
               flex: 1,
-              maxHeight: 120,
               minHeight: 44,
+              maxHeight: 120,
+              justifyContent: "center",
               borderRadius: radius.lg,
               backgroundColor: colors.surface,
-              color: colors.textPrimary,
-              ...inputTextStyle(true),
-              paddingHorizontal: spacing.md,
-              paddingTop: spacing.xs + 2,
-              paddingBottom: spacing.xs + 2,
             }}
-          />
+          >
+            <TextInput
+              ref={inputRef}
+              accessibilityLabel={editingComment ? "Edit your comment" : "Write a comment"}
+              placeholder={editingComment ? "Edit your comment" : "Write a comment"}
+              placeholderTextColor={colors.textMuted}
+              multiline
+              autoCapitalize="sentences"
+              value={draft}
+              onChangeText={mentions.handleChangeText}
+              onSelectionChange={mentions.onSelectionChange}
+              // Controlled for exactly the one render after a mention is
+              // inserted, so the caret lands past the marker; undefined the rest
+              // of the time, because a permanently controlled selection fights
+              // the user for the caret on every keystroke.
+              selection={mentions.selection}
+              style={{
+                color: colors.textPrimary,
+                ...inputTextStyle(true),
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.xs,
+              }}
+            />
+          </View>
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Send comment"

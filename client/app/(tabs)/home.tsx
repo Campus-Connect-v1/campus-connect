@@ -11,6 +11,7 @@ import { ProfileNudge } from "@/src/components/profile/ProfileNudge";
 import { StoryRail } from "@/src/components/stories/StoryRail";
 import ProfileDrawer from "@/src/components/layout/profile-drawer";
 import {
+  CountBadge,
   Avatar,
   EmptyState,
   Icon,
@@ -23,7 +24,6 @@ import {
   SectionHeader,
   Sticker,
   Text,
-  type IconName,
 } from "@/src/components/ui";
 import { adaptEvent } from "@/src/features/events/adapt";
 import { type CampusEvent } from "@/src/features/events/types";
@@ -744,33 +744,20 @@ export default function HomeScreen() {
         >
           <Icon name="notification" size={21} color={colors.textPrimary} />
           {unread.count ? (
-            <View
+            <CountBadge
+              count={unread.count}
+              size={16}
+              max={9}
+              // A ring in the screen colour, so the badge reads as separate
+              // from the bell it overlaps rather than merging into it.
               style={{
                 position: "absolute",
                 top: 8,
                 right: 6,
-                minWidth: 16,
-                height: 16,
-                paddingHorizontal: 4,
-                borderRadius: radius.full,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: culture.pink,
                 borderWidth: 1.5,
                 borderColor: colors.background,
               }}
-            >
-              <Text
-                variant="micro"
-                style={{
-                  color: foregroundOn(culture.pink),
-                  fontSize: 9,
-                  lineHeight: 11,
-                }}
-              >
-                {unread.count > 9 ? "9+" : unread.count}
-              </Text>
-            </View>
+            />
           ) : null}
         </PressableScale>
         <PressableScale
