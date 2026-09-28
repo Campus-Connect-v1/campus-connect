@@ -63,6 +63,9 @@ function CommentRow({
 }) {
   const { colors } = useTheme();
   const name = [comment.author.first_name, comment.author.last_name].filter(Boolean).join(" ");
+
+  const openAuthor = () =>
+    router.push({ pathname: "/person/[id]", params: { id: comment.author.user_id } });
   // A reply is inset rather than given its own card, so a thread reads as one
   // conversation instead of a stack of boxes.
   const isReply = Boolean(comment.parent_comment_id);
@@ -91,7 +94,19 @@ function CommentRow({
         paddingLeft: spacing.lg + (isReply ? spacing.xl : 0),
       }}
     >
-      <Avatar uri={comment.author.profile_picture_url ?? undefined} size={34} />
+      {/* The avatar and the name open the author's profile; the comment body
+          does not. Keeping them separate matters here, because the body's
+          press gesture is already spoken for by the long-press edit/delete on
+          your own comment -- one element cannot own both without the
+          navigation stealing that gesture. Same identity-row rule PostCard
+          follows, so an author tap goes to the same place everywhere. */}
+      <PressableScale
+        accessibilityRole="link"
+        accessibilityLabel={`View ${name}'s profile`}
+        onPress={() => openAuthor()}
+      >
+        <Avatar uri={comment.author.profile_picture_url ?? undefined} size={34} />
+      </PressableScale>
       <PressableScale
         accessibilityRole={isOwn ? "button" : "text"}
         accessibilityLabel={
@@ -102,7 +117,13 @@ function CommentRow({
         style={{ flex: 1, gap: 2 }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
-          <Text variant="label">{name}</Text>
+          <PressableScale
+            accessibilityRole="link"
+            accessibilityLabel={`View ${name}'s profile`}
+            onPress={() => openAuthor()}
+          >
+            <Text variant="label">{name}</Text>
+          </PressableScale>
           <Text variant="caption" color="textMuted">
             {since(comment.created_at)}
           </Text>
