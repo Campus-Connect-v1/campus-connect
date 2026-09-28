@@ -1,5 +1,8 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
+import { MentionText } from "@/src/components/social/MentionText";
+import { MentionSuggestions } from "@/src/components/social/MentionSuggestions";
+import { useMentionAutocomplete } from "@/src/features/mentions/useMentionAutocomplete";
 import { useCallback, useRef, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -133,7 +136,7 @@ function CommentRow({
             </Text>
           ) : null}
         </View>
-        <Text variant="body">{comment.content}</Text>
+        <MentionText variant="body" content={comment.content} />
       </PressableScale>
 
       <PressableScale
@@ -176,6 +179,13 @@ export default function PostCommentsScreen() {
   const inputRef = useRef<TextInput>(null);
 
   const [draft, setDraft] = useState("");
+  const mentions = useMentionAutocomplete({
+    text: draft,
+    onChange: (next) => {
+      setDraft(next);
+      setError(null);
+    },
+  });
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extra, setExtra] = useState<ApiComment[]>([]);
@@ -320,13 +330,18 @@ export default function PostCommentsScreen() {
    */
   const startEditingComment = (comment: ApiComment) => {
     setEditingComment(comment);
-    setDraft(comment.content);
+    // hydrate, not the raw content: the stored text carries
+    // `@[joyce.elli](user_3)` markers, and dropping those into the input would
+    // show the writer the brackets and the id. It also re-registers them, so
+    // editing the sentence around a mention does not silently unlink it.
+    setDraft(mentions.hydrate(comment.content));
     inputRef.current?.focus();
   };
 
   const cancelEditing = () => {
     setEditingComment(null);
     setDraft("");
+    mentions.reset();
   };
 
   const confirmDeleteComment = (comment: ApiComment) =>
@@ -350,7 +365,10 @@ export default function PostCommentsScreen() {
     ]);
 
   const send = async () => {
-    const content = draft.trim();
+    // The draft holds plain `@handle` text, which is what the writer sees.
+    // The stored markers are assembled here, from the people they actually
+    // picked -- see useMentionAutocomplete.
+    const content = mentions.serialize(draft).trim();
     if (!content || sending) return;
 
     setSending(true);
@@ -389,6 +407,10 @@ export default function PostCommentsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setExtra((current) => [...current, result.data]);
     setDraft("");
+    // Clear the handle registry with the draft. Left to accumulate, a handle
+    // picked in an earlier comment would still resolve in a later one the user
+    // only typed by hand.
+    mentions.reset();
   };
 
   return (
@@ -481,6 +503,14 @@ export default function PostCommentsScreen() {
           </View>
         ) : null}
 
+        <MentionSuggestions
+          open={mentions.open}
+          query={mentions.query}
+          loading={mentions.loading}
+          people={mentions.suggestions}
+          onSelect={mentions.select}
+        />
+
         <View
           style={{
             flexDirection: "row",
@@ -503,10 +533,13 @@ export default function PostCommentsScreen() {
             multiline
             autoCapitalize="sentences"
             value={draft}
-            onChangeText={(value) => {
-              setDraft(value);
-              setError(null);
-            }}
+            onChangeText={mentions.handleChangeText}
+            onSelectionChange={mentions.onSelectionChange}
+            // Controlled for exactly the one render after a mention is
+            // inserted, so the caret lands past the marker; undefined the rest
+            // of the time, because a permanently controlled selection fights
+            // the user for the caret on every keystroke.
+            selection={mentions.selection}
             style={{
               flex: 1,
               maxHeight: 120,

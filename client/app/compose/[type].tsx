@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, View } from "react-native";
 
 import { MediaAttachment } from "@/src/components/compose/MediaAttachment";
+import { MentionSuggestions } from "@/src/components/social/MentionSuggestions";
+import { useMentionAutocomplete } from "@/src/features/mentions/useMentionAutocomplete";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { Button, Icon, InlineNotice, PressableScale, Sticker, Text } from "@/src/components/ui";
 import { useUploadsEnabled } from "@/src/hooks/useUploadsEnabled";
@@ -40,6 +42,13 @@ export default function ComposeScreen() {
   const copy = COPY[kind];
 
   const [text, setText] = useState("");
+  const mentions = useMentionAutocomplete({
+    text,
+    onChange: (next) => {
+      setText(next);
+      setError(null);
+    },
+  });
   const [media, setMedia] = useState<PickedMedia | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -72,7 +81,8 @@ export default function ComposeScreen() {
   };
 
   const publish = async () => {
-    const content = text.trim();
+    // Plain `@handle` while composing; markers only at the point of storing.
+    const content = mentions.serialize(text).trim();
     if (!content) return;
 
     setPublishing(true);
@@ -135,10 +145,11 @@ export default function ComposeScreen() {
             autoCapitalize="sentences"
             autoCorrect
             value={text}
-            onChangeText={(value) => {
-              setText(value);
-              setError(null);
-            }}
+            onChangeText={mentions.handleChangeText}
+            onSelectionChange={mentions.onSelectionChange}
+            // Controlled only for the render that follows an insert, so the
+            // caret lands past the marker rather than past the visible label.
+            selection={mentions.selection}
             style={{
               minHeight: media ? 110 : 180,
               borderRadius: radius.lg,
@@ -150,6 +161,14 @@ export default function ComposeScreen() {
               padding: spacing.lg,
               textAlignVertical: "top",
             }}
+          />
+
+          <MentionSuggestions
+            open={mentions.open}
+            query={mentions.query}
+            loading={mentions.loading}
+            people={mentions.suggestions}
+            onSelect={mentions.select}
           />
 
           {media ? (

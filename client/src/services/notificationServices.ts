@@ -10,6 +10,7 @@ export type NotificationType =
   | "group_invite"
   | "story_view"
   | "new_post"
+  | "mention"
   | string;
 
 export interface ApiNotification {

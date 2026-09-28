@@ -50,10 +50,20 @@ export function disconnectSocket() {
   lifecycleBound = false;
 }
 
-export function sendMessage(receiverId: string, content: string) {
+/**
+ * `context` carries only what the server needs to FIND the thing being replied
+ * to -- a kind and an id. The quoted text and image are read from the row
+ * server-side, so a sender cannot fabricate a quote of words the other person
+ * never wrote.
+ */
+export function sendMessage(
+  receiverId: string,
+  content: string,
+  context?: { kind: "story"; refId: string }
+) {
   const active = getSocket();
   if (!active) return false;
-  active.emit("send_message", { receiverId, content });
+  active.emit("send_message", { receiverId, content, context });
   return true;
 }
 

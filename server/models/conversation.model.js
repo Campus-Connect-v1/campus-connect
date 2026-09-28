@@ -14,6 +14,16 @@ const conversationSchema = new mongoose.Schema(
       content: String,
       senderId: String,
       timestamp: { type: Date, default: Date.now },
+      /**
+       * What the last message was replying to, if anything.
+       *
+       * Only the KIND, not the whole quote. The conversation list needs to say
+       * "Replied to your story" rather than showing a bare emoji with no
+       * subject -- it does not need the story's text or image, and copying
+       * those into every conversation row would duplicate a preview that is
+       * already on the message itself.
+       */
+      contextKind: String,
     },
     unreadCount: {
       type: Map,
@@ -47,6 +57,7 @@ conversationSchema.methods.updateLastMessage = function (message) {
     content: message.content,
     senderId: message.senderId,
     timestamp: message.createdAt || new Date(),
+    contextKind: message.context?.kind ?? null,
   };
   return this.save();
 };

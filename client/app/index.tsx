@@ -6,6 +6,7 @@ import { View } from "react-native";
 import { Loader } from "@/src/components/ui";
 import { BYPASS_AUTH } from "@/src/constants/env";
 import { signedInDestination } from "@/src/features/profile/setup";
+import { warmApi } from "@/src/services/api";
 import { useSession } from "@/src/services/SessionContext";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -20,6 +21,21 @@ export default function Index() {
 
   useEffect(() => {
     AsyncStorage.getItem("hasSeenOnboarding").then((value) => setSeenOnboarding(!!value));
+  }, []);
+
+  /**
+   * Wake the API as early as the app can reach it.
+   *
+   * The backend sleeps on Render's free tier, so the first request after an
+   * idle period takes ~25 seconds. Whoever makes that call pays for it, and
+   * for a returning user that is the sign-in button -- which reads as slow
+   * authentication rather than a server waking up. Starting it here spends
+   * the wait under the splash and behind the login form instead.
+   *
+   * Deliberately not awaited: nothing on this screen depends on it.
+   */
+  useEffect(() => {
+    warmApi();
   }, []);
 
   useEffect(() => {

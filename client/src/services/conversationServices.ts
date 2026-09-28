@@ -19,6 +19,12 @@ export interface ApiConversation {
     content: string;
     senderId: string;
     timestamp: string;
+    /**
+     * What the last message replied to, if anything. Only the kind: the list
+     * needs to say "Replied to your story", not reproduce the quote, which
+     * already travels on the message itself.
+     */
+    contextKind?: "story" | null;
   };
   /** Already narrowed to the caller's own count by the controller. */
   unreadCount: number;
@@ -33,12 +39,29 @@ export interface ApiMessageIdentity {
   email?: string;
 }
 
+/**
+ * What a message is a reply to, shown as the quoted block above the bubble.
+ *
+ * Every field is resolved on the server from the row being quoted, never sent
+ * by the client -- a preview the sender could set is a preview the sender
+ * could forge. It is also denormalised deliberately: a story is gone after 24
+ * hours and the reply to it still has to make sense.
+ */
+export interface ApiMessageContext {
+  kind: "story";
+  refId: string;
+  authorId: string;
+  mediaUrl: string | null;
+  text: string | null;
+}
+
 export interface ApiMessage {
   _id: string;
   senderId: ApiMessageIdentity;
   receiverId: ApiMessageIdentity;
   content: string;
   status: "sent" | "delivered" | "read";
+  context?: ApiMessageContext | null;
   createdAt: string;
   updatedAt: string;
 }
