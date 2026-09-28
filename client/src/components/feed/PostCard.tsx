@@ -20,6 +20,16 @@ import { useTheme } from "@/src/styles/useTheme";
 
 interface Props {
   post: FeedPost;
+  /**
+   * Saved state as a separate primitive, overriding `post.saved`.
+   *
+   * This exists so a list does not have to spread a new post object per row to
+   * inject it. `{ ...item.post, saved }` builds a fresh object on every render,
+   * which defeats the memo below completely -- the props never compare equal,
+   * so every visible card re-rendered whenever anything on the screen changed.
+   * A boolean compares by value and costs nothing.
+   */
+  saved?: boolean;
   onToggleLike: (id: string) => void;
   onToggleSave: (id: string) => void;
   /** Opens the overflow menu. Omitted where the menu does not apply. */
@@ -96,12 +106,15 @@ function compact(n: number) {
  */
 export const PostCard = memo(function PostCard({
   post,
+  saved,
   onToggleLike,
   onToggleSave,
   onOpenOptions,
   linkToDetail = true,
 }: Props) {
   const { colors } = useTheme();
+  // Falls back to the flag on the post, for callers that already carry it.
+  const isSaved = saved ?? post.saved;
   const openComments = linkToDetail ? () => router.push(`/post/${post.id}`) : undefined;
 
   // On the post's own detail screen there is nowhere left for a tap on the
@@ -193,11 +206,11 @@ export const PostCard = memo(function PostCard({
       <View style={{ flex: 1 }} />
       <StatPill
         icon="save"
-        label={post.saved ? "Saved" : "Save"}
-        active={post.saved}
+        label={isSaved ? "Saved" : "Save"}
+        active={isSaved}
         tint={culture.yellow}
         foreground={culture.ink}
-        accessibilityLabel={post.saved ? "Remove from saved" : "Save"}
+        accessibilityLabel={isSaved ? "Remove from saved" : "Save"}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onToggleSave(post.id);

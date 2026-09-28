@@ -804,6 +804,15 @@ export default function HomeScreen() {
         // recycle one over the other.
         keyExtractor={(item) => (item.kind === "post" ? item.post.id : `people-${item.slot}`)}
         showsVerticalScrollIndicator={false}
+        // Tuned for tall cards. A feed row is a ~460pt media card, so the
+        // defaults (initialNumToRender 10, windowSize 21) mount roughly ten
+        // full-screen images before first paint and keep ten screens of them
+        // alive. These are deliberately conservative rather than minimal:
+        // windowSize 9 still holds about four screens either side, which is
+        // more than a fast flick covers.
+        initialNumToRender={4}
+        maxToRenderPerBatch={5}
+        windowSize={9}
         // Measured, never assumed: a guessed height leaves a permanent gap or
         // hides the first row the moment the campus name wraps or the type
         // scale changes.
@@ -905,7 +914,8 @@ export default function HomeScreen() {
               entering={index < 4 ? FadeIn.delay(index * 45).duration(200) : undefined}
             >
               <PostCard
-                post={{ ...item.post, saved: saved.isSaved(item.post.id) }}
+                post={item.post}
+                saved={saved.isSaved(item.post.id)}
                 onToggleLike={toggleLike}
                 onToggleSave={toggleSave}
                 onOpenOptions={setOptions}

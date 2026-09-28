@@ -174,6 +174,12 @@ export default function ProfileScreen() {
         data={myPosts}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
+        // Same reasoning as the home feed: these are tall media cards, and the
+        // defaults mount far more of them before first paint than a screen can
+        // show.
+        initialNumToRender={4}
+        maxToRenderPerBatch={5}
+        windowSize={9}
         contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
         refreshControl={
           <RefreshControl
@@ -382,7 +388,8 @@ export default function ProfileScreen() {
         }
         renderItem={({ item }) => (
           <PostCard
-            post={{ ...item, saved: store.isSaved(item.id) }}
+            post={item}
+            saved={store.isSaved(item.id)}
             onToggleLike={() => {}}
             onToggleSave={store.toggle}
             onOpenOptions={setOptions}
