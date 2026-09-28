@@ -657,6 +657,113 @@ export default function HomeScreen() {
         />
       ) : null}
 
+      {/* Lifted out of ListHeaderComponent so it stays put. A sibling of the
+          list rather than an absolute overlay: it takes its own height out of
+          the layout, so the feed ends where the bar begins and no post can
+          scroll underneath it. The greeting, stories and category rail stay in
+          the list header and still scroll away -- only the campus and the
+          three controls are worth the permanent vertical space. */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: spacing.lg,
+          // Vertical padding it used to inherit from the list header's gap,
+          // now that it stands on its own.
+          paddingTop: spacing.xs,
+          paddingBottom: spacing.sm,
+          // The two icon buttons read as one control group, so the gap
+          // between them is tighter than the gap to the campus name.
+          gap: spacing["3xs"],
+        }}
+      >
+        <View style={{ flex: 1, marginRight: spacing.xs }}>
+          <Text variant="micro" color="textMuted">
+            CAMPUS CONNECT
+          </Text>
+          <Text variant="label" numberOfLines={1}>
+            {campus ?? "Your campus"}
+          </Text>
+        </View>
+        {/* Create left the tab bar (it is an action, not a
+            destination), so this is its primary entry point. */}
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Create a post, event or group"
+          onPress={() => router.push("/(tabs)/create")}
+          style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="create" size={22} color={colors.textPrimary} />
+        </PressableScale>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={
+            unread.count ? `Notifications, ${unread.count} unread` : "Notifications"
+          }
+          onPress={() => router.push("/notifications")}
+          style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="notification" size={21} color={colors.textPrimary} />
+          {unread.count ? (
+            <View
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 6,
+                minWidth: 16,
+                height: 16,
+                paddingHorizontal: 4,
+                borderRadius: radius.full,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: culture.pink,
+                borderWidth: 1.5,
+                borderColor: colors.background,
+              }}
+            >
+              <Text
+                variant="micro"
+                style={{
+                  color: foregroundOn(culture.pink),
+                  fontSize: 9,
+                  lineHeight: 11,
+                }}
+              >
+                {unread.count > 9 ? "9+" : unread.count}
+              </Text>
+            </View>
+          ) : null}
+        </PressableScale>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={
+            attention.hasAny
+              ? `Open profile menu, ${attention.connectionRequests} waiting`
+              : "Open profile menu"
+          }
+          onPress={() => setDrawerOpen(true)}
+        >
+          <Avatar uri={display?.avatar ?? undefined} size={42} />
+          {/* A plain dot, not a count. This is a nudge to open the menu;
+              the number belongs on the row that leads to the thing. */}
+          {attention.hasAny ? (
+            <View
+              style={{
+                position: "absolute",
+                top: -1,
+                right: -1,
+                width: 13,
+                height: 13,
+                borderRadius: radius.full,
+                backgroundColor: culture.pink,
+                borderWidth: 2,
+                borderColor: colors.background,
+              }}
+            />
+          ) : null}
+        </PressableScale>
+      </View>
+
       <FlatList
         ref={listRef}
         data={rows}
@@ -682,103 +789,6 @@ export default function HomeScreen() {
         }
         ListHeaderComponent={
           <View style={{ gap: spacing.xl, paddingBottom: spacing.lg }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: spacing.lg,
-                // The two icon buttons read as one control group, so the gap
-                // between them is tighter than the gap to the campus name.
-                gap: spacing["3xs"],
-              }}
-            >
-              <View style={{ flex: 1, marginRight: spacing.xs }}>
-                <Text variant="micro" color="textMuted">
-                  CAMPUS CONNECT
-                </Text>
-                <Text variant="label" numberOfLines={1}>
-                  {campus ?? "Your campus"}
-                </Text>
-              </View>
-              {/* Create left the tab bar (it is an action, not a
-                  destination), so this is its primary entry point. */}
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel="Create a post, event or group"
-                onPress={() => router.push("/(tabs)/create")}
-                style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
-              >
-                <Icon name="create" size={22} color={colors.textPrimary} />
-              </PressableScale>
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel={
-                  unread.count ? `Notifications, ${unread.count} unread` : "Notifications"
-                }
-                onPress={() => router.push("/notifications")}
-                style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
-              >
-                <Icon name="notification" size={21} color={colors.textPrimary} />
-                {unread.count ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: 8,
-                      right: 6,
-                      minWidth: 16,
-                      height: 16,
-                      paddingHorizontal: 4,
-                      borderRadius: radius.full,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: culture.pink,
-                      borderWidth: 1.5,
-                      borderColor: colors.background,
-                    }}
-                  >
-                    <Text
-                      variant="micro"
-                      style={{
-                        color: foregroundOn(culture.pink),
-                        fontSize: 9,
-                        lineHeight: 11,
-                      }}
-                    >
-                      {unread.count > 9 ? "9+" : unread.count}
-                    </Text>
-                  </View>
-                ) : null}
-              </PressableScale>
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel={
-                  attention.hasAny
-                    ? `Open profile menu, ${attention.connectionRequests} waiting`
-                    : "Open profile menu"
-                }
-                onPress={() => setDrawerOpen(true)}
-              >
-                <Avatar uri={display?.avatar ?? undefined} size={42} />
-                {/* A plain dot, not a count. This is a nudge to open the menu;
-                    the number belongs on the row that leads to the thing. */}
-                {attention.hasAny ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -1,
-                      right: -1,
-                      width: 13,
-                      height: 13,
-                      borderRadius: radius.full,
-                      backgroundColor: culture.pink,
-                      borderWidth: 2,
-                      borderColor: colors.background,
-                    }}
-                  />
-                ) : null}
-              </PressableScale>
-            </View>
-
             <View style={{ paddingHorizontal: spacing.lg, gap: spacing.xs }}>
               <Text variant="title">
                 {firstName ? `WHAT'S GOOD, ${firstName.toUpperCase()}?` : "WHAT'S GOOD?"}
