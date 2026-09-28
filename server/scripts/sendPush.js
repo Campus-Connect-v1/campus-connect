@@ -98,13 +98,18 @@ try {
   let accepted = 0;
 
   if (personalised) {
+    // One recipient failing must not cost everyone after them their message.
     for (const user of users) {
-      const result = await sendToUsers([user.user_id], {
-        title: personalise(title, user),
-        body: personalise(body, user),
-        data,
-      });
-      accepted += result.accepted;
+      try {
+        const result = await sendToUsers([user.user_id], {
+          title: personalise(title, user),
+          body: personalise(body, user),
+          data,
+        });
+        accepted += result.accepted;
+      } catch (error) {
+        console.error(`  ${user.first_name ?? user.email}: ${error.message}`);
+      }
     }
   } else {
     ({ accepted } = await sendToUsers(users.map((u) => u.user_id), { title, body, data }));
