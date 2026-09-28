@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -12,6 +12,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar, EmptyState, Icon, PressableScale, Text } from "@/src/components/ui";
+import { StoryReplyBar } from "@/src/components/stories/StoryReplyBar";
 import { StoryViewers } from "@/src/components/stories/StoryViewers";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useSession } from "@/src/services/SessionContext";
@@ -414,6 +415,31 @@ export default function StoryViewerScreen() {
           </PressableScale>
         </View>
       </View>
+
+      {/* Reply bar. Only on someone else's story: replying to your own would
+          open a conversation with yourself, which the server rejects anyway.
+          Absolutely positioned so it sits over the story rather than shrinking
+          it, and lifted by the keyboard so the input stays reachable. */}
+      {!isOwn && current ? (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{
+            position: "absolute",
+            left: spacing.md,
+            right: spacing.md,
+            bottom: insets.bottom + spacing.md,
+          }}
+        >
+          <StoryReplyBar
+            authorId={group.author.user_id}
+            storyId={current.story_id}
+            authorName={authorName}
+            // The story must not advance while the keyboard is up, or the
+            // reply lands against a story the sender is no longer looking at.
+            onFocusChange={setPaused}
+          />
+        </KeyboardAvoidingView>
+      ) : null}
 
       {isOwn && current ? (
         <StoryViewers

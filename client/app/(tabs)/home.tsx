@@ -438,7 +438,10 @@ export default function HomeScreen() {
   // The bar positions itself absolutely, which does NOT inherit Screen's top
   // padding -- it was rendering up behind the status bar. It owns the inset
   // now, and Screen is told to skip it so the two do not both apply it.
-  const header = useHideOnScroll({ minVisible: insets.top });
+  //
+  // No minVisible: it leaves the screen completely, inset included, rather
+  // than parking a strip behind the status bar.
+  const header = useHideOnScroll();
 
   /**
    * Posts published while this feed is open, held back rather than inserted.
