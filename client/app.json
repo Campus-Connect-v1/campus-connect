@@ -8,6 +8,12 @@
     "scheme": "campusconnect",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1565d730-4f88-4944-88fd-5bfa0fe51445"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.lesliepaulajayi.campusconnect",

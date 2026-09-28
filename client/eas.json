@@ -7,6 +7,7 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://campus-connect-api-o0xt.onrender.com/api",
         "EXPO_PUBLIC_SOCKET_URL": "https://campus-connect-api-o0xt.onrender.com",
@@ -17,6 +18,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "android": {
         "buildType": "apk"
       },
@@ -30,6 +32,7 @@
     },
     "production": {
       "autoIncrement": true,
+      "channel": "production",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://campus-connect-api-o0xt.onrender.com/api",
         "EXPO_PUBLIC_SOCKET_URL": "https://campus-connect-api-o0xt.onrender.com",
