@@ -1,9 +1,18 @@
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { router } from "expo-router";
-import { memo } from "react";
-import { View, type GestureResponderEvent } from "react-native";
+import { memo, useEffect, useState } from "react";
+import { Modal, Pressable, StyleSheet, View, type GestureResponderEvent } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { Avatar, Media, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
+import { MentionText } from "@/src/components/social/MentionText";
 import { PollCard } from "./PollCard";
 import type { FeedPost } from "@/src/features/feed/types";
 import { culture, radius, spacing } from "@/src/styles/theme";
@@ -11,6 +20,16 @@ import { useTheme } from "@/src/styles/useTheme";
 
 interface Props {
   post: FeedPost;
+  /**
+   * Saved state as a separate primitive, overriding `post.saved`.
+   *
+   * This exists so a list does not have to spread a new post object per row to
+   * inject it. `{ ...item.post, saved }` builds a fresh object on every render,
+   * which defeats the memo below completely -- the props never compare equal,
+   * so every visible card re-rendered whenever anything on the screen changed.
+   * A boolean compares by value and costs nothing.
+   */
+  saved?: boolean;
   onToggleLike: (id: string) => void;
   onToggleSave: (id: string) => void;
   /** Opens the overflow menu. Omitted where the menu does not apply. */
@@ -87,13 +106,34 @@ function compact(n: number) {
  */
 export const PostCard = memo(function PostCard({
   post,
+  saved,
   onToggleLike,
   onToggleSave,
   onOpenOptions,
   linkToDetail = true,
 }: Props) {
   const { colors } = useTheme();
+  // Falls back to the flag on the post, for callers that already carry it.
+  const isSaved = saved ?? post.saved;
   const openComments = linkToDetail ? () => router.push(`/post/${post.id}`) : undefined;
+
+  // On the post's own detail screen there is nowhere left for a tap on the
+  // photo to navigate to, so it opens a full-screen view of just the image
+  // instead -- header, caption and actions fade away rather than sitting on
+  // top of a photo that is finally shown at its own size.
+  const canExpandMedia = !linkToDetail;
+  const [expanded, setExpanded] = useState(false);
+  const chromeProgress = useSharedValue(0);
+
+  useEffect(() => {
+    chromeProgress.value = withTiming(expanded ? 1 : 0, { duration: 240 });
+  }, [expanded, chromeProgress]);
+
+  const chromeStyle = useAnimatedStyle(() => ({
+    opacity: 1 - chromeProgress.value,
+    transform: [{ translateY: chromeProgress.value * 28 }],
+  }));
+
   const openAuthor = (event: GestureResponderEvent) => {
     // The card itself opens the post. Stop that parent press so tapping the
     // identity row has exactly one destination: the author's profile.
@@ -166,11 +206,11 @@ export const PostCard = memo(function PostCard({
       <View style={{ flex: 1 }} />
       <StatPill
         icon="save"
-        label={post.saved ? "Saved" : "Save"}
-        active={post.saved}
+        label={isSaved ? "Saved" : "Save"}
+        active={isSaved}
         tint={culture.yellow}
         foreground={culture.ink}
-        accessibilityLabel={post.saved ? "Remove from saved" : "Save"}
+        accessibilityLabel={isSaved ? "Remove from saved" : "Save"}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onToggleSave(post.id);
@@ -199,7 +239,7 @@ export const PostCard = memo(function PostCard({
         }}
       >
         {header}
-        <Text variant="body">{post.caption}</Text>
+        <MentionText variant="body" content={post.caption} />
         <PollCard pollId={post.pollId} />
         {actions}
       </PressableScale>
@@ -223,38 +263,82 @@ export const PostCard = memo(function PostCard({
         }}
       >
         {header}
-        <Text variant="body">{post.caption}</Text>
+        <MentionText variant="body" content={post.caption} />
         {actions}
       </PressableScale>
     );
   }
 
+  const mediaPress = openComments ?? (canExpandMedia ? () => setExpanded(true) : undefined);
+
   return (
-    <PressableScale
-      accessibilityRole={linkToDetail ? "button" : "none"}
-      accessibilityLabel={linkToDetail ? `Open ${post.author.name}'s post` : undefined}
-      disabled={!linkToDetail}
-      onPress={openComments}
-      style={{ marginHorizontal: spacing.lg, marginBottom: spacing.lg }}
-    >
-      <Media
-        source={post.image}
-        scrim="full"
-        rounded="lg"
-        style={{ height: 460 }}
-        accessibilityIgnoresInvertColors
-        accessibilityLabel={`Photo from ${post.author.name}`}
+    <>
+      <PressableScale
+        accessibilityRole={mediaPress ? "button" : "none"}
+        accessibilityLabel={
+          linkToDetail
+            ? `Open ${post.author.name}'s post`
+            : canExpandMedia
+              ? `View ${post.author.name}'s photo full screen`
+              : undefined
+        }
+        disabled={!mediaPress}
+        onPress={mediaPress}
+        style={{ marginHorizontal: spacing.lg, marginBottom: spacing.lg }}
       >
-        <View style={{ flex: 1, justifyContent: "space-between", padding: spacing.md }}>
-          {header}
-          <View style={{ gap: spacing.sm }}>
-            <Text variant="body" onMedia numberOfLines={3}>
-              {post.caption}
-            </Text>
-            {actions}
-          </View>
-        </View>
-      </Media>
-    </PressableScale>
+        <Media
+          source={post.image}
+          scrim="full"
+          rounded="lg"
+          style={{ height: 460 }}
+          accessibilityIgnoresInvertColors
+          accessibilityLabel={`Photo from ${post.author.name}`}
+        >
+          <Animated.View
+            style={[
+              { flex: 1, justifyContent: "space-between", padding: spacing.md },
+              chromeStyle,
+            ]}
+          >
+            {header}
+            <View style={{ gap: spacing.sm }}>
+              <MentionText variant="body" onMedia numberOfLines={3} content={post.caption} />
+              {actions}
+            </View>
+          </Animated.View>
+        </Media>
+      </PressableScale>
+
+      {canExpandMedia ? (
+        <Modal
+          visible={expanded}
+          transparent
+          animationType="none"
+          statusBarTranslucent
+          onRequestClose={() => setExpanded(false)}
+        >
+          <Animated.View
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(160)}
+            style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close full-screen photo"
+              onPress={() => setExpanded(false)}
+              style={StyleSheet.absoluteFill}
+            >
+              <Image
+                source={post.image}
+                contentFit="contain"
+                style={StyleSheet.absoluteFill}
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={`Photo from ${post.author.name}`}
+              />
+            </Pressable>
+          </Animated.View>
+        </Modal>
+      ) : null}
+    </>
   );
 });

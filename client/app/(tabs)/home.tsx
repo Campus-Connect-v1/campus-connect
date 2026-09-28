@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
+import { useScrollToTop } from "@react-navigation/native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -30,12 +31,14 @@ import { adaptPost } from "@/src/features/feed/adapt";
 import { type FeedPost } from "@/src/features/feed/types";
 import { adaptProfile } from "@/src/features/profile/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
+import { useCampusLookup } from "@/src/hooks/useCampusRing";
 import { fetchEvents } from "@/src/services/eventServices";
 import { useAttention } from "@/src/services/AttentionContext";
 import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
 import { fetchFeed, likePost, unlikePost, type ApiPost } from "@/src/services/socialServices";
 import { useFeedRealtime } from "@/src/hooks/useFeedRealtime";
+import { useHideOnScroll } from "@/src/hooks/useHideOnScroll";
 import { onNewPost } from "@/src/services/socket";
 import { fetchUniversityById } from "@/src/services/universityServices";
 import { useUnread } from "@/src/services/UnreadContext";
@@ -247,7 +250,11 @@ function PeopleSection({ people }: { people: ApiUserCard[] }) {
     <View style={{ gap: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.lg }}>
       <View style={{ paddingHorizontal: spacing.lg }}>
         <SectionHeader
-          eyebrow="AROUND CAMPUS"
+          // Was "AROUND CAMPUS". These matches are built from interests,
+          // courses and mutuals, not proximity, and they now cross
+          // universities -- so a location eyebrow claimed something the list
+          // does not deliver.
+          eyebrow="WORTH KNOWING"
           title="People you might know"
           actionLabel="Explore"
           onAction={() => router.push("/(tabs)/connect")}
@@ -262,6 +269,7 @@ type FeedRow = { kind: "post"; post: FeedPost } | { kind: "people"; slot: number
 
 function PeopleStrip({ people }: { people: ApiUserCard[] }) {
   const { width } = useWindowDimensions();
+  const campusOf = useCampusLookup();
   const cardWidth = Math.min(154, width * 0.39);
 
   const matchColor = (percentage: number) => {
@@ -277,48 +285,82 @@ function PeopleStrip({ people }: { people: ApiUserCard[] }) {
       style={{ flexGrow: 0 }}
       contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
     >
-      {people.slice(0, 5).map((person) => (
-        <PressableScale
-          key={person.user_id}
-          accessibilityRole="button"
-          accessibilityLabel={[
-            `View ${person.first_name} ${person.last_name ?? ""}`.trim(),
-            typeof person.match_percentage === "number"
-              ? `${person.match_percentage}% match`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(", ")}
-          onPress={() => router.push(`/person/${person.user_id}`)}
-          style={{ width: cardWidth }}
-        >
-          <Media
-            source={person.profile_picture_url ?? undefined}
-            scrim
-            rounded="md"
-            style={{ height: 190 }}
+      {people.slice(0, 5).map((person) => {
+        // Recommendations cross universities now, so a card can no longer
+        // assume the person is a classmate.
+        const campus = campusOf(person.university_id);
+        const away = campus ? !campus.isOwn : false;
+
+        return (
+          <PressableScale
+            key={person.user_id}
+            accessibilityRole="button"
+            accessibilityLabel={[
+              `View ${person.first_name} ${person.last_name ?? ""}`.trim(),
+              away && campus ? `at ${campus.label}` : null,
+              typeof person.match_percentage === "number"
+                ? `${person.match_percentage}% match`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(", ")}
+            onPress={() => router.push(`/person/${person.user_id}`)}
+            style={{ width: cardWidth }}
           >
-            <View style={{ flex: 1, justifyContent: "space-between", padding: spacing.sm }}>
-              {typeof person.match_percentage === "number" ? (
-                <Sticker
-                  label={`${person.match_percentage}% MATCH`}
-                  backgroundColor={matchColor(person.match_percentage)}
-                />
-              ) : (
-                <View />
-              )}
-              <View>
-                <Text variant="label" onMedia numberOfLines={1}>
-                  {[person.first_name, person.last_name].filter(Boolean).join(" ")}
-                </Text>
-                <Text variant="caption" onMedia style={{ opacity: 0.82 }} numberOfLines={1}>
-                  {person.program ?? person.profile_headline ?? "On campus"}
-                </Text>
+            <Media
+              source={person.profile_picture_url ?? undefined}
+              scrim
+              rounded="md"
+              style={{ height: 190 }}
+            >
+              <View style={{ flex: 1, justifyContent: "space-between", padding: spacing.sm }}>
+                {typeof person.match_percentage === "number" ? (
+                  <Sticker
+                    label={`${person.match_percentage}% MATCH`}
+                    backgroundColor={matchColor(person.match_percentage)}
+                  />
+                ) : (
+                  <View />
+                )}
+                <View style={{ gap: 4, alignItems: "flex-start" }}>
+                  {/* Above the name rather than beside the match sticker: this
+                      card is ~154pt wide and two stickers on one row collide.
+                      Only a visitor's campus is named, the rule UserRow already
+                      follows -- labelling your own campus on a list that is
+                      mostly your own campus is noise. Drawn in the university's
+                      own colour so the same person reads the same here, on the
+                      map and in search. */}
+                  {away && campus ? (
+                    <View
+                      style={{
+                        paddingHorizontal: spacing.xs,
+                        paddingVertical: 1,
+                        borderRadius: radius.full,
+                        backgroundColor: campus.color,
+                      }}
+                    >
+                      <Text
+                        variant="caption"
+                        style={{ color: foregroundOn(campus.color), fontSize: 10 }}
+                      >
+                        {campus.label}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <Text variant="label" onMedia numberOfLines={1}>
+                    {[person.first_name, person.last_name].filter(Boolean).join(" ")}
+                  </Text>
+                  <Text variant="caption" onMedia style={{ opacity: 0.82 }} numberOfLines={1}>
+                    {person.program ??
+                      person.profile_headline ??
+                      (away && campus ? campus.label : "On campus")}
+                  </Text>
+                </View>
               </View>
-            </View>
-          </Media>
-        </PressableScale>
-      ))}
+            </Media>
+          </PressableScale>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -394,6 +436,22 @@ export default function HomeScreen() {
   // the second call and fetch the same page twice.
   const fetching = useRef(false);
   const listRef = useRef<FlatList<FeedRow>>(null);
+  // The bar positions itself absolutely, which does NOT inherit Screen's top
+  // padding -- it was rendering up behind the status bar. It owns the inset
+  // now, and Screen is told to skip it so the two do not both apply it.
+  //
+  // No minVisible: it leaves the screen completely, inset included, rather
+  // than parking a strip behind the status bar.
+  const header = useHideOnScroll();
+
+  /**
+   * Tapping the active tab returns to the top of the feed.
+   *
+   * useScrollToTop rather than a hand-rolled tabPress listener: it is the
+   * navigation library's own binding, so it also covers the iOS status-bar
+   * tap, and it detaches itself when the screen is not focused.
+   */
+  useScrollToTop(listRef as never);
 
   /**
    * Posts published while this feed is open, held back rather than inserted.
@@ -566,7 +624,7 @@ export default function HomeScreen() {
   const peopleAtTop = recommendations.length > 0 && posts.length <= FIRST_SLOT;
 
   return (
-    <Screen>
+    <Screen edges={{ top: false }}>
       <OfflineBanner />
       <ProfileDrawer
         isVisible={drawerOpen}
@@ -617,15 +675,151 @@ export default function HomeScreen() {
         />
       ) : null}
 
-      <FlatList
+      {/* Lifted out of ListHeaderComponent so it stays put. A sibling of the
+          list rather than an absolute overlay: it takes its own height out of
+          the layout, so the feed ends where the bar begins and no post can
+          scroll underneath it. The greeting, stories and category rail stay in
+          the list header and still scroll away -- only the campus and the
+          three controls are worth the permanent vertical space. */}
+      <Animated.View
+        onLayout={header.onHeaderLayout}
+        style={[
+          {
+            // Absolute, so the feed passes UNDER it as it slides away. That is
+            // the whole effect, and it is why the list gets a paddingTop of the
+            // measured height instead of the bar taking layout space.
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+            // Opaque, for the same reason: posts travel behind this.
+            backgroundColor: colors.background,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: spacing.lg,
+            paddingTop: insets.top + spacing.xs,
+            paddingBottom: spacing.sm,
+            // The two icon buttons read as one control group, so the gap
+            // between them is tighter than the gap to the campus name.
+            gap: spacing["3xs"],
+          },
+          header.headerStyle,
+        ]}
+      >
+        <View style={{ flex: 1, marginRight: spacing.xs }}>
+          <Text variant="micro" color="textMuted">
+            CAMPUS CONNECT
+          </Text>
+          <Text variant="label" numberOfLines={1}>
+            {campus ?? "Your campus"}
+          </Text>
+        </View>
+        {/* Create left the tab bar (it is an action, not a
+            destination), so this is its primary entry point. */}
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Create a post, event or group"
+          onPress={() => router.push("/(tabs)/create")}
+          style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="create" size={22} color={colors.textPrimary} />
+        </PressableScale>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={
+            unread.count ? `Notifications, ${unread.count} unread` : "Notifications"
+          }
+          onPress={() => router.push("/notifications")}
+          style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="notification" size={21} color={colors.textPrimary} />
+          {unread.count ? (
+            <View
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 6,
+                minWidth: 16,
+                height: 16,
+                paddingHorizontal: 4,
+                borderRadius: radius.full,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: culture.pink,
+                borderWidth: 1.5,
+                borderColor: colors.background,
+              }}
+            >
+              <Text
+                variant="micro"
+                style={{
+                  color: foregroundOn(culture.pink),
+                  fontSize: 9,
+                  lineHeight: 11,
+                }}
+              >
+                {unread.count > 9 ? "9+" : unread.count}
+              </Text>
+            </View>
+          ) : null}
+        </PressableScale>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={
+            attention.hasAny
+              ? `Open profile menu, ${attention.connectionRequests} waiting`
+              : "Open profile menu"
+          }
+          onPress={() => setDrawerOpen(true)}
+        >
+          <Avatar uri={display?.avatar ?? undefined} size={42} />
+          {/* A plain dot, not a count. This is a nudge to open the menu;
+              the number belongs on the row that leads to the thing. */}
+          {attention.hasAny ? (
+            <View
+              style={{
+                position: "absolute",
+                top: -1,
+                right: -1,
+                width: 13,
+                height: 13,
+                borderRadius: radius.full,
+                backgroundColor: culture.pink,
+                borderWidth: 2,
+                borderColor: colors.background,
+              }}
+            />
+          ) : null}
+        </PressableScale>
+      </Animated.View>
+
+      <Animated.FlatList
         ref={listRef}
+        onScroll={header.onScroll}
+        scrollEventThrottle={16}
         data={rows}
         // The slot index keys the injected rows: two suggestion blocks in one
         // feed would otherwise collide on a constant key and FlatList would
         // recycle one over the other.
         keyExtractor={(item) => (item.kind === "post" ? item.post.id : `people-${item.slot}`)}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+        // Tuned for tall cards. A feed row is a ~460pt media card, so the
+        // defaults (initialNumToRender 10, windowSize 21) mount roughly ten
+        // full-screen images before first paint and keep ten screens of them
+        // alive. These are deliberately conservative rather than minimal:
+        // windowSize 9 still holds about four screens either side, which is
+        // more than a fast flick covers.
+        initialNumToRender={4}
+        maxToRenderPerBatch={5}
+        windowSize={9}
+        // Measured, never assumed: a guessed height leaves a permanent gap or
+        // hides the first row the moment the campus name wraps or the type
+        // scale changes.
+        contentContainerStyle={{
+          paddingTop: header.headerHeight,
+          paddingBottom: TAB_BAR_CLEARANCE,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={feed.refreshing}
@@ -642,103 +836,6 @@ export default function HomeScreen() {
         }
         ListHeaderComponent={
           <View style={{ gap: spacing.xl, paddingBottom: spacing.lg }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: spacing.lg,
-                // The two icon buttons read as one control group, so the gap
-                // between them is tighter than the gap to the campus name.
-                gap: spacing["3xs"],
-              }}
-            >
-              <View style={{ flex: 1, marginRight: spacing.xs }}>
-                <Text variant="micro" color="textMuted">
-                  CAMPUS CONNECT
-                </Text>
-                <Text variant="label" numberOfLines={1}>
-                  {campus ?? "Your campus"}
-                </Text>
-              </View>
-              {/* Create left the tab bar (it is an action, not a
-                  destination), so this is its primary entry point. */}
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel="Create a post, event or group"
-                onPress={() => router.push("/(tabs)/create")}
-                style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
-              >
-                <Icon name="create" size={22} color={colors.textPrimary} />
-              </PressableScale>
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel={
-                  unread.count ? `Notifications, ${unread.count} unread` : "Notifications"
-                }
-                onPress={() => router.push("/notifications")}
-                style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
-              >
-                <Icon name="notification" size={21} color={colors.textPrimary} />
-                {unread.count ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: 8,
-                      right: 6,
-                      minWidth: 16,
-                      height: 16,
-                      paddingHorizontal: 4,
-                      borderRadius: radius.full,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: culture.pink,
-                      borderWidth: 1.5,
-                      borderColor: colors.background,
-                    }}
-                  >
-                    <Text
-                      variant="micro"
-                      style={{
-                        color: foregroundOn(culture.pink),
-                        fontSize: 9,
-                        lineHeight: 11,
-                      }}
-                    >
-                      {unread.count > 9 ? "9+" : unread.count}
-                    </Text>
-                  </View>
-                ) : null}
-              </PressableScale>
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel={
-                  attention.hasAny
-                    ? `Open profile menu, ${attention.connectionRequests} waiting`
-                    : "Open profile menu"
-                }
-                onPress={() => setDrawerOpen(true)}
-              >
-                <Avatar uri={display?.avatar ?? undefined} size={42} />
-                {/* A plain dot, not a count. This is a nudge to open the menu;
-                    the number belongs on the row that leads to the thing. */}
-                {attention.hasAny ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -1,
-                      right: -1,
-                      width: 13,
-                      height: 13,
-                      borderRadius: radius.full,
-                      backgroundColor: culture.pink,
-                      borderWidth: 2,
-                      borderColor: colors.background,
-                    }}
-                  />
-                ) : null}
-              </PressableScale>
-            </View>
-
             <View style={{ paddingHorizontal: spacing.lg, gap: spacing.xs }}>
               <Text variant="title">
                 {firstName ? `WHAT'S GOOD, ${firstName.toUpperCase()}?` : "WHAT'S GOOD?"}
@@ -817,7 +914,8 @@ export default function HomeScreen() {
               entering={index < 4 ? FadeIn.delay(index * 45).duration(200) : undefined}
             >
               <PostCard
-                post={{ ...item.post, saved: saved.isSaved(item.post.id) }}
+                post={item.post}
+                saved={saved.isSaved(item.post.id)}
                 onToggleLike={toggleLike}
                 onToggleSave={toggleSave}
                 onOpenOptions={setOptions}

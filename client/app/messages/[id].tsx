@@ -1,4 +1,5 @@
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Platform, TextInput, View } from "react-native";
@@ -6,7 +7,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { EmptyState, Icon, InlineNotice, PressableScale, Text } from "@/src/components/ui";
-import { fetchConversationMessages } from "@/src/services/conversationServices";
+import {
+  fetchConversationMessages,
+  type ApiMessageContext,
+} from "@/src/services/conversationServices";
 import { useSession } from "@/src/services/SessionContext";
 import { getSocket, markMessageRead, sendMessage, type SocketMessage } from "@/src/services/socket";
 import { culture, inputTextStyle, radius, spacing } from "@/src/styles/theme";
@@ -17,6 +21,57 @@ interface ChatMessage {
   content: string;
   mine: boolean;
   at: string;
+  context?: ApiMessageContext | null;
+}
+
+/**
+ * The quoted block above a reply, the way a chat app shows what you answered.
+ *
+ * Deliberately NOT tappable through to the story. A story lives 24 hours and
+ * the reply outlives it, so most of these point at something already gone --
+ * a link that usually dead-ends is worse than no link. The quote is a record
+ * of what was said, not a way back to it.
+ */
+function QuotedStory({ context, mine }: { context: ApiMessageContext; mine: boolean }) {
+  const { colors } = useTheme();
+  const tint = mine ? culture.warmWhite : colors.textPrimary;
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.sm,
+        marginBottom: spacing.xs,
+        paddingLeft: spacing.sm,
+        paddingRight: spacing.xs,
+        paddingVertical: spacing.xs,
+        borderRadius: radius.sm,
+        // A translucent wash rather than a fixed colour, so one rule reads
+        // correctly on the violet of your own bubble and on the surface of
+        // theirs.
+        backgroundColor: mine ? "rgba(255,255,255,0.16)" : colors.background,
+        borderLeftWidth: 3,
+        borderLeftColor: mine ? culture.warmWhite : culture.violet,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <Text variant="micro" style={{ color: tint, opacity: 0.8 }}>
+          STORY
+        </Text>
+        <Text variant="caption" numberOfLines={2} style={{ color: tint, opacity: 0.9 }}>
+          {context.text || (context.mediaUrl ? "Photo" : "Story")}
+        </Text>
+      </View>
+      {context.mediaUrl ? (
+        <Image
+          source={{ uri: context.mediaUrl }}
+          style={{ width: 38, height: 38, borderRadius: radius.sm }}
+          contentFit="cover"
+        />
+      ) : null}
+    </View>
+  );
 }
 
 function clock(iso: string) {
@@ -42,6 +97,9 @@ function Bubble({ message }: { message: ChatMessage }) {
         backgroundColor: message.mine ? culture.violet : colors.surface,
       }}
     >
+      {message.context?.kind === "story" ? (
+        <QuotedStory context={message.context} mine={message.mine} />
+      ) : null}
       <Text variant="body" style={message.mine ? { color: culture.warmWhite } : undefined}>
         {message.content}
       </Text>
@@ -116,6 +174,7 @@ export default function ChatScreen() {
       const history = result.data.messages.map((message) => ({
         id: message._id,
         content: message.content,
+        context: message.context ?? null,
         mine: message.senderId._id === user?.id,
         at: message.createdAt,
       }));

@@ -1,7 +1,8 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { FlatList, RefreshControl, SectionList, View } from "react-native";
+import { useScrollToTop } from "@react-navigation/native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -244,6 +245,16 @@ function GroupCard({
 }
 
 export default function EventsScreen() {
+  /**
+   * Two scrollers, because this tab swaps between a groups list and a
+   * sectioned events list. Both are registered: whichever is not mounted has
+   * a null ref and the hook simply does nothing for it.
+   */
+  const groupsRef = useRef<FlatList>(null);
+  const eventsRef = useRef<SectionList>(null);
+  useScrollToTop(groupsRef as never);
+  useScrollToTop(eventsRef as never);
+
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ section?: string }>();
@@ -520,6 +531,7 @@ export default function EventsScreen() {
         </View>
       ) : section === "groups" ? (
         <FlatList
+          ref={groupsRef}
           data={groups}
           keyExtractor={(item) => item.group_id}
           showsVerticalScrollIndicator={false}
@@ -584,6 +596,7 @@ export default function EventsScreen() {
         />
       ) : (
         <SectionList
+          ref={eventsRef}
           sections={sections}
           keyExtractor={(item) => item.event_id}
           showsVerticalScrollIndicator={false}

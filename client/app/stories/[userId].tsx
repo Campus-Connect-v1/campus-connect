@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -12,8 +12,10 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar, EmptyState, Icon, PressableScale, Text } from "@/src/components/ui";
+import { StoryReplyBar } from "@/src/components/stories/StoryReplyBar";
 import { StoryViewers } from "@/src/components/stories/StoryViewers";
 import { useAsync } from "@/src/hooks/useAsync";
+import { cachedStoryGroup } from "@/src/features/stories/cache";
 import { useSession } from "@/src/services/SessionContext";
 import {
   fetchStoryFeed,
@@ -115,6 +117,14 @@ export default function StoryViewerScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { user } = useSession();
 
+  /**
+   * What the rail already had, read synchronously so the first frame can draw.
+   *
+   * This is the fix for the black screen on opening a story: the fetches below
+   * still run, but nothing waits on them to show the first image.
+   */
+  const seeded = useMemo(() => cachedStoryGroup(userId), [userId]);
+
   const feed = useAsync(
     useCallback(() => fetchStoryFeed(50, 0), []),
     []
@@ -129,13 +139,25 @@ export default function StoryViewerScreen() {
    * here" for someone who plainly had one.
    */
   const direct = useAsync(
-    useCallback(() => fetchUserStories(userId), [userId]),
-    [userId]
+    // Skipped when the rail already handed us this person, which is the common
+    // path. It used to fire on every story open alongside the feed fetch, so
+    // opening a story cost two round trips to learn what was already known.
+    useCallback(
+      () =>
+        seeded
+          ? Promise.resolve({ success: true as const, data: seeded.stories })
+          : fetchUserStories(userId),
+      [userId, seeded]
+    ),
+    [userId, seeded]
   );
 
   const group: ApiStoryGroup | undefined = useMemo(() => {
+    // Live data wins as soon as it lands; the seed only covers the gap before
+    // it does, and may be stale enough to have expired stories in it.
     const fromFeed = (feed.data ?? []).find((g) => g.author.user_id === userId);
     if (fromFeed) return fromFeed;
+    if (seeded) return seeded;
 
     const stories = direct.data ?? [];
     if (stories.length === 0) return undefined;
@@ -160,7 +182,7 @@ export default function StoryViewerScreen() {
       latest_story_at: stories[stories.length - 1]?.created_at ?? "",
       stories,
     };
-  }, [feed.data, direct.data, userId]);
+  }, [feed.data, direct.data, seeded, userId]);
 
   // Memoised because it feeds a dependency array; a fresh [] each render
   // would restart the "open on first unseen" effect on every frame.
@@ -414,6 +436,31 @@ export default function StoryViewerScreen() {
           </PressableScale>
         </View>
       </View>
+
+      {/* Reply bar. Only on someone else's story: replying to your own would
+          open a conversation with yourself, which the server rejects anyway.
+          Absolutely positioned so it sits over the story rather than shrinking
+          it, and lifted by the keyboard so the input stays reachable. */}
+      {!isOwn && current ? (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{
+            position: "absolute",
+            left: spacing.md,
+            right: spacing.md,
+            bottom: insets.bottom + spacing.md,
+          }}
+        >
+          <StoryReplyBar
+            authorId={group.author.user_id}
+            storyId={current.story_id}
+            authorName={authorName}
+            // The story must not advance while the keyboard is up, or the
+            // reply lands against a story the sender is no longer looking at.
+            onFocusChange={setPaused}
+          />
+        </KeyboardAvoidingView>
+      ) : null}
 
       {isOwn && current ? (
         <StoryViewers
