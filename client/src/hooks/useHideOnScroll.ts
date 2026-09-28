@@ -39,7 +39,7 @@ const TIMING = { duration: 180, easing: Easing.out(Easing.quad) };
  * number is what leaves a permanent gap, or hides the first row, as soon as
  * the type scale or the campus name changes.
  */
-export function useHideOnScroll() {
+export function useHideOnScroll({ minVisible = 0 }: { minVisible?: number } = {}) {
   const [height, setHeight] = useState(0);
 
   const offset = useSharedValue(0);
@@ -47,6 +47,14 @@ export function useHideOnScroll() {
   const hidden = useSharedValue(false);
   // The worklet cannot read React state, so the measured height lives here too.
   const measured = useSharedValue(0);
+  /**
+   * How much of the header stays on screen when hidden.
+   *
+   * Callers pass the top safe-area inset, so the strip behind the status bar
+   * keeps its solid background and the feed never scrolls under the clock.
+   */
+  const floor = useSharedValue(minVisible);
+  floor.value = minVisible;
 
   const onHeaderLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -78,7 +86,7 @@ export function useHideOnScroll() {
       // once per change of direction rather than restarting every frame.
       if (delta > 0 && !hidden.value) {
         hidden.value = true;
-        offset.value = withTiming(-measured.value, TIMING);
+        offset.value = withTiming(-(measured.value - floor.value), TIMING);
       } else if (delta < 0 && hidden.value) {
         hidden.value = false;
         offset.value = withTiming(0, TIMING);

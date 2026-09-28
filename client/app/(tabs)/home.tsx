@@ -435,7 +435,10 @@ export default function HomeScreen() {
   // the second call and fetch the same page twice.
   const fetching = useRef(false);
   const listRef = useRef<FlatList<FeedRow>>(null);
-  const header = useHideOnScroll();
+  // The bar positions itself absolutely, which does NOT inherit Screen's top
+  // padding -- it was rendering up behind the status bar. It owns the inset
+  // now, and Screen is told to skip it so the two do not both apply it.
+  const header = useHideOnScroll({ minVisible: insets.top });
 
   /**
    * Posts published while this feed is open, held back rather than inserted.
@@ -608,7 +611,7 @@ export default function HomeScreen() {
   const peopleAtTop = recommendations.length > 0 && posts.length <= FIRST_SLOT;
 
   return (
-    <Screen>
+    <Screen edges={{ top: false }}>
       <OfflineBanner />
       <ProfileDrawer
         isVisible={drawerOpen}
@@ -682,7 +685,7 @@ export default function HomeScreen() {
             flexDirection: "row",
             alignItems: "center",
             paddingHorizontal: spacing.lg,
-            paddingTop: spacing.xs,
+            paddingTop: insets.top + spacing.xs,
             paddingBottom: spacing.sm,
             // The two icon buttons read as one control group, so the gap
             // between them is tighter than the gap to the campus name.
