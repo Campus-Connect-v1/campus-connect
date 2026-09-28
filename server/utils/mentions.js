@@ -100,3 +100,76 @@ export const mentionHandle = (user) => {
   const named = clean([user?.first_name, user?.last_name].filter(Boolean).join("."));
   return (named || "campus.user").slice(0, 40);
 };
+
+/**
+ * A short, stable tag for a university: `ug.edu.gh` -> `ug`.
+ *
+ * Taken from the domain rather than the name, because the domain is already
+ * the thing that is unique per institution and is short enough to sit on the
+ * end of a handle.
+ */
+const campusTag = (user) => {
+  const domain = String(user?.university_domain ?? "").toLowerCase();
+  const first = domain.split(".")[0];
+  if (first) return first.replace(/[^a-z0-9]/g, "").slice(0, 12);
+
+  const name = String(user?.university_name ?? "");
+  const initials = name
+    .split(/\s+/)
+    .filter((word) => /^[A-Za-z]/.test(word) && !/^(of|the|and)$/i.test(word))
+    .map((word) => word[0].toLowerCase())
+    .join("");
+  return initials.slice(0, 12);
+};
+
+/**
+ * Handles for a set of users, with the campus appended ONLY where it is needed
+ * to tell two of them apart: `kofi.mensah` stays as it is until a second Kofi
+ * Mensah shows up, and then both become `kofi.mensah.ug` and
+ * `kofi.mensah.knust`.
+ *
+ * Suffixing only on collision keeps the common case short. Suffixing BOTH
+ * sides of a collision rather than just the newcomer matters: if one of them
+ * kept the bare handle, which one that was would depend on row order, and the
+ * same person would be labelled differently from one search to the next.
+ *
+ * This runs per result set, which is the moment the label is chosen: the
+ * picker shows it, the composer inserts it, and it is then frozen into the
+ * stored marker. It never has to resolve anything -- the user_id does that --
+ * so it only has to be unambiguous to the person reading the list.
+ */
+export const disambiguateHandles = (users) => {
+  const base = new Map(users.map((user) => [user.user_id, mentionHandle(user)]));
+
+  const counts = new Map();
+  for (const handle of base.values()) {
+    counts.set(handle, (counts.get(handle) ?? 0) + 1);
+  }
+
+  const resolved = new Map();
+  const used = new Set();
+
+  for (const user of users) {
+    const handle = base.get(user.user_id);
+    let final = handle;
+
+    if (counts.get(handle) > 1) {
+      const tag = campusTag(user);
+      if (tag) final = `${handle}.${tag}`;
+    }
+
+    // Two people with the same name at the SAME university: the campus cannot
+    // separate them, so fall back to a counter rather than handing out one
+    // label twice.
+    if (used.has(final)) {
+      let n = 2;
+      while (used.has(`${final}${n}`)) n += 1;
+      final = `${final}${n}`;
+    }
+
+    used.add(final);
+    resolved.set(user.user_id, final);
+  }
+
+  return resolved;
+};

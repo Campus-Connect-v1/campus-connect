@@ -26,7 +26,7 @@ import bcrypt from "bcrypt";
 import { authenticate } from "../middleware/auth.js";
 import { notify } from "../models/notification.model.js";
 import { db } from "../config/db.js";
-import { mentionHandle } from "../utils/mentions.js";
+import { disambiguateHandles } from "../utils/mentions.js";
 
 // Get user profile
 export const getProfile = async (req, res) => {
@@ -198,6 +198,10 @@ export const searchUsers = async (req, res) => {
         )}`,
       });
     }
+    // Computed over the whole result set, not per row: the campus suffix is
+    // only added where two of these people would otherwise share a handle.
+    const handles = disambiguateHandles(users);
+
     res.status(200).json({
       message: "Users retrieved successfully",
       count: users.length,
@@ -213,7 +217,7 @@ export const searchUsers = async (req, res) => {
         // The label the mention composer inserts and shows. Derived here, not
         // in the client, so one rule decides it -- and because it reads the
         // email, which the client is never sent.
-        mention_handle: mentionHandle(user),
+        mention_handle: handles.get(user.user_id),
       })),
     });
   } catch (error) {

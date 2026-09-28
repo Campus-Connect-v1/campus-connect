@@ -182,7 +182,7 @@ export const searchUsersModel = async (filters = {}) => {
       SELECT DISTINCT 
         u.user_id, u.first_name, u.last_name, u.profile_picture_url,
         u.profile_headline, u.program, u.graduation_year,
-        u.university_id, uni.name as university_name,
+        u.university_id, uni.name as university_name, uni.domain as university_domain,
         u.privacy_profile, u.created_at, u.last_login,
         -- year_of_study and bio were already being read by the controller's
         -- serializer but were never selected, so both came back undefined on
@@ -207,21 +207,43 @@ export const searchUsersModel = async (filters = {}) => {
     }
 
     if (filters.q && filters.q.trim() !== "") {
-      const searchParam = `%${filters.q}%`;
-      conditions.push(`(
-        u.first_name LIKE ? OR 
-        u.last_name LIKE ? OR 
-        u.profile_headline LIKE ? OR 
-        u.bio LIKE ? OR
-        u.program LIKE ?
-      )`);
-      params.push(
-        searchParam,
-        searchParam,
-        searchParam,
-        searchParam,
-        searchParam
-      );
+      /**
+       * Tokenised, because the whole query used to be wrapped in one %...%
+       * and matched against each column on its own. No single column holds
+       * "joyce elli", so a full name never matched -- and neither did a
+       * handle like "joyce.elli", which is what the mention picker sends.
+       *
+       * Splitting on whitespace AND punctuation means one rule serves
+       * "Joyce Elli", "joyce.elli" and "joyce.elli.ug". Tokens are ANDed and
+       * each may match any field, so extra words narrow rather than widen.
+       */
+      const tokens = filters.q
+        .trim()
+        .split(/[\s._-]+/)
+        .filter(Boolean)
+        // Bounded: each token costs 8 placeholders, and nobody searches with
+        // more words than this.
+        .slice(0, 5);
+
+      for (const token of tokens) {
+        const like = `%${token}%`;
+        conditions.push(`(
+          u.first_name LIKE ? OR
+          u.last_name LIKE ? OR
+          CONCAT(u.first_name, ' ', u.last_name) LIKE ? OR
+          -- The email LOCAL PART only. This is what makes a handle
+          -- searchable; the domain is matched separately below so that
+          -- "joyce.elli.ug" can find Joyce at UG without every UG address
+          -- matching the word "ug".
+          SUBSTRING_INDEX(u.email, '@', 1) LIKE ? OR
+          uni.name LIKE ? OR
+          SUBSTRING_INDEX(uni.domain, '.', 1) LIKE ? OR
+          u.profile_headline LIKE ? OR
+          u.program LIKE ? OR
+          u.bio LIKE ?
+        )`);
+        params.push(like, like, like, like, like, like, like, like, like);
+      }
     }
 
     if (filters.program) {

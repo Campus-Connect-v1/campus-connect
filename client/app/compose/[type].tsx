@@ -81,7 +81,8 @@ export default function ComposeScreen() {
   };
 
   const publish = async () => {
-    const content = text.trim();
+    // Plain `@handle` while composing; markers only at the point of storing.
+    const content = mentions.serialize(text).trim();
     if (!content) return;
 
     setPublishing(true);

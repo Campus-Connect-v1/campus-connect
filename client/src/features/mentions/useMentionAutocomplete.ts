@@ -3,7 +3,7 @@ import type { NativeSyntheticEvent, TextInputSelectionChangeEventData } from "re
 
 import { searchUsers, type ApiUserCard } from "@/src/services/userServices";
 
-import { activeMentionQuery } from "./parse";
+import { activeMentionQuery, hydrateMentions, serializeMentions } from "./parse";
 
 /** Long enough that a fast typist issues one request per word, not per letter. */
 const DEBOUNCE_MS = 220;
@@ -39,6 +39,13 @@ export function useMentionAutocomplete({
     start: number;
     end: number;
   } | null>(null);
+  /**
+   * handle -> user_id for everyone picked from the picker in this draft.
+   *
+   * This is the only record of who a `@handle` in the text actually meant, so
+   * it is what makes the plain-text composer resolvable on submit.
+   */
+  const [registry, setRegistry] = useState<ReadonlyMap<string, string>>(new Map());
 
   const active = activeMentionQuery(text, caret);
   const query = active?.query ?? null;
@@ -94,27 +101,39 @@ export function useMentionAutocomplete({
   );
 
   /**
-   * Replaces the typed token with the stored marker.
+   * Replaces the typed token with the PLAIN handle, and remembers who it meant.
    *
-   * The visible text grows from `@kof` to `@kofi.mensah`, but what is stored
-   * is `@[kofi.mensah](user_12)`, so the caret has to be placed past the whole
-   * marker rather than past the label the user can see.
+   * Not the marker. A React Native TextInput cannot style part of its own
+   * value, so writing `@[Joyce Elli](user_123)` into it shows the writer the
+   * id and the brackets while they type. They see `@joyce.elli`; the marker is
+   * assembled from this registry on submit.
    */
   const select = useCallback(
     (person: ApiUserCard) => {
       if (!active) return;
 
-      const label =
+      const handle =
         person.mention_handle ||
-        [person.first_name, person.last_name].filter(Boolean).join(" ") ||
+        [person.first_name, person.last_name]
+          .filter(Boolean)
+          .join(".")
+          .toLowerCase()
+          .replace(/\s+/g, ".") ||
         "campus.user";
 
-      const marker = `@[${label}](${person.user_id})`;
+      const inserted = `@${handle}`;
       const before = text.slice(0, active.start);
       const after = text.slice(caret);
-      // A trailing space so the next word is not swallowed into the mention.
-      const next = `${before}${marker} ${after}`;
-      const cursor = before.length + marker.length + 1;
+      // A trailing space, so the next word is not read as part of the handle
+      // and the picker closes on the whitespace.
+      const next = `${before}${inserted} ${after}`;
+      const cursor = before.length + inserted.length + 1;
+
+      setRegistry((current) => {
+        const updated = new Map(current);
+        updated.set(handle, person.user_id);
+        return updated;
+      });
 
       onChange(next);
       setCaret(cursor);
@@ -124,6 +143,37 @@ export function useMentionAutocomplete({
     [active, caret, onChange, text]
   );
 
+  /**
+   * Call this on submit to get what should actually be stored.
+   *
+   * Handles nobody picked stay plain, so typing `@someone` by hand, or editing
+   * a picked name until it no longer matches, produces no link and notifies
+   * nobody -- which is the safe direction for a mistake to fall.
+   */
+  const serialize = useCallback(
+    (value: string = text) => serializeMentions(value, registry),
+    [registry, text]
+  );
+
+  /**
+   * Seeds the composer from stored content for an edit: returns the plain text
+   * to show, and restores the registry so saving re-writes the same markers.
+   */
+  const hydrate = useCallback((content: string | null | undefined) => {
+    const { text: plain, registry: restored } = hydrateMentions(content);
+    setRegistry(restored);
+    setCaret(plain.length);
+    setPendingSelection(null);
+    return plain;
+  }, []);
+
+  const reset = useCallback(() => {
+    setRegistry(new Map());
+    setSuggestions([]);
+    setPendingSelection(null);
+    setCaret(0);
+  }, []);
+
   return {
     /** True whenever the caret sits in an @-token, even before results land. */
     open: query !== null,
@@ -131,6 +181,9 @@ export function useMentionAutocomplete({
     suggestions,
     loading,
     select,
+    serialize,
+    hydrate,
+    reset,
     onSelectionChange,
     handleChangeText,
     selection: pendingSelection ?? undefined,

@@ -330,13 +330,18 @@ export default function PostCommentsScreen() {
    */
   const startEditingComment = (comment: ApiComment) => {
     setEditingComment(comment);
-    setDraft(comment.content);
+    // hydrate, not the raw content: the stored text carries
+    // `@[joyce.elli](user_3)` markers, and dropping those into the input would
+    // show the writer the brackets and the id. It also re-registers them, so
+    // editing the sentence around a mention does not silently unlink it.
+    setDraft(mentions.hydrate(comment.content));
     inputRef.current?.focus();
   };
 
   const cancelEditing = () => {
     setEditingComment(null);
     setDraft("");
+    mentions.reset();
   };
 
   const confirmDeleteComment = (comment: ApiComment) =>
@@ -360,7 +365,10 @@ export default function PostCommentsScreen() {
     ]);
 
   const send = async () => {
-    const content = draft.trim();
+    // The draft holds plain `@handle` text, which is what the writer sees.
+    // The stored markers are assembled here, from the people they actually
+    // picked -- see useMentionAutocomplete.
+    const content = mentions.serialize(draft).trim();
     if (!content || sending) return;
 
     setSending(true);
@@ -399,6 +407,10 @@ export default function PostCommentsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setExtra((current) => [...current, result.data]);
     setDraft("");
+    // Clear the handle registry with the draft. Left to accumulate, a handle
+    // picked in an earlier comment would still resolve in a later one the user
+    // only typed by hand.
+    mentions.reset();
   };
 
   return (
