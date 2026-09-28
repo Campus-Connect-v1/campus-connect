@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, View } 
 
 import { MediaAttachment } from "@/src/components/compose/MediaAttachment";
 import { COMPOSER_TOPICS } from "@/src/features/feed/topics";
+import { useUploadQueue } from "@/src/services/UploadQueueContext";
 import { MentionSuggestions } from "@/src/components/social/MentionSuggestions";
 import { useMentionAutocomplete } from "@/src/features/mentions/useMentionAutocomplete";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
@@ -16,7 +17,6 @@ import {
   type PickedMedia,
   type PickResult,
 } from "@/src/services/media";
-import { uploadMedia } from "@/src/services/uploadServices";
 import { createPost } from "@/src/services/socialServices";
 import { culture, foregroundOn, inputTextStyle, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
@@ -52,6 +52,7 @@ export default function ComposeScreen() {
    * under a chip.
    */
   const [topic, setTopic] = useState<string | null>(null);
+  const { enqueue } = useUploadQueue();
   const mentions = useMentionAutocomplete({
     text,
     onChange: (next) => {
@@ -60,8 +61,6 @@ export default function ComposeScreen() {
     },
   });
   const [media, setMedia] = useState<PickedMedia | null>(null);
-  const [publishing, setPublishing] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const canUpload = useUploadsEnabled();
@@ -90,44 +89,47 @@ export default function ComposeScreen() {
     }
   };
 
-  const publish = async () => {
+  /**
+   * Hands the work to the upload queue and leaves immediately.
+   *
+   * This used to hold the composer open until Cloudinary had the whole file,
+   * which on a campus connection is a long time to stare at a spinner for
+   * something the user has already decided to do. The screen closes now and
+   * the upload finishes behind whatever they do next; the bar at the top of
+   * the window reports it, and a toast plus a haptic confirm it.
+   *
+   * The cost is that a failure surfaces after the composer has gone, which is
+   * why the toast names what failed rather than just saying something went
+   * wrong. Errors that can be caught BEFORE leaving -- empty text -- are still
+   * caught here.
+   */
+  const publish = () => {
     // Plain `@handle` while composing; markers only at the point of storing.
     const content = mentions.serialize(text).trim();
     if (!content) return;
 
-    setPublishing(true);
     setError(null);
 
-    // The file goes to Cloudinary first: the post needs a hosted URL, and the
-    // server rejects a media_url that is not from our own cloud. A failed
-    // upload stops the publish rather than quietly posting text alone.
-    let mediaUrl: string | undefined;
-    if (media && canUpload) {
-      setUploading(true);
-      const uploaded = await uploadMedia(media, "posts");
-      setUploading(false);
+    const attachment = media && canUpload ? media : null;
+    // A plain noun, not copy.sticker -- that is the composer's headline
+    // ("SAY SOMETHING"), and the pill was reading "Sharing say something".
+    // Anonymous posts are still posts.
+    const label = "Post";
 
-      if (!uploaded.success) {
-        setPublishing(false);
-        setError(uploaded.error);
-        return;
-      }
-      mediaUrl = uploaded.url;
-    }
+    enqueue({
+      label,
+      kind: "posts",
+      media: attachment,
+      commit: async (mediaUrl) => {
+        const result = await createPost(content, mediaUrl ?? undefined, "public", topic);
+        return result.success
+          ? { ok: true }
+          : { ok: false, error: `${label} failed: ${result.error}` };
+      },
+    });
 
-    const result = await createPost(content, mediaUrl, "public", topic);
-
-    setPublishing(false);
-
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setText("");
     setMedia(null);
-
     router.replace("/(tabs)/home");
   };
 
@@ -271,8 +273,9 @@ export default function ComposeScreen() {
           ) : null}
 
           <Button
-            label={uploading ? "Uploading media" : copy.action}
-            loading={publishing}
+            // No loading state: the button does not wait for anything any
+            // more. The bar at the top of the window owns progress now.
+            label={copy.action}
             disabled={!text.trim()}
             onPress={publish}
           />

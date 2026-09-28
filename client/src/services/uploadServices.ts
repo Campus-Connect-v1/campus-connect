@@ -30,9 +30,43 @@ export type UploadResult =
  * the Express process entirely, and the signature is per-request and
  * timestamped so a captured one is not a standing grant.
  */
+/**
+ * Sends the form and reports progress.
+ *
+ * XMLHttpRequest rather than fetch: fetch cannot report UPLOAD progress in
+ * React Native, so a bar driven by it could only ever be indeterminate. This
+ * is the one reason to prefer the older API here.
+ */
+function postForm(
+  uploadUrl: string,
+  form: FormData,
+  onProgress?: (fraction: number) => void
+): Promise<{ ok: boolean; status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", uploadUrl);
+
+    if (onProgress) {
+      xhr.upload.onprogress = (event) => {
+        // lengthComputable is false for chunked bodies; reporting 0 forever
+        // would be worse than leaving the bar where it is.
+        if (event.lengthComputable && event.total > 0) {
+          onProgress(Math.min(1, event.loaded / event.total));
+        }
+      };
+    }
+
+    xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, text: xhr.responseText });
+    xhr.onerror = () => reject(new Error("The upload could not reach the server."));
+    xhr.ontimeout = () => reject(new Error("The upload timed out."));
+    xhr.send(form);
+  });
+}
+
 export async function uploadMedia(
   media: PickedMedia,
-  kind: UploadKind = "posts"
+  kind: UploadKind = "posts",
+  onProgress?: (fraction: number) => void
 ): Promise<UploadResult> {
   const signed = await request<UploadSignature>(() =>
     api.post("/upload/signature", { kind, resource_type: media.kind })
@@ -55,8 +89,8 @@ export async function uploadMedia(
   form.append("folder", folder);
 
   try {
-    const response = await fetch(uploadUrl, { method: "POST", body: form });
-    const body = (await response.json()) as {
+    const response = await postForm(uploadUrl, form, onProgress);
+    const body = JSON.parse(response.text || "{}") as {
       secure_url?: string;
       resource_type?: string;
       error?: { message?: string };
