@@ -111,7 +111,10 @@ export default function ComposeScreen() {
     setError(null);
 
     const attachment = media && canUpload ? media : null;
-    const label = copy.sticker || "Post";
+    // A plain noun, not copy.sticker -- that is the composer's headline
+    // ("SAY SOMETHING"), and the pill was reading "Sharing say something".
+    // Anonymous posts are still posts.
+    const label = "Post";
 
     enqueue({
       label,

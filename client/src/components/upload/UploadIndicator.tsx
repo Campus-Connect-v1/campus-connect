@@ -74,11 +74,18 @@ export function UploadIndicator() {
   const background = failed ? colors.destructive : culture.pink;
   const ink = foregroundOn(background);
 
+  /**
+   * `label` is the plain noun the job was queued with: "Post" or "Story".
+   * The two states read as a sentence pair -- "Sharing a new post", then
+   * "Post shared" -- rather than the same word twice.
+   */
+  const noun = (finished ?? active)?.label ?? "Post";
+
   const label = finished
     ? failed
-      ? finished.error || `${finished.label} could not be shared`
-      : `${finished.label} shared`
-    : `Sharing ${active?.label.toLowerCase() ?? "post"}…`;
+      ? finished.error || `${noun} could not be shared`
+      : `${noun} shared`
+    : `Sharing a new ${noun.toLowerCase()}`;
 
   return (
     <View
