@@ -37,6 +37,7 @@ import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
 import { fetchFeed, likePost, unlikePost, type ApiPost } from "@/src/services/socialServices";
 import { useFeedRealtime } from "@/src/hooks/useFeedRealtime";
+import { useHideOnScroll } from "@/src/hooks/useHideOnScroll";
 import { onNewPost } from "@/src/services/socket";
 import { fetchUniversityById } from "@/src/services/universityServices";
 import { useUnread } from "@/src/services/UnreadContext";
@@ -434,6 +435,7 @@ export default function HomeScreen() {
   // the second call and fetch the same page twice.
   const fetching = useRef(false);
   const listRef = useRef<FlatList<FeedRow>>(null);
+  const header = useHideOnScroll();
 
   /**
    * Posts published while this feed is open, held back rather than inserted.
@@ -663,19 +665,31 @@ export default function HomeScreen() {
           scroll underneath it. The greeting, stories and category rail stay in
           the list header and still scroll away -- only the campus and the
           three controls are worth the permanent vertical space. */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: spacing.lg,
-          // Vertical padding it used to inherit from the list header's gap,
-          // now that it stands on its own.
-          paddingTop: spacing.xs,
-          paddingBottom: spacing.sm,
-          // The two icon buttons read as one control group, so the gap
-          // between them is tighter than the gap to the campus name.
-          gap: spacing["3xs"],
-        }}
+      <Animated.View
+        onLayout={header.onHeaderLayout}
+        style={[
+          {
+            // Absolute, so the feed passes UNDER it as it slides away. That is
+            // the whole effect, and it is why the list gets a paddingTop of the
+            // measured height instead of the bar taking layout space.
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+            // Opaque, for the same reason: posts travel behind this.
+            backgroundColor: colors.background,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.xs,
+            paddingBottom: spacing.sm,
+            // The two icon buttons read as one control group, so the gap
+            // between them is tighter than the gap to the campus name.
+            gap: spacing["3xs"],
+          },
+          header.headerStyle,
+        ]}
       >
         <View style={{ flex: 1, marginRight: spacing.xs }}>
           <Text variant="micro" color="textMuted">
@@ -762,17 +776,25 @@ export default function HomeScreen() {
             />
           ) : null}
         </PressableScale>
-      </View>
+      </Animated.View>
 
-      <FlatList
+      <Animated.FlatList
         ref={listRef}
+        onScroll={header.onScroll}
+        scrollEventThrottle={16}
         data={rows}
         // The slot index keys the injected rows: two suggestion blocks in one
         // feed would otherwise collide on a constant key and FlatList would
         // recycle one over the other.
         keyExtractor={(item) => (item.kind === "post" ? item.post.id : `people-${item.slot}`)}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+        // Measured, never assumed: a guessed height leaves a permanent gap or
+        // hides the first row the moment the campus name wraps or the type
+        // scale changes.
+        contentContainerStyle={{
+          paddingTop: header.headerHeight,
+          paddingBottom: TAB_BAR_CLEARANCE,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={feed.refreshing}
