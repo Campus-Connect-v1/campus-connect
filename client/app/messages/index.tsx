@@ -5,12 +5,14 @@ import { Swipeable } from "react-native-gesture-handler";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { Avatar, EmptyState, Icon, PressableScale, SkeletonList, Text } from "@/src/components/ui";
+import { conversationPreview } from "@/src/features/messages/preview";
 import { useAsync } from "@/src/hooks/useAsync";
 import {
   deleteConversation,
   fetchConversations,
   type ApiConversation,
 } from "@/src/services/conversationServices";
+import { useSession } from "@/src/services/SessionContext";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -25,6 +27,8 @@ function when(iso?: string) {
 }
 
 function Row({ conversation }: { conversation: ApiConversation }) {
+  const { user } = useSession();
+  const viewerId = user?.id;
   const { colors } = useTheme();
   const other = conversation.otherParticipant;
   const name = other?.username || other?.email?.split("@")[0] || "Someone";
@@ -68,7 +72,7 @@ function Row({ conversation }: { conversation: ApiConversation }) {
           </Text>
         </View>
         <Text variant="caption" color={unread ? "textPrimary" : "textMuted"} numberOfLines={1}>
-          {conversation.lastMessage?.content ?? "No messages yet"}
+          {conversationPreview(conversation, viewerId)}
         </Text>
       </View>
 

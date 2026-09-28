@@ -132,7 +132,7 @@ export async function registerForPushNotificationsAsync(): Promise<PushRegistrat
       // Expo will not issue a token to a simulator, so this is the single most
       // likely reason push "does not work" during development.
       await recordStatus("unsupported_device");
-      return;
+      return "unavailable";
     }
 
     const existing = await Notifications.getPermissionsAsync();

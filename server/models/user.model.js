@@ -182,8 +182,15 @@ export const searchUsersModel = async (filters = {}) => {
       SELECT DISTINCT 
         u.user_id, u.first_name, u.last_name, u.profile_picture_url,
         u.profile_headline, u.program, u.graduation_year,
-        u.university_id, uni.name as university_name,
-        u.privacy_profile, u.created_at, u.last_login
+        u.university_id, uni.name as university_name, uni.domain as university_domain,
+        u.privacy_profile, u.created_at, u.last_login,
+        -- year_of_study and bio were already being read by the controller's
+        -- serializer but were never selected, so both came back undefined on
+        -- every search result.
+        u.year_of_study, u.bio,
+        -- Only to derive the @handle. searchUsers does NOT serialize it, and
+        -- must not: a mention label is public, an address is not.
+        u.email
       FROM users u
       LEFT JOIN universities uni ON u.university_id = uni.university_id
       LEFT JOIN user_interests ui ON u.user_id = ui.user_id
@@ -200,21 +207,43 @@ export const searchUsersModel = async (filters = {}) => {
     }
 
     if (filters.q && filters.q.trim() !== "") {
-      const searchParam = `%${filters.q}%`;
-      conditions.push(`(
-        u.first_name LIKE ? OR 
-        u.last_name LIKE ? OR 
-        u.profile_headline LIKE ? OR 
-        u.bio LIKE ? OR
-        u.program LIKE ?
-      )`);
-      params.push(
-        searchParam,
-        searchParam,
-        searchParam,
-        searchParam,
-        searchParam
-      );
+      /**
+       * Tokenised, because the whole query used to be wrapped in one %...%
+       * and matched against each column on its own. No single column holds
+       * "joyce elli", so a full name never matched -- and neither did a
+       * handle like "joyce.elli", which is what the mention picker sends.
+       *
+       * Splitting on whitespace AND punctuation means one rule serves
+       * "Joyce Elli", "joyce.elli" and "joyce.elli.ug". Tokens are ANDed and
+       * each may match any field, so extra words narrow rather than widen.
+       */
+      const tokens = filters.q
+        .trim()
+        .split(/[\s._-]+/)
+        .filter(Boolean)
+        // Bounded: each token costs 8 placeholders, and nobody searches with
+        // more words than this.
+        .slice(0, 5);
+
+      for (const token of tokens) {
+        const like = `%${token}%`;
+        conditions.push(`(
+          u.first_name LIKE ? OR
+          u.last_name LIKE ? OR
+          CONCAT(u.first_name, ' ', u.last_name) LIKE ? OR
+          -- The email LOCAL PART only. This is what makes a handle
+          -- searchable; the domain is matched separately below so that
+          -- "joyce.elli.ug" can find Joyce at UG without every UG address
+          -- matching the word "ug".
+          SUBSTRING_INDEX(u.email, '@', 1) LIKE ? OR
+          uni.name LIKE ? OR
+          SUBSTRING_INDEX(uni.domain, '.', 1) LIKE ? OR
+          u.profile_headline LIKE ? OR
+          u.program LIKE ? OR
+          u.bio LIKE ?
+        )`);
+        params.push(like, like, like, like, like, like, like, like, like);
+      }
     }
 
     if (filters.program) {
@@ -299,6 +328,8 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
         COALESCE(shared_courses.score, 0)   AS shared_courses,
         COALESCE(shared_groups.score, 0)    AS shared_groups,
         COALESCE(mutuals.score, 0)          AS mutual_connections,
+        u2.university_id,
+        CASE WHEN u2.university_id = u1.university_id THEN 1 ELSE 0 END AS same_campus,
         CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 1 ELSE 0 END AS same_program,
         CASE WHEN u1.graduation_year IS NOT NULL
               AND u1.graduation_year = u2.graduation_year THEN 1 ELSE 0 END AS same_year,
@@ -319,35 +350,62 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
          * two students would get on.
          *
          * Weights, and why:
-         *   interests 30 - the only signal a brand-new account has
-         *   mutuals   25 - the strongest real-world predictor of a connection
-         *   courses   20 - you already share a room twice a week
-         *   groups    12 - deliberate, but a smaller population
-         *   program    8 - same department, weak on its own
-         *   year       5 - weakest; cohort alone says little
+         *   interests 27 - the only signal a brand-new account has
+         *   mutuals   23 - the strongest real-world predictor of a connection
+         *   courses   18 - you already share a room twice a week
+         *   groups    11 - deliberate, but a smaller population
+         *   campus    10 - see below
+         *   program    7 - same department, weak on its own
+         *   year       4 - weakest; cohort alone says little
+         *
+         * Campus is WEIGHTED, not a filter, and deliberately not a hard tier.
+         * Ranking every same-campus account above every other one would mean
+         * never meeting anyone off your campus until you had exhausted it,
+         * which is the behaviour this change exists to remove. At 10 it breaks
+         * ties among similar matches and steps aside for a clearly better one:
+         * a stranger elsewhere sharing three interests and two courses still
+         * outranks a same-campus account sharing nothing.
+         *
+         * The other six were scaled from their previous values to make room
+         * while keeping their order and rough proportions, so the total is
+         * still 100 and a saturated score still means the same thing.
          *
          * Caps are set where the signal stops being informative: a fourth
          * shared interest says much less than the first, and beyond five
          * mutuals you are simply in the same circle.
          */
         LEAST(100, ROUND(
-          LEAST(COALESCE(shared_interests.score, 0) / 3.0, 1.0) * 30 +
-          LEAST(COALESCE(mutuals.score, 0)          / 5.0, 1.0) * 25 +
-          LEAST(COALESCE(shared_courses.score, 0)   / 2.0, 1.0) * 20 +
-          LEAST(COALESCE(shared_groups.score, 0)    / 2.0, 1.0) * 12 +
-          CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 8 ELSE 0 END +
+          LEAST(COALESCE(shared_interests.score, 0) / 3.0, 1.0) * 27 +
+          LEAST(COALESCE(mutuals.score, 0)          / 5.0, 1.0) * 23 +
+          LEAST(COALESCE(shared_courses.score, 0)   / 2.0, 1.0) * 18 +
+          LEAST(COALESCE(shared_groups.score, 0)    / 2.0, 1.0) * 11 +
+          CASE WHEN u2.university_id = u1.university_id THEN 10 ELSE 0 END +
+          CASE WHEN u1.program IS NOT NULL AND u1.program = u2.program THEN 7 ELSE 0 END +
           CASE WHEN u1.graduation_year IS NOT NULL
-                AND u1.graduation_year = u2.graduation_year THEN 5 ELSE 0 END
+                AND u1.graduation_year = u2.graduation_year THEN 4 ELSE 0 END
         )) AS match_score
       FROM users u1
       JOIN users u2
-        ON u2.university_id = u1.university_id
-       AND u2.user_id <> u1.user_id
+        ON u2.user_id <> u1.user_id
        AND u2.is_active = 1
        -- New accounts default to friends. They still need to appear as a
        -- lightweight discovery card so the first-run matching flow can work;
        -- private is the explicit opt-out from discovery.
        AND u2.privacy_profile <> 'private'
+       /*
+        * Recommendations now cross universities, following the same split the
+        * feed made: WHO may be suggested is decided here, HOW RELEVANT they
+        * are is decided by the score below. Confining suggestions to one
+        * school meant you could read another campus but never be introduced
+        * to anyone on it.
+        *
+        * 'university' is the one privacy value whose meaning is campus scope,
+        * so it has to actually bound this. Before, it was moot -- the join
+        * never left the campus. Opening the join without this line would
+        * surface exactly the people who asked not to be seen off it.
+        */
+       AND (u2.university_id = u1.university_id
+            OR u2.privacy_profile <> 'university')
 
       -- Interests are the strongest first-run signal: a new account has no
       -- friends, groups or courses yet, but it has just told us what it likes.
@@ -418,7 +476,11 @@ export const getConnectionRecommendationsModel = async (userId, limit = 10) => {
           WHERE (c.requester_id = u1.user_id AND c.receiver_id = u2.user_id)
              OR (c.requester_id = u2.user_id AND c.receiver_id = u1.user_id)
         )
-      ORDER BY match_score DESC
+      -- Ties were rare while everyone shared a campus; opening the join makes
+      -- them common, and an unordered tie means the list reshuffles on every
+      -- refresh. Same campus breaks a tie -- the one place a hard preference
+      -- for your own school costs nothing, because the match is equal anyway.
+      ORDER BY match_score DESC, same_campus DESC, u2.user_id
       LIMIT ${safeLimit};
     `;
 

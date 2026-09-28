@@ -1,5 +1,6 @@
 // socket.js
 import { Server } from "socket.io";
+import { resolveMessageContext } from "./utils/messageContext.js";
 import Message from "./models/message.model.js";
 import Conversation from "./models/conversation.model.js"; // NEW
 import { findByEmail, findById } from "./models/user.model.js";
@@ -135,7 +136,7 @@ export default function socketServer(httpServer) {
       console.log(`✅ User connected: ${userId} (${socket.id})`);
     }
 
-    socket.on("send_message", async ({ receiverId, content }) => {
+    socket.on("send_message", async ({ receiverId, content, context }) => {
       try {
         const senderId = socket.user.id;
         console.log(`📨 Message from ${senderId} to ${receiverId}`);
@@ -161,11 +162,21 @@ export default function socketServer(httpServer) {
           `✅ Receiver found: ${receiver.email} (ID: ${actualReceiverId})`
         );
 
+        // Resolved from the story row, not from the payload: see
+        // utils/messageContext.js for why the client is not trusted with the
+        // text and image of its own quote. Null when it does not check out,
+        // and the message is then sent as an ordinary one.
+        const resolvedContext = await resolveMessageContext(context, {
+          senderId,
+          receiverId: actualReceiverId,
+        });
+
         // Save message in MongoDB (EXISTING CODE - UNCHANGED)
         const msg = await Message.create({
           senderId: senderId,
           receiverId: actualReceiverId,
           content: content,
+          ...(resolvedContext ? { context: resolvedContext } : {}),
         });
 
         console.log("💾 Message saved to MongoDB");
@@ -232,6 +243,7 @@ export default function socketServer(httpServer) {
             email: receiver.email,
           },
           content: content,
+          context: resolvedContext,
           createdAt: msg.createdAt,
         };
 

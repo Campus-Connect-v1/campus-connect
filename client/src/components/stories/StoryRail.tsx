@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { router } from "expo-router";
 import { FlatList, View } from "react-native";
 
 import { Avatar, Icon, PressableScale, Text } from "@/src/components/ui";
+import { primeStoryGroups } from "@/src/features/stories/cache";
 import type { ApiStoryGroup } from "@/src/services/storyServices";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
@@ -25,6 +27,17 @@ export function StoryRail({
   const { colors } = useTheme();
 
   // The user's own stories always lead, so "add" and "yours" are one place.
+  /**
+   * Hand the viewer what this rail already has.
+   *
+   * Without it, tapping a story navigates with a user id alone and the viewer
+   * re-fetches the whole feed to find what was on screen a moment ago -- which
+   * is the black screen before a story appears.
+   */
+  useEffect(() => {
+    primeStoryGroups(groups);
+  }, [groups]);
+
   const own = groups.find((group) => group.is_own);
   const others = groups.filter((group) => !group.is_own);
 

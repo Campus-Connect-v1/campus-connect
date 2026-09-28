@@ -1,6 +1,7 @@
 import { router } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
+import { useScrollToTop } from "@react-navigation/native";
 
 import {
   Icon,
@@ -23,6 +24,10 @@ import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 export default function CampusScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  // Tapping the active tab returns to the top.
+  useScrollToTop(scrollRef as never);
+
   const { colors } = useTheme();
   const { user, profile } = useSession();
   const universityId = profile?.university_id ?? user?.university_id;
@@ -77,6 +82,7 @@ export default function CampusScreen() {
   return (
     <Screen>
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
       >

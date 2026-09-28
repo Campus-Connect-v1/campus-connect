@@ -26,6 +26,7 @@ import bcrypt from "bcrypt";
 import { authenticate } from "../middleware/auth.js";
 import { notify } from "../models/notification.model.js";
 import { db } from "../config/db.js";
+import { disambiguateHandles } from "../utils/mentions.js";
 
 // Get user profile
 export const getProfile = async (req, res) => {
@@ -197,6 +198,10 @@ export const searchUsers = async (req, res) => {
         )}`,
       });
     }
+    // Computed over the whole result set, not per row: the campus suffix is
+    // only added where two of these people would otherwise share a handle.
+    const handles = disambiguateHandles(users);
+
     res.status(200).json({
       message: "Users retrieved successfully",
       count: users.length,
@@ -209,6 +214,10 @@ export const searchUsers = async (req, res) => {
         year_of_study: user.year_of_study,
         university_id: user.university_id,
         bio: user.bio,
+        // The label the mention composer inserts and shows. Derived here, not
+        // in the client, so one rule decides it -- and because it reads the
+        // email, which the client is never sent.
+        mention_handle: handles.get(user.user_id),
       })),
     });
   } catch (error) {
@@ -939,6 +948,13 @@ export const getConnectionRecommendations = async (req, res) => {
         profile_headline: user.profile_headline,
         program: user.program,
         graduation_year: user.graduation_year,
+        // Recommendations cross universities now, so a card has to be able to
+        // say which campus it is showing you. The client already colours the
+        // ring by university and renders a campus badge for anyone off yours;
+        // without these two fields every suggestion would silently read as a
+        // classmate.
+        university_id: user.university_id ?? null,
+        same_campus: Number(user.same_campus ?? 0) > 0,
         match_score: user.match_score,
         // Already 0-100 from the query. It used to be divided by a hardcoded
         // 5 here while the score itself was unbounded, which is how three
@@ -952,6 +968,7 @@ export const getConnectionRecommendations = async (req, res) => {
           mutual_connections: Number(user.mutual_connections ?? 0),
           same_program: Number(user.same_program ?? 0) > 0,
           same_year: Number(user.same_year ?? 0) > 0,
+          same_campus: Number(user.same_campus ?? 0) > 0,
         },
       })),
     });
