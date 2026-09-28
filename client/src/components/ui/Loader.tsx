@@ -34,7 +34,21 @@ export function Loader({ size = 22, color, strokeWidth = 3, style }: LoaderProps
     <View
       accessibilityLabel="Loading"
       accessibilityRole="progressbar"
-      style={[{ width: size, height: size }, style]}
+      /**
+       * Centres itself on the cross axis.
+       *
+       * This is a fixed-size box, so a parent that only sets padding leaves it
+       * against the leading edge -- which is what put the feed's pagination
+       * spinner in the left corner while the ones wrapped in an explicitly
+       * centred View looked fine. Leaving it to each call site means every new
+       * one is a chance to forget.
+       *
+       * Cross axis only, so it does the right thing in both directions: in a
+       * column it centres horizontally, and inline in a row it centres against
+       * the text rather than moving along the line. `style` is applied after,
+       * so a caller that wants something else still wins.
+       */
+      style={[{ width: size, height: size, alignSelf: "center" }, style]}
     >
       <Animated.View
         style={[
