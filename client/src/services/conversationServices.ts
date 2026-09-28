@@ -25,6 +25,8 @@ export interface ApiConversation {
      * already travels on the message itself.
      */
     contextKind?: "story" | null;
+    /** Set when the last message was an attachment, so the list can name it. */
+    mediaType?: "image" | "video" | null;
   };
   /** Already narrowed to the caller's own count by the controller. */
   unreadCount: number;
@@ -60,6 +62,11 @@ export interface ApiMessageContext {
   expiresAt?: string | null;
 }
 
+export interface ApiMessageMedia {
+  url: string;
+  type: "image" | "video";
+}
+
 export interface ApiMessage {
   _id: string;
   senderId: ApiMessageIdentity;
@@ -67,6 +74,7 @@ export interface ApiMessage {
   content: string;
   status: "sent" | "delivered" | "read";
   context?: ApiMessageContext | null;
+  media?: ApiMessageMedia | null;
   createdAt: string;
   updatedAt: string;
 }

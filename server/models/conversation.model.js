@@ -24,6 +24,12 @@ const conversationSchema = new mongoose.Schema(
        * already on the message itself.
        */
       contextKind: String,
+      /**
+       * "image" or "video" when the last message was an attachment, so the
+       * conversations list can say "Photo" instead of showing the blank body
+       * an image-only message carries.
+       */
+      mediaType: String,
     },
     unreadCount: {
       type: Map,
@@ -58,6 +64,7 @@ conversationSchema.methods.updateLastMessage = function (message) {
     senderId: message.senderId,
     timestamp: message.createdAt || new Date(),
     contextKind: message.context?.kind ?? null,
+    mediaType: message.media?.type ?? null,
   };
   return this.save();
 };
