@@ -33,6 +33,7 @@ import { getFollowingCountModel } from "../models/follow.model.js";
 import { logHandled } from "../middleware/observability.js";
 import { syncPostMentions, syncCommentMentions } from "../models/mention.model.js";
 import { stripMentions } from "../utils/mentions.js";
+import { normaliseTopic } from "../utils/postTopics.js";
 
 /**
  * The socket that issued this request, if any.
@@ -78,6 +79,7 @@ export const createPost = async (req, res) => {
       media_type = "text",
       visibility = "connections",
       expires_at,
+      topic,
     } = req.body;
 
     if (!content && !media_url) {
@@ -104,6 +106,9 @@ export const createPost = async (req, res) => {
       media_type,
       visibility,
       expires_at: expires_at || null,
+      // Validated against the allowlist; anything else files the post under no
+      // topic rather than failing the post.
+      topic: normaliseTopic(topic),
     };
 
     const post = await createPostModel(postData);
@@ -188,6 +193,8 @@ export const createPost = async (req, res) => {
             content: post.content ?? null,
             media_url: post.media_url ?? null,
             media_type: post.media_type,
+        topic: post.topic ?? null,
+            topic: post.topic ?? null,
             poll_id: post.poll_id ?? null,
             visibility: post.visibility,
             created_at: post.created_at ?? new Date().toISOString(),
@@ -241,6 +248,7 @@ export const createPost = async (req, res) => {
         content: post.content,
         media_url: post.media_url,
         media_type: post.media_type,
+        topic: post.topic ?? null,
         poll_id: post.poll_id || null,
         visibility: post.visibility,
         expires_at: post.expires_at,
@@ -293,7 +301,18 @@ export const getFeedPosts = async (req, res) => {
           : FEED_MODES.DISCOVERY;
     }
 
-    const posts = await getFeedPostsModel(userId, pageSize, parseInt(offset), cursor, mode);
+    // Unrecognised topics are dropped rather than rejected: a stale chip in an
+    // older client should show the whole feed, not an error.
+    const topic = normaliseTopic(req.query.topic);
+
+    const posts = await getFeedPostsModel(
+      userId,
+      pageSize,
+      parseInt(offset),
+      cursor,
+      mode,
+      topic
+    );
 
     // A short page means the end of the feed; sending no cursor is how the
     // client knows to stop asking rather than looping on an empty response.
@@ -313,6 +332,7 @@ export const getFeedPosts = async (req, res) => {
         content: post.content,
         media_url: post.media_url,
         media_type: post.media_type,
+        topic: post.topic ?? null,
         poll_id: post.poll_id || null,
         visibility: post.visibility,
         created_at: post.created_at,
@@ -363,6 +383,7 @@ export const getPost = async (req, res) => {
         content: post.content,
         media_url: post.media_url,
         media_type: post.media_type,
+        topic: post.topic ?? null,
         poll_id: post.poll_id || null,
         visibility: post.visibility,
         created_at: post.created_at,
