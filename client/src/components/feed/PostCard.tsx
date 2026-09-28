@@ -12,6 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { Avatar, Media, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
+import { MentionText } from "@/src/components/social/MentionText";
 import { PollCard } from "./PollCard";
 import type { FeedPost } from "@/src/features/feed/types";
 import { culture, radius, spacing } from "@/src/styles/theme";
@@ -225,7 +226,7 @@ export const PostCard = memo(function PostCard({
         }}
       >
         {header}
-        <Text variant="body">{post.caption}</Text>
+        <MentionText variant="body" content={post.caption} />
         <PollCard pollId={post.pollId} />
         {actions}
       </PressableScale>
@@ -249,7 +250,7 @@ export const PostCard = memo(function PostCard({
         }}
       >
         {header}
-        <Text variant="body">{post.caption}</Text>
+        <MentionText variant="body" content={post.caption} />
         {actions}
       </PressableScale>
     );
@@ -288,9 +289,7 @@ export const PostCard = memo(function PostCard({
           >
             {header}
             <View style={{ gap: spacing.sm }}>
-              <Text variant="body" onMedia numberOfLines={3}>
-                {post.caption}
-              </Text>
+              <MentionText variant="body" onMedia numberOfLines={3} content={post.caption} />
               {actions}
             </View>
           </Animated.View>
