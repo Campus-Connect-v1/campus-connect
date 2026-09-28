@@ -25,6 +25,7 @@ import {
 import bcrypt from "bcrypt";
 import { authenticate } from "../middleware/auth.js";
 import { notify } from "../models/notification.model.js";
+import { invalidateCache } from "../utils/responseCache.js";
 import { db } from "../config/db.js";
 import { disambiguateHandles } from "../utils/mentions.js";
 
@@ -310,6 +311,8 @@ export const sendConnectionRequest = async (req, res) => {
       connection_note,
       shared_courses
     );
+    // Each should stop being recommended to the other straight away.
+    void invalidateCache("recs", [requesterId, receiver_id]);
 
     notify({
       userId: receiver_id,
@@ -352,6 +355,7 @@ export const cancelConnectionRequest = async (req, res) => {
     }
 
     const result = await cancelConnectionRequestModel(connection_id, userId);
+    void invalidateCache("recs", [userId]);
 
     let message = "Connection request cancelled successfully";
     if (result.previous_status && result.previous_status !== "pending") {
@@ -406,6 +410,7 @@ export const respondToConnection = async (req, res) => {
 
     const status = action === "accept" ? "accepted" : "declined";
     const updated = await updateConnectionStatus(connection_id, status, userId);
+    if (updated) void invalidateCache("recs", [userId]);
 
     if (!updated) {
       return res.status(404).json({ message: "Connection request not found" });

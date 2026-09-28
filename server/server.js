@@ -181,6 +181,28 @@ app.get("/", (req, res) => res.send("Campus Connect API running..."));
 // Prunes device tokens Expo reports as dead. See services/push.
 startReceiptPolling();
 
+// ========================= KEEP AWAKE =========================
+// Render's free plan suspends the service after 15 minutes without inbound
+// traffic. The GitHub Actions pinger (.github/workflows/keep-awake.yml) was
+// meant to prevent that, but GitHub throttles scheduled workflows on free
+// repos: a */10 schedule actually ran every 3-6 hours, so the API slept most
+// of the day and each first request paid a ~50s cold start.
+//
+// Pinging our own PUBLIC url goes out through Render's edge and back in, so it
+// counts as inbound traffic. RENDER_EXTERNAL_URL is set by Render itself and is
+// absent locally, so this only ever runs on Render. The workflow stays as a
+// backstop to wake the service if it does go down.
+const KEEP_AWAKE_MS = 10 * 60 * 1000;
+if (process.env.RENDER_EXTERNAL_URL) {
+  const healthUrl = `${process.env.RENDER_EXTERNAL_URL}/api/health`;
+  const keepAwakeTimer = setInterval(() => {
+    fetch(healthUrl, { signal: AbortSignal.timeout(30_000) }).catch((error) =>
+      console.error("keep-awake ping failed:", error.message)
+    );
+  }, KEEP_AWAKE_MS);
+  keepAwakeTimer.unref();
+}
+
 // ========================= SOCKET SERVER ======================
 socketServer(server);
 
