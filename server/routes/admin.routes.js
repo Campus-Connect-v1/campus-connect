@@ -21,6 +21,7 @@ import {
   setVerified,
 } from "../controllers/admin/seed.controller.js";
 import { requireOperator, requirePermission } from "../middleware/adminAuth.js";
+import { invalidateOnWrite } from "../utils/responseCache.js";
 
 const router = express.Router();
 
@@ -39,6 +40,11 @@ router.post("/auth/login", adminLoginLimiter, login);
 
 // ---- everything below requires a valid operator token -------------------
 router.use(requireOperator);
+
+// Universities, buildings and facilities are written only from here, through
+// generic resource handlers, seed packs and imports. Clearing the public cache
+// on every successful admin write is simpler and safer than finding each one.
+router.use(invalidateOnWrite("university"));
 
 router.get("/auth/me", me);
 
