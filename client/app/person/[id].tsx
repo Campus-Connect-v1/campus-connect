@@ -1,15 +1,31 @@
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, View, useWindowDimensions } from "react-native";
+import { FlatList, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { EmptyState, Loader, Media, PressableScale, Tag, Text, Icon } from "@/src/components/ui";
+import { PostCard } from "@/src/components/feed/PostCard";
+import { PostOptionsSheet } from "@/src/components/feed/PostOptionsSheet";
+import {
+  EmptyState,
+  Loader,
+  Media,
+  PressableScale,
+  SkeletonList,
+  Tag,
+  Text,
+  Icon,
+} from "@/src/components/ui";
+import { adaptPost } from "@/src/features/feed/adapt";
+import { type FeedPost } from "@/src/features/feed/types";
 import { adaptPublicUser } from "@/src/features/profile/adapt";
 import { useAsync } from "@/src/hooks/useAsync";
+import { useFeedRealtime } from "@/src/hooks/useFeedRealtime";
 import { createConversation, fetchConversationWith } from "@/src/services/conversationServices";
-import { fetchUserStories } from "@/src/services/storyServices";
+import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
+import { fetchPostsByAuthor, likePost, unlikePost } from "@/src/services/socialServices";
+import { fetchUserStories } from "@/src/services/storyServices";
 import {
   fetchUserById,
   respondToConnection,
@@ -30,6 +46,59 @@ const INTEREST_STYLES = [
   { background: culture.violet, foreground: culture.warmWhite },
 ];
 
+/**
+ * One tab today ("Posts"), but takes a list so Media/Likes can be added later
+ * without touching how the profile screen is structured — just another entry
+ * here and a branch on `active` in the screen below.
+ */
+function ProfileTabs({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: { key: string; label: string }[];
+  active: string;
+  onChange: (key: string) => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        gap: spacing.xl,
+        paddingHorizontal: spacing.xl,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      }}
+    >
+      {tabs.map((tab) => {
+        const isActive = tab.key === active;
+        return (
+          <PressableScale
+            key={tab.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={tab.label}
+            onPress={() => onChange(tab.key)}
+            style={{
+              paddingVertical: spacing.sm,
+              borderBottomWidth: 2,
+              borderBottomColor: isActive ? culture.violet : "transparent",
+            }}
+          >
+            <Text variant="label" color={isActive ? "textPrimary" : "textMuted"}>
+              {tab.label}
+            </Text>
+          </PressableScale>
+        );
+      })}
+    </View>
+  );
+}
+
+const PROFILE_TABS = [{ key: "posts", label: "Posts" }];
+
 export default function PersonScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -42,6 +111,16 @@ export default function PersonScreen() {
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  const [activeTab, setActiveTab] = useState("posts");
+
+  const saved = useSavedPosts();
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [postsError, setPostsError] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [options, setOptions] = useState<FeedPost | null>(null);
 
   // Whether this person has an unexpired story, so the profile can offer it.
   // The story feed does not necessarily carry them, hence the direct read.
@@ -118,6 +197,92 @@ export default function PersonScreen() {
   useEffect(() => {
     setConnection(remote.data?.connection ?? null);
   }, [remote.data]);
+
+  // profile owner's id, never the viewer's — a profile always shows what ITS
+  // owner posted, not whoever happens to be signed in.
+  const profileUserId = person?.id;
+
+  const loadPosts = async (mode: "initial" | "more") => {
+    if (!profileUserId) return;
+    if (mode === "more") {
+      if (!hasMore || loadingMore) return;
+      setLoadingMore(true);
+    } else {
+      setPostsLoading(true);
+      setPostsError(null);
+    }
+
+    const result = await fetchPostsByAuthor(profileUserId, 20, mode === "more" ? cursor : null);
+
+    if (result.success) {
+      const page = result.data.posts.map(adaptPost);
+      setPosts((current) => (mode === "more" ? [...current, ...page] : page));
+      setCursor(result.data.nextCursor);
+      setHasMore(result.data.hasMore);
+    } else if (mode === "initial") {
+      setPostsError(result.error);
+    }
+
+    if (mode === "more") setLoadingMore(false);
+    else setPostsLoading(false);
+  };
+
+  // Reset and reload whenever the profile changes — navigating from one
+  // person's profile to another pushes a new route with a new id, but this
+  // also covers the same screen instance being reused for a different id.
+  useEffect(() => {
+    if (!profileUserId) return;
+    setPosts([]);
+    setCursor(null);
+    setHasMore(false);
+    loadPosts("initial");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileUserId]);
+
+  const toggleLike = useCallback((postId: string) => {
+    let wasLiked = false;
+    setPosts((current) =>
+      current.map((post) => {
+        if (post.id !== postId) return post;
+        wasLiked = post.liked;
+        return { ...post, liked: !post.liked, likes: post.likes + (post.liked ? -1 : 1) };
+      })
+    );
+    (wasLiked ? unlikePost : likePost)(postId);
+  }, []);
+
+  const removePost = useCallback((postId: string) => {
+    setPosts((current) => current.filter((post) => post.id !== postId));
+  }, []);
+
+  // Same realtime mechanism the main feed uses (src/hooks/useFeedRealtime):
+  // a like made here shows the same count when the post is later seen in the
+  // feed, and vice versa, because both screens listen to the same post rooms
+  // rather than keeping independent copies of the state.
+  useFeedRealtime(
+    useMemo(() => posts.map((post) => post.id), [posts]),
+    {
+      onCounts: (postId, counts) =>
+        setPosts((current) =>
+          current.map((post) =>
+            post.id === postId
+              ? {
+                  ...post,
+                  likes: counts.like_count ?? post.likes,
+                  comments: counts.comment_count ?? post.comments,
+                }
+              : post
+          )
+        ),
+      onPostDeleted: removePost,
+      onPostUpdated: (postId, content) =>
+        setPosts((current) =>
+          current.map((post) =>
+            post.id === postId && content !== undefined ? { ...post, caption: content } : post
+          )
+        ),
+    }
+  );
 
   const connect = async () => {
     if (!person || connection || requesting) return;
@@ -248,164 +413,240 @@ export default function PersonScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView
+      <FlatList
+        data={activeTab === "posts" ? posts : []}
+        keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing["3xl"] }}
-      >
-        <View style={{ height: heroHeight }}>
-          <Media
-            source={person.avatar ?? undefined}
-            scrim="full"
-            rounded="none"
-            style={{ flex: 1 }}
-            accessibilityIgnoresInvertColors
-          >
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "flex-end",
-                paddingHorizontal: spacing.xl,
-                paddingBottom: insets.bottom + 104,
-                gap: spacing.sm,
-              }}
-            >
-              <Text variant="display" onMedia>
-                {person.name}
-              </Text>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: spacing.md,
-                }}
-              >
-                {person.university ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing["2xs"] }}>
-                    <Icon name="campus" size={13} color={colors.onMedia} />
-                    <Text variant="caption" onMedia>
-                      {person.university}
-                    </Text>
-                  </View>
-                ) : null}
-                {person.year ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing["2xs"] }}>
-                    <Icon name="course" size={13} color={colors.onMedia} />
-                    <Text variant="caption" onMedia>
-                      {person.year}
-                    </Text>
-                  </View>
-                ) : null}
-                <Text variant="caption" onMedia>
-                  {person.age ? `${person.age} · ` : ""}@{person.handle}
-                </Text>
-              </View>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: spacing.xs,
-                  marginTop: spacing["2xs"],
-                }}
-              >
-                {interests.map((interest, i) => {
-                  const interestStyle = INTEREST_STYLES[i % INTEREST_STYLES.length];
-                  return (
-                    <View
-                      key={interest}
-                      style={{
-                        paddingHorizontal: spacing.sm,
-                        paddingVertical: spacing["2xs"] + 2,
-                        borderRadius: radius.full,
-                        backgroundColor: interestStyle.background,
-                      }}
-                    >
-                      <Text variant="caption" style={{ color: interestStyle.foreground }}>
-                        #{interest}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
+        onEndReachedThreshold={0.5}
+        onEndReached={() => loadPosts("more")}
+        renderItem={({ item }) => (
+          <PostCard
+            post={{ ...item, saved: saved.isSaved(item.id) }}
+            onToggleLike={toggleLike}
+            onToggleSave={saved.toggle}
+            onOpenOptions={setOptions}
+          />
+        )}
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={{ paddingVertical: spacing.lg, alignItems: "center" }}>
+              <Loader size={20} color={colors.textPrimary} />
             </View>
-          </Media>
-        </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          postsLoading ? (
+            <SkeletonList count={2} />
+          ) : postsError ? (
+            <EmptyState
+              compact
+              tone="error"
+              title="Couldn't load posts"
+              body={postsError}
+              actionLabel="Retry"
+              onAction={() => loadPosts("initial")}
+            />
+          ) : (
+            <EmptyState
+              compact
+              title={isSelf ? "You haven't posted anything yet." : "No posts yet"}
+              body={
+                isSelf
+                  ? undefined
+                  : `When ${person.name.split(" ")[0]} shares something, you'll see it here.`
+              }
+            />
+          )
+        }
+        ListHeaderComponent={
+          <>
+            <View style={{ height: heroHeight }}>
+              <Media
+                source={person.avatar ?? undefined}
+                scrim="full"
+                rounded="none"
+                style={{ flex: 1 }}
+                accessibilityIgnoresInvertColors
+              >
+                <View
+                  style={{
+                    flex: 1,
+                    justifyContent: "flex-end",
+                    paddingHorizontal: spacing.xl,
+                    paddingBottom: insets.bottom + 104,
+                    gap: spacing.sm,
+                  }}
+                >
+                  <Text variant="display" onMedia>
+                    {person.name}
+                  </Text>
 
-        <View style={{ padding: spacing.xl, gap: spacing.md }}>
-          {/* Counts read from the follow state that is already loaded, so this
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: spacing.md,
+                    }}
+                  >
+                    {person.university ? (
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center", gap: spacing["2xs"] }}
+                      >
+                        <Icon name="campus" size={13} color={colors.onMedia} />
+                        <Text variant="caption" onMedia>
+                          {person.university}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {person.year ? (
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center", gap: spacing["2xs"] }}
+                      >
+                        <Icon name="course" size={13} color={colors.onMedia} />
+                        <Text variant="caption" onMedia>
+                          {person.year}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <Text variant="caption" onMedia>
+                      {person.age ? `${person.age} · ` : ""}@{person.handle}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      gap: spacing.xs,
+                      marginTop: spacing["2xs"],
+                    }}
+                  >
+                    {interests.map((interest, i) => {
+                      const interestStyle = INTEREST_STYLES[i % INTEREST_STYLES.length];
+                      return (
+                        <View
+                          key={interest}
+                          style={{
+                            paddingHorizontal: spacing.sm,
+                            paddingVertical: spacing["2xs"] + 2,
+                            borderRadius: radius.full,
+                            backgroundColor: interestStyle.background,
+                          }}
+                        >
+                          <Text variant="caption" style={{ color: interestStyle.foreground }}>
+                            #{interest}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              </Media>
+            </View>
+
+            <View style={{ padding: spacing.xl, gap: spacing.md }}>
+              {/* Counts read from the follow state that is already loaded, so this
               adds no request. Both are tappable, because a number nobody can
               open is decoration. */}
-          {hasStory ? (
-            <PressableScale
-              accessibilityRole="button"
-              accessibilityLabel={`View ${person.name}'s story`}
-              onPress={() => router.push({ pathname: "/stories/[userId]", params: { userId: id } })}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: spacing.xs,
-                minHeight: 46,
-                borderRadius: radius.full,
-                borderWidth: 1.5,
-                borderColor: culture.pink,
-              }}
-            >
-              <Icon name="play" size={15} color={culture.pink} />
-              <Text variant="label" style={{ color: culture.pink }}>
-                View story
-              </Text>
-            </PressableScale>
-          ) : null}
-
-          {follow ? (
-            <View style={{ flexDirection: "row", gap: spacing["2xl"] }}>
-              {[
-                { tab: "followers" as const, label: "FOLLOWERS", value: follow.follower_count },
-                { tab: "following" as const, label: "FOLLOWING", value: follow.following_count },
-              ].map((entry) => (
+              {hasStory ? (
                 <PressableScale
-                  key={entry.tab}
                   accessibilityRole="button"
-                  accessibilityLabel={`${entry.value} ${entry.label.toLowerCase()}`}
+                  accessibilityLabel={`View ${person.name}'s story`}
                   onPress={() =>
-                    router.push({
-                      pathname: "/person/[id]/follows",
-                      params: { id, tab: entry.tab, name: person.name },
-                    })
+                    router.push({ pathname: "/stories/[userId]", params: { userId: id } })
                   }
-                  style={{ gap: 2 }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: spacing.xs,
+                    minHeight: 46,
+                    borderRadius: radius.full,
+                    borderWidth: 1.5,
+                    borderColor: culture.pink,
+                  }}
                 >
-                  <Text variant="heading">{entry.value.toLocaleString()}</Text>
-                  <Text variant="micro" color="textMuted">
-                    {entry.label}
+                  <Icon name="play" size={15} color={culture.pink} />
+                  <Text variant="label" style={{ color: culture.pink }}>
+                    View story
                   </Text>
                 </PressableScale>
-              ))}
+              ) : null}
+
+              {follow ? (
+                <View style={{ flexDirection: "row", gap: spacing["2xl"] }}>
+                  {[
+                    { tab: "followers" as const, label: "FOLLOWERS", value: follow.follower_count },
+                    {
+                      tab: "following" as const,
+                      label: "FOLLOWING",
+                      value: follow.following_count,
+                    },
+                  ].map((entry) => (
+                    <PressableScale
+                      key={entry.tab}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${entry.value} ${entry.label.toLowerCase()}`}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/person/[id]/follows",
+                          params: { id, tab: entry.tab, name: person.name },
+                        })
+                      }
+                      style={{ gap: 2 }}
+                    >
+                      <Text variant="heading">{entry.value.toLocaleString()}</Text>
+                      <Text variant="micro" color="textMuted">
+                        {entry.label}
+                      </Text>
+                    </PressableScale>
+                  ))}
+                </View>
+              ) : null}
+
+              {person.bio ? (
+                <Text variant="body" color="textSecondary">
+                  {person.bio}
+                </Text>
+              ) : null}
+
+              {person.programme ? (
+                <View style={{ flexDirection: "row", gap: spacing.xs, flexWrap: "wrap" }}>
+                  <Tag label={person.programme} />
+                </View>
+              ) : null}
+
+              {requestError ? (
+                <Text variant="caption" color="destructive">
+                  {requestError}
+                </Text>
+              ) : null}
             </View>
-          ) : null}
 
-          {person.bio ? (
-            <Text variant="body" color="textSecondary">
-              {person.bio}
-            </Text>
-          ) : null}
+            <ProfileTabs tabs={PROFILE_TABS} active={activeTab} onChange={setActiveTab} />
 
-          {person.programme ? (
-            <View style={{ flexDirection: "row", gap: spacing.xs, flexWrap: "wrap" }}>
-              <Tag label={person.programme} />
-            </View>
-          ) : null}
+            {/* Breathing room between the tab underline and the first card —
+                lives in the header so it applies identically whether the list
+                below is populated, empty, loading, or erroring. */}
+            <View style={{ height: spacing.md }} />
+          </>
+        }
+      />
 
-          {requestError ? (
-            <Text variant="caption" color="destructive">
-              {requestError}
-            </Text>
-          ) : null}
-        </View>
-      </ScrollView>
+      {options ? (
+        <PostOptionsSheet
+          postId={options.id}
+          authorName={options.author.name}
+          isOwnPost={options.author.id === user?.id}
+          saved={saved.isSaved(options.id)}
+          visible
+          onClose={() => setOptions(null)}
+          onRemoved={removePost}
+          onToggleSave={saved.toggle}
+        />
+      ) : null}
 
       {/* Connect is the one thing this screen is for, so it stays reachable
           without scrolling back. */}

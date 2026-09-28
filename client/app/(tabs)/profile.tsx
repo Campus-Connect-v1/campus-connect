@@ -107,11 +107,11 @@ export default function ProfileScreen() {
 
   const userId = user?.id;
   const posts = useAsync(
-    useCallback(
-      () =>
-        userId ? fetchPostsByAuthor(userId) : Promise.resolve({ success: true as const, data: [] }),
-      [userId]
-    ),
+    useCallback(async () => {
+      if (!userId) return { success: true as const, data: [] };
+      const result = await fetchPostsByAuthor(userId);
+      return result.success ? { ...result, data: result.data.posts } : result;
+    }, [userId]),
     [userId]
   );
 
