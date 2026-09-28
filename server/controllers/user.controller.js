@@ -26,6 +26,7 @@ import bcrypt from "bcrypt";
 import { authenticate } from "../middleware/auth.js";
 import { notify } from "../models/notification.model.js";
 import { db } from "../config/db.js";
+import { mentionHandle } from "../utils/mentions.js";
 
 // Get user profile
 export const getProfile = async (req, res) => {
@@ -209,6 +210,10 @@ export const searchUsers = async (req, res) => {
         year_of_study: user.year_of_study,
         university_id: user.university_id,
         bio: user.bio,
+        // The label the mention composer inserts and shows. Derived here, not
+        // in the client, so one rule decides it -- and because it reads the
+        // email, which the client is never sent.
+        mention_handle: mentionHandle(user),
       })),
     });
   } catch (error) {

@@ -183,7 +183,14 @@ export const searchUsersModel = async (filters = {}) => {
         u.user_id, u.first_name, u.last_name, u.profile_picture_url,
         u.profile_headline, u.program, u.graduation_year,
         u.university_id, uni.name as university_name,
-        u.privacy_profile, u.created_at, u.last_login
+        u.privacy_profile, u.created_at, u.last_login,
+        -- year_of_study and bio were already being read by the controller's
+        -- serializer but were never selected, so both came back undefined on
+        -- every search result.
+        u.year_of_study, u.bio,
+        -- Only to derive the @handle. searchUsers does NOT serialize it, and
+        -- must not: a mention label is public, an address is not.
+        u.email
       FROM users u
       LEFT JOIN universities uni ON u.university_id = uni.university_id
       LEFT JOIN user_interests ui ON u.user_id = ui.user_id
