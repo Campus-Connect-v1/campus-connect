@@ -6,9 +6,8 @@ import {
   markAllNotificationsReadModel,
   deleteNotificationModel,
   clearNotificationsModel,
-  registerPushTokenModel,
-  unregisterPushTokenModel,
 } from "../models/notification.model.js";
+import { registerDevice, unregisterDevice } from "../services/push/index.js";
 
 // Shape a row for the client. The actor is nested rather than left as flat
 // actor_* columns so it matches the `author` block the social endpoints return,
@@ -172,7 +171,7 @@ export const registerPushToken = async (req, res) => {
       return res.status(400).json({ message: "Invalid push token platform" });
     }
 
-    const saved = await registerPushTokenModel(req.user.id, {
+    const saved = await registerDevice(req.user.id, {
       token,
       platform,
       deviceId: device_id,
@@ -191,7 +190,7 @@ export const unregisterPushToken = async (req, res) => {
   try {
     const { token } = req.body;
     if (!token) return res.status(400).json({ message: "Push token is required" });
-    const removed = await unregisterPushTokenModel(req.user.id, token);
+    const removed = await unregisterDevice(req.user.id, token);
     if (!removed) return res.status(404).json({ message: "Push token not found" });
     res.status(200).json({ message: "Push token unregistered" });
   } catch (error) {
