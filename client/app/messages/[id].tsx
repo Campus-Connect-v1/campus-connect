@@ -1,16 +1,18 @@
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Platform, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
-import { EmptyState, Icon, InlineNotice, PressableScale, Text } from "@/src/components/ui";
+import { EmptyState, Icon, InlineNotice, Loader, PressableScale, Text } from "@/src/components/ui";
 import {
   fetchConversationMessages,
   type ApiMessageContext,
+  type ApiMessageMedia,
 } from "@/src/services/conversationServices";
+import { pickFromLibrary } from "@/src/services/media";
+import { uploadMedia } from "@/src/services/uploadServices";
 import { useSession } from "@/src/services/SessionContext";
 import { getSocket, markMessageRead, sendMessage, type SocketMessage } from "@/src/services/socket";
 import { culture, inputTextStyle, radius, spacing } from "@/src/styles/theme";
@@ -22,55 +24,131 @@ interface ChatMessage {
   mine: boolean;
   at: string;
   context?: ApiMessageContext | null;
+  media?: ApiMessageMedia | null;
+}
+
+/**
+ * A message that is nothing but emoji is drawn large and without a bubble.
+ *
+ * This is what "stickers" means here: the app has no sticker artwork, and a
+ * picker of big emoji is the same gesture with nothing to download. The
+ * bubble is dropped because a 40pt emoji inside a chat bubble reads as a
+ * mistake rather than as a reaction.
+ *
+ * Capped at three so a sentence of emoji stays a sentence.
+ */
+/** The sticker row. Short on purpose: a grid you have to read is slower than typing. */
+const CHAT_STICKERS = ["❤️", "🔥", "😂", "👏", "😮", "🙏", "🎉", "💯"] as const;
+
+const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|\uFE0F|\u200D)+$/u;
+
+function isStickerMessage(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed || trimmed.length > 12) return false;
+  if (!EMOJI_ONLY.test(trimmed)) return false;
+  return [...trimmed.replace(/[\uFE0F\u200D]/g, "")].length <= 3;
 }
 
 /**
  * The quoted block above a reply, the way a chat app shows what you answered.
  *
- * Deliberately NOT tappable through to the story. A story lives 24 hours and
- * the reply outlives it, so most of these point at something already gone --
- * a link that usually dead-ends is worse than no link. The quote is a record
- * of what was said, not a way back to it.
+ * Tappable, and it opens THAT story rather than the person's rail -- but only
+ * while the story is still alive. A story lives 24 hours and the reply
+ * outlives it, so a quote that always looked tappable would usually dead-end
+ * into an empty viewer. expiresAt travels on the message for exactly this, so
+ * the state is known without a request per quote in a scrolling list.
+ *
+ * An expired quote stays visible and says so. It is still the record of what
+ * was answered; it has just stopped being a way back.
  */
 function QuotedStory({ context, mine }: { context: ApiMessageContext; mine: boolean }) {
   const { colors } = useTheme();
   const tint = mine ? culture.warmWhite : colors.textPrimary;
 
+  // No expiry recorded means the message predates the field. Treated as open,
+  // because the viewer degrades gracefully and wrongly greying out a live
+  // story is the worse error.
+  const expired = context.expiresAt ? new Date(context.expiresAt).getTime() <= Date.now() : false;
+
+  const open = () =>
+    router.push({
+      pathname: "/stories/[userId]",
+      params: { userId: context.authorId, storyId: context.refId },
+    });
+
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.sm,
-        marginBottom: spacing.xs,
-        paddingLeft: spacing.sm,
-        paddingRight: spacing.xs,
-        paddingVertical: spacing.xs,
-        borderRadius: radius.sm,
-        // A translucent wash rather than a fixed colour, so one rule reads
-        // correctly on the violet of your own bubble and on the surface of
-        // theirs.
-        backgroundColor: mine ? "rgba(255,255,255,0.16)" : colors.background,
-        borderLeftWidth: 3,
-        borderLeftColor: mine ? culture.warmWhite : culture.violet,
-      }}
+    <PressableScale
+      accessibilityRole={expired ? "text" : "link"}
+      accessibilityLabel={
+        expired ? "Story no longer available" : `Open the story this replies to`
+      }
+      disabled={expired}
+      onPress={open}
     >
-      <View style={{ flex: 1 }}>
-        <Text variant="micro" style={{ color: tint, opacity: 0.8 }}>
-          STORY
-        </Text>
-        <Text variant="caption" numberOfLines={2} style={{ color: tint, opacity: 0.9 }}>
-          {context.text || (context.mediaUrl ? "Photo" : "Story")}
-        </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: spacing.md,
+          marginBottom: spacing.xs,
+          paddingLeft: spacing.md,
+          paddingRight: spacing.sm,
+          paddingVertical: spacing.sm,
+          /**
+           * The quote sets the bubble's width, rather than the other way round.
+           *
+           * A bubble sizes to its content, so a one-emoji reply -- which is
+           * most of them -- made a bubble barely wider than the emoji and the
+           * quote inside it was crushed into two cramped lines beside the
+           * thumbnail. A floor here means the quote reads the same whether the
+           * reply is "😂" or a paragraph.
+           *
+           * 200 is the largest round number that still fits inside the 78%
+           * cap on a 320pt screen (which leaves 218pt of bubble interior), and
+           * it leaves the text column ~113pt next to a 40pt thumbnail. At 168
+           * the text had 81pt and still wrapped awkwardly, which was the
+           * cramped look this is fixing.
+           */
+          minWidth: 200,
+          // Matches the thumbnail plus its padding, so a quote with one short
+          // line is not shorter than a quote with a picture in it.
+          minHeight: 56,
+          borderRadius: radius.sm,
+          // A translucent wash rather than a fixed colour, so one rule reads
+          // correctly on the violet of your own bubble and on the surface of
+          // theirs.
+          backgroundColor: mine ? "rgba(255,255,255,0.16)" : colors.background,
+          borderLeftWidth: 3,
+          borderLeftColor: mine ? culture.warmWhite : culture.violet,
+        }}
+      >
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text variant="micro" style={{ color: tint, opacity: 0.8 }}>
+            STORY
+          </Text>
+          <Text variant="caption" numberOfLines={2} style={{ color: tint, opacity: 0.9 }}>
+            {expired
+              ? "This story is no longer available"
+              : context.text || (context.mediaUrl ? "Photo" : "Story")}
+          </Text>
+        </View>
+        {context.mediaUrl ? (
+          <Image
+            source={{ uri: context.mediaUrl }}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: radius.sm,
+              // The thumbnail is kept even when expired -- it is what makes the
+              // quote recognisable -- but dimmed, so the block does not look
+              // tappable when it is not.
+              opacity: expired ? 0.45 : 1,
+            }}
+            contentFit="cover"
+          />
+        ) : null}
       </View>
-      {context.mediaUrl ? (
-        <Image
-          source={{ uri: context.mediaUrl }}
-          style={{ width: 38, height: 38, borderRadius: radius.sm }}
-          contentFit="cover"
-        />
-      ) : null}
-    </View>
+    </PressableScale>
   );
 }
 
@@ -80,6 +158,25 @@ function clock(iso: string) {
 
 function Bubble({ message }: { message: ChatMessage }) {
   const { colors } = useTheme();
+  const sticker = !message.media && !message.context && isStickerMessage(message.content);
+
+  // A sticker gets no bubble, no background and no padding: it is the message.
+  if (sticker) {
+    return (
+      <View
+        style={{
+          alignSelf: message.mine ? "flex-end" : "flex-start",
+          marginBottom: spacing.xs,
+          alignItems: message.mine ? "flex-end" : "flex-start",
+        }}
+      >
+        <Text style={{ fontSize: 44, lineHeight: 52 }}>{message.content.trim()}</Text>
+        <Text variant="caption" color="textMuted" style={{ opacity: 0.7 }}>
+          {clock(message.at)}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View
@@ -100,13 +197,33 @@ function Bubble({ message }: { message: ChatMessage }) {
       {message.context?.kind === "story" ? (
         <QuotedStory context={message.context} mine={message.mine} />
       ) : null}
-      <Text variant="body" style={message.mine ? { color: culture.warmWhite } : undefined}>
-        {message.content}
-      </Text>
+      {message.media ? (
+        <Image
+          source={{ uri: message.media.url }}
+          // Fixed width, 4:3. A chat has no room to honour each image's own aspect
+          // ratio without the column jumping about as pictures load.
+          style={{
+            width: 216,
+            height: 162,
+            borderRadius: radius.sm,
+            marginBottom: message.content.trim() ? spacing.xs : 0,
+          }}
+          contentFit="cover"
+          accessibilityIgnoresInvertColors
+          accessibilityLabel={message.media.type === "video" ? "Video" : "Photo"}
+        />
+      ) : null}
+      {message.content.trim() ? (
+        <Text variant="body" style={message.mine ? { color: culture.warmWhite } : undefined}>
+          {message.content}
+        </Text>
+      ) : null}
       <Text
         variant="caption"
         style={{
-          marginTop: 2,
+          // 2pt put the clock almost on the message's baseline, which is a lot
+          // of the cramped feel on a one-line reply.
+          marginTop: 4,
           opacity: 0.7,
           color: message.mine ? culture.warmWhite : colors.textMuted,
         }}
@@ -119,7 +236,6 @@ function Bubble({ message }: { message: ChatMessage }) {
 
 export default function ChatScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const { user } = useSession();
   const { id, participantId, name } = useLocalSearchParams<{
     id: string;
@@ -132,6 +248,8 @@ export default function ChatScreen() {
   const [draft, setDraft] = useState("");
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [stickersOpen, setStickersOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
@@ -143,6 +261,8 @@ export default function ChatScreen() {
         {
           id: incoming._id,
           content: incoming.content,
+          context: incoming.context ?? null,
+          media: incoming.media ?? null,
           mine,
           at: incoming.createdAt,
         },
@@ -175,6 +295,7 @@ export default function ChatScreen() {
         id: message._id,
         content: message.content,
         context: message.context ?? null,
+        media: message.media ?? null,
         mine: message.senderId._id === user?.id,
         at: message.createdAt,
       }));
@@ -243,12 +364,13 @@ export default function ChatScreen() {
     if (messages.length) listRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
 
-  const send = () => {
+  const send = (media?: { url: string; type: "image" | "video" }) => {
     const content = draft.trim();
-    if (!content || !participantId) return;
+    // An attachment can travel on its own; text cannot be empty without one.
+    if ((!content && !media) || !participantId) return;
 
     setError(null);
-    const ok = sendMessage(participantId, content);
+    const ok = sendMessage(participantId, content, undefined, media);
 
     if (!ok) {
       setError("Not connected. Check your connection and try again.");
@@ -258,12 +380,54 @@ export default function ChatScreen() {
     setDraft("");
   };
 
+  /**
+   * Pick, upload, then send.
+   *
+   * Uploaded before the message exists rather than after: the server only
+   * accepts a URL on our own Cloudinary account, so there is nothing to send
+   * until the upload has produced one.
+   */
+  const attach = async () => {
+    const picked = await pickFromLibrary("image");
+    if (picked.status !== "picked") {
+      // Cancelling is not an error and must not leave a message on screen.
+      if (picked.status === "denied") {
+        setError("Campus Connect needs photo access to send a picture.");
+      }
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+    const uploaded = await uploadMedia(picked.media, "posts");
+    setUploading(false);
+
+    if (!uploaded.success) {
+      setError(uploaded.error);
+      return;
+    }
+
+    send({ url: uploaded.url, type: uploaded.kind });
+  };
+
   return (
     <SettingsShell title={name || "Chat"}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={insets.top + 56}
+        /**
+         * No keyboardVerticalOffset.
+         *
+         * SettingsShell renders its header IN FLOW and this sits below it, so
+         * the frame React Native measures already excludes the top inset and
+         * the header. The offset it used to pass described both again, and a
+         * larger offset makes RN think the keyboard reaches higher than it
+         * does -- so it padded ~100pt too much and left a band of background
+         * between the composer and the keyboard.
+         *
+         * An offset is for a KeyboardAvoidingView that is the root with a
+         * header floating OVER it. That is not this.
+         */
       >
         <FlatList
           ref={listRef}
@@ -307,6 +471,48 @@ export default function ChatScreen() {
           </View>
         ) : null}
 
+        {/* Stickers. A row of large emoji rather than artwork: the app ships
+            no sticker pack, and this is the same gesture with nothing to
+            download. One tap sends. */}
+        {stickersOpen ? (
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: spacing.xs,
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.sm,
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              backgroundColor: colors.background,
+            }}
+          >
+            {CHAT_STICKERS.map((emoji) => (
+              <PressableScale
+                key={emoji}
+                accessibilityRole="button"
+                accessibilityLabel={`Send ${emoji}`}
+                onPress={() => {
+                  if (!participantId) return;
+                  sendMessage(participantId, emoji);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setStickersOpen(false);
+                }}
+                style={{
+                  width: 48,
+                  height: 48,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: radius.full,
+                  backgroundColor: colors.surface,
+                }}
+              >
+                <Text style={{ fontSize: 26, lineHeight: 32 }}>{emoji}</Text>
+              </PressableScale>
+            ))}
+          </View>
+        ) : null}
+
         <View
           style={{
             flexDirection: "row",
@@ -319,32 +525,69 @@ export default function ChatScreen() {
             backgroundColor: colors.background,
           }}
         >
-          <TextInput
-            accessibilityLabel="Message"
-            placeholder="Message"
-            placeholderTextColor={colors.textMuted}
-            multiline
-            autoCapitalize="sentences"
-            value={draft}
-            onChangeText={setDraft}
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel="Send a photo"
+            accessibilityState={{ disabled: uploading }}
+            disabled={uploading}
+            onPress={attach}
+            style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
+          >
+            {uploading ? (
+              <Loader size={18} />
+            ) : (
+              <Icon name="photo" size={21} color={colors.textSecondary} />
+            )}
+          </PressableScale>
+
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityState={{ selected: stickersOpen }}
+            accessibilityLabel={stickersOpen ? "Hide stickers" : "Send a sticker"}
+            onPress={() => setStickersOpen((open) => !open)}
+            style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ fontSize: 20, lineHeight: 24, opacity: stickersOpen ? 1 : 0.65 }}>
+              😊
+            </Text>
+          </PressableScale>
+
+          {/* The box carries the height and the centring; the input sizes to
+              its own text. A minHeight on the TextInput itself top-aligns the
+              first line on iOS and leaves a gap beneath it, which is what made
+              the placeholder sit high. */}
+          <View
             style={{
               flex: 1,
-              maxHeight: 120,
               minHeight: 44,
+              maxHeight: 120,
+              justifyContent: "center",
               borderRadius: radius.lg,
               backgroundColor: colors.surface,
-              color: colors.textPrimary,
-              ...inputTextStyle(true),
-              paddingHorizontal: spacing.md,
-              paddingVertical: spacing.xs + 2,
             }}
-          />
+          >
+            <TextInput
+              accessibilityLabel="Message"
+              placeholder="Message"
+              placeholderTextColor={colors.textMuted}
+              multiline
+              autoCapitalize="sentences"
+              value={draft}
+              onChangeText={setDraft}
+              style={{
+                color: colors.textPrimary,
+                ...inputTextStyle(true),
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.xs,
+              }}
+            />
+          </View>
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Send message"
             accessibilityState={{ disabled: !draft.trim() }}
             disabled={!draft.trim()}
-            onPress={send}
+            onPress={() => send()}
             style={{
               width: 44,
               height: 44,
