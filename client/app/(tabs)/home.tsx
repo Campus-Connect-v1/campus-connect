@@ -39,6 +39,7 @@ import { useSession } from "@/src/services/SessionContext";
 import { fetchFeed, likePost, unlikePost, type ApiPost } from "@/src/services/socialServices";
 import { useFeedRealtime } from "@/src/hooks/useFeedRealtime";
 import { useHideOnScroll } from "@/src/hooks/useHideOnScroll";
+import { FEED_CATEGORIES, topicFor } from "@/src/features/feed/topics";
 import { onNewPost } from "@/src/services/socket";
 import { fetchUniversityById } from "@/src/services/universityServices";
 import { useUnread } from "@/src/services/UnreadContext";
@@ -48,14 +49,6 @@ import { TAB_BAR_CLEARANCE, tabBarTop } from "@/src/styles/layout";
 import { culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
-const CATEGORIES: { label: string; icon: IconName; color: string; route?: "/(tabs)/events" }[] = [
-  { label: "Trending", icon: "trending", color: culture.pink },
-  { label: "Events", icon: "events", color: culture.yellow, route: "/(tabs)/events" },
-  { label: "Sports", icon: "sports", color: culture.lime },
-  { label: "Academic", icon: "academic", color: culture.violet },
-  { label: "Music", icon: "entertainment", color: culture.pink },
-  { label: "Food", icon: "food", color: culture.yellow },
-];
 
 function CategoryRail({ active, onChange }: { active: string; onChange: (label: string) => void }) {
   const { colors } = useTheme();
@@ -71,7 +64,7 @@ function CategoryRail({ active, onChange }: { active: string; onChange: (label: 
         alignItems: "center",
       }}
     >
-      {CATEGORIES.map((category) => {
+      {FEED_CATEGORIES.map((category) => {
         const selected = category.label === active;
         return (
           <PressableScale
@@ -80,8 +73,13 @@ function CategoryRail({ active, onChange }: { active: string; onChange: (label: 
             accessibilityState={{ selected }}
             accessibilityLabel={`Show ${category.label}`}
             onPress={() => {
+              // Events leaves the screen, so selecting it would leave the rail
+              // showing a filter that is not applied when you come back.
+              if (category.route) {
+                router.push(category.route);
+                return;
+              }
               onChange(category.label);
-              if (category.route) router.push(category.route);
             }}
             style={{
               minHeight: 44,
@@ -378,9 +376,20 @@ export default function HomeScreen() {
   const display = useMemo(() => (profile ? adaptProfile(profile) : null), [profile]);
   const firstName = (display?.name || user?.name || "").split(" ")[0];
 
+  /**
+   * The category chip drives the feed request, so switching chips refetches.
+   *
+   * Filtering the already-loaded page client-side would have been cheaper, but
+   * it filters 20 posts rather than the feed: pick Food and you would see the
+   * food posts that happened to be in the first page and nothing else, with no
+   * way to page further. The server does the filtering so a category is a real
+   * view of the whole feed.
+   */
+  const activeTopic = topicFor(category);
+
   const feed = useAsync(
-    useCallback(() => fetchFeed(20, 0), []),
-    []
+    useCallback(() => fetchFeed(20, 0, null, activeTopic), [activeTopic]),
+    [activeTopic]
   );
 
   const people = useAsync(
@@ -881,6 +890,17 @@ export default function HomeScreen() {
               body={feed.error}
               actionLabel="Try again"
               onAction={feed.reload}
+            />
+          ) : activeTopic ? (
+            // A filtered feed empties for a different reason than the main one,
+            // and the generic copy ("follow a few people") would be advice that
+            // does not apply. It also has to say which filter is on, or an
+            // empty screen reads as a broken feed rather than a quiet category.
+            <EmptyState
+              title={`Nothing under ${category} yet`}
+              body={`No one has posted to ${category} recently. Post the first one, or tap Trending to see everything.`}
+              actionLabel={`Post to ${category}`}
+              onAction={() => router.push("/compose/post")}
             />
           ) : (
             <EmptyState

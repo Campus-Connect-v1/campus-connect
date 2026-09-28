@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, View } from "react-native";
 
 import { MediaAttachment } from "@/src/components/compose/MediaAttachment";
+import { COMPOSER_TOPICS } from "@/src/features/feed/topics";
 import { MentionSuggestions } from "@/src/components/social/MentionSuggestions";
 import { useMentionAutocomplete } from "@/src/features/mentions/useMentionAutocomplete";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
@@ -17,7 +18,7 @@ import {
 } from "@/src/services/media";
 import { uploadMedia } from "@/src/services/uploadServices";
 import { createPost } from "@/src/services/socialServices";
-import { culture, inputTextStyle, radius, spacing } from "@/src/styles/theme";
+import { culture, foregroundOn, inputTextStyle, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 const COPY = {
@@ -42,6 +43,15 @@ export default function ComposeScreen() {
   const copy = COPY[kind];
 
   const [text, setText] = useState("");
+  /**
+   * Optional, and null by default.
+   *
+   * A required picker would be a tax on every post to serve the rail, and a
+   * pre-selected one would file posts under a category the writer never chose.
+   * An untagged post still reaches the main feed; it just does not appear
+   * under a chip.
+   */
+  const [topic, setTopic] = useState<string | null>(null);
   const mentions = useMentionAutocomplete({
     text,
     onChange: (next) => {
@@ -105,7 +115,7 @@ export default function ComposeScreen() {
       mediaUrl = uploaded.url;
     }
 
-    const result = await createPost(content, mediaUrl);
+    const result = await createPost(content, mediaUrl, "public", topic);
 
     setPublishing(false);
 
@@ -170,6 +180,56 @@ export default function ComposeScreen() {
             people={mentions.suggestions}
             onSelect={mentions.select}
           />
+
+          {kind === "post" ? (
+            <View style={{ gap: spacing.sm }}>
+              <Text variant="micro" color="textMuted">
+                ADD A CATEGORY (OPTIONAL)
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+                {COMPOSER_TOPICS.map((option) => {
+                  const selected = option.topic === topic;
+                  return (
+                    <PressableScale
+                      key={option.topic}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Category ${option.label}`}
+                      // Tapping the selected chip clears it: with no "none"
+                      // option, choosing a category by accident would
+                      // otherwise be permanent for that post.
+                      onPress={() => setTopic(selected ? null : option.topic)}
+                      style={{
+                        minHeight: 40,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: spacing.xs,
+                        paddingHorizontal: spacing.sm,
+                        borderRadius: radius.full,
+                        backgroundColor: selected ? option.color : colors.surface,
+                        borderWidth: 1,
+                        borderColor: selected ? option.color : colors.border,
+                      }}
+                    >
+                      <Icon
+                        name={option.icon}
+                        size={15}
+                        color={selected ? foregroundOn(option.color) : colors.textSecondary}
+                      />
+                      <Text
+                        variant="label"
+                        style={{
+                          color: selected ? foregroundOn(option.color) : colors.textSecondary,
+                        }}
+                      >
+                        {option.label}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
 
           {media ? (
             <>

@@ -23,11 +23,12 @@ export const createPostModel = async (postData) => {
       media_type = "text",
       visibility = "connections",
       expires_at = null,
+      topic = null,
     } = postData;
 
     const query = `
-      INSERT INTO posts (post_id, user_id, content, media_url, media_type, visibility, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO posts (post_id, user_id, content, media_url, media_type, visibility, expires_at, topic)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.execute(query, [
@@ -38,6 +39,7 @@ export const createPostModel = async (postData) => {
       media_type,
       visibility,
       expires_at,
+      topic,
     ]);
 
     return { post_id: postId, ...postData };
@@ -112,7 +114,8 @@ export const getFeedPostsModel = async (
   limit = 20,
   offset = 0,
   cursor = null,
-  mode = FEED_MODES.FOLLOWING
+  mode = FEED_MODES.FOLLOWING,
+  topic = null
 ) => {
   const safeLimit = Number.isInteger(parseInt(limit)) ? parseInt(limit) : 20;
   const safeOffset = Number.isInteger(parseInt(offset)) ? parseInt(offset) : 0;
@@ -139,6 +142,7 @@ export const getFeedPostsModel = async (
         p.content,
         p.media_url,
         p.media_type,
+        p.topic,
         p.visibility,
         p.created_at,
         p.expires_at,
@@ -215,6 +219,9 @@ export const getFeedPostsModel = async (
           )
         )
         AND ${hiddenPostFilterSql()}
+        -- Last in the clause, and its bind is appended after the viewer binds,
+        -- so adding it cannot disturb the order the nine above depend on.
+        ${topic ? "AND p.topic = ?" : ""}
       ORDER BY affinity_score DESC, preference_score DESC, p.created_at DESC, p.post_id DESC
     `;
 
@@ -268,6 +275,8 @@ export const getFeedPostsModel = async (
     // the connections test, then the hidden-posts filter.
     const viewerBinds = [
       userId, userId, userId, userId, userId, userId, userId, userId, userId,
+      // Only present when filtering, matching the conditional clause above.
+      ...(topic ? [topic] : []),
     ];
     const cursorBinds = after
       ? [
