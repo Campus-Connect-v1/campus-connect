@@ -79,6 +79,12 @@ export async function fetchFeed(limit = 20, offset = 0, cursor: string | null = 
   };
 }
 
+export interface UserPostsPage {
+  posts: ApiPost[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 /**
  * One user's posts, for their profile.
  *
@@ -88,12 +94,33 @@ export async function fetchFeed(limit = 20, offset = 0, cursor: string | null = 
  * follow. The server now answers this directly and applies the profile's own
  * visibility rules, so a profile shows that person's posts regardless of who
  * is looking.
+ *
+ * Cursor-paginated, same shape as fetchFeed: pass the previous page's
+ * nextCursor to get the next one.
  */
-export async function fetchPostsByAuthor(userId: string, limit = 50) {
-  const result = await request<{ count: number; posts?: ApiPost[] }>(() =>
-    api.get(`/user/${userId}/posts`, { params: { limit } })
-  );
-  return result.success ? { ...result, data: result.data.posts ?? [] } : result;
+export async function fetchPostsByAuthor(
+  userId: string,
+  limit = 50,
+  cursor: string | null = null
+) {
+  const result = await request<{
+    count: number;
+    posts?: ApiPost[];
+    next_cursor?: string | null;
+    has_more?: boolean;
+  }>(() => api.get(`/user/${userId}/posts`, { params: cursor ? { limit, cursor } : { limit } }));
+
+  if (!result.success) return result;
+
+  const posts = result.data.posts ?? [];
+  return {
+    ...result,
+    data: {
+      posts,
+      nextCursor: result.data.next_cursor ?? null,
+      hasMore: result.data.has_more ?? Boolean(result.data.next_cursor),
+    } as UserPostsPage,
+  };
 }
 
 export async function fetchPost(postId: string) {
