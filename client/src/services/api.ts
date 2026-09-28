@@ -96,3 +96,35 @@ export async function request<T>(fn: () => Promise<{ data: T }>): Promise<Result
     };
   }
 }
+
+let warming: Promise<void> | null = null;
+
+/**
+ * Wakes the API before anyone asks it for anything.
+ *
+ * The backend sleeps on Render's free tier: the first request after an idle
+ * period takes roughly 25 seconds, and every one after it about 200ms. That
+ * cost lands wherever the first call happens to be -- which, for a returning
+ * user, is the sign-in button. The wait then looks like slow authentication
+ * rather than a server waking up.
+ *
+ * Firing this at launch moves the wait under the splash and the login form,
+ * so it overlaps with the seconds the user spends typing instead of following
+ * their tap. It cannot make the cold start shorter; it stops it being spent
+ * in front of a spinner.
+ *
+ * Targets the ORIGIN, not the API base: `GET /` is unauthenticated, touches no
+ * database and returns a string, so it wakes the dyno without doing work.
+ * Failures are ignored on purpose -- this is a warm-up, and nothing should
+ * break because it did not land.
+ */
+export function warmApi(): Promise<void> {
+  if (warming) return warming;
+
+  const origin = API_URL.replace(/\/api\/?$/, "");
+  warming = fetch(origin, { method: "GET" })
+    .then(() => undefined)
+    .catch(() => undefined);
+
+  return warming;
+}
