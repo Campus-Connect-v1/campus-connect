@@ -1,7 +1,15 @@
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { router } from "expo-router";
-import { memo } from "react";
-import { View, type GestureResponderEvent } from "react-native";
+import { memo, useEffect, useState } from "react";
+import { Modal, Pressable, StyleSheet, View, type GestureResponderEvent } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { Avatar, Media, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
 import { PollCard } from "./PollCard";
@@ -94,6 +102,24 @@ export const PostCard = memo(function PostCard({
 }: Props) {
   const { colors } = useTheme();
   const openComments = linkToDetail ? () => router.push(`/post/${post.id}`) : undefined;
+
+  // On the post's own detail screen there is nowhere left for a tap on the
+  // photo to navigate to, so it opens a full-screen view of just the image
+  // instead -- header, caption and actions fade away rather than sitting on
+  // top of a photo that is finally shown at its own size.
+  const canExpandMedia = !linkToDetail;
+  const [expanded, setExpanded] = useState(false);
+  const chromeProgress = useSharedValue(0);
+
+  useEffect(() => {
+    chromeProgress.value = withTiming(expanded ? 1 : 0, { duration: 240 });
+  }, [expanded, chromeProgress]);
+
+  const chromeStyle = useAnimatedStyle(() => ({
+    opacity: 1 - chromeProgress.value,
+    transform: [{ translateY: chromeProgress.value * 28 }],
+  }));
+
   const openAuthor = (event: GestureResponderEvent) => {
     // The card itself opens the post. Stop that parent press so tapping the
     // identity row has exactly one destination: the author's profile.
@@ -229,32 +255,78 @@ export const PostCard = memo(function PostCard({
     );
   }
 
+  const mediaPress = openComments ?? (canExpandMedia ? () => setExpanded(true) : undefined);
+
   return (
-    <PressableScale
-      accessibilityRole={linkToDetail ? "button" : "none"}
-      accessibilityLabel={linkToDetail ? `Open ${post.author.name}'s post` : undefined}
-      disabled={!linkToDetail}
-      onPress={openComments}
-      style={{ marginHorizontal: spacing.lg, marginBottom: spacing.lg }}
-    >
-      <Media
-        source={post.image}
-        scrim="full"
-        rounded="lg"
-        style={{ height: 460 }}
-        accessibilityIgnoresInvertColors
-        accessibilityLabel={`Photo from ${post.author.name}`}
+    <>
+      <PressableScale
+        accessibilityRole={mediaPress ? "button" : "none"}
+        accessibilityLabel={
+          linkToDetail
+            ? `Open ${post.author.name}'s post`
+            : canExpandMedia
+              ? `View ${post.author.name}'s photo full screen`
+              : undefined
+        }
+        disabled={!mediaPress}
+        onPress={mediaPress}
+        style={{ marginHorizontal: spacing.lg, marginBottom: spacing.lg }}
       >
-        <View style={{ flex: 1, justifyContent: "space-between", padding: spacing.md }}>
-          {header}
-          <View style={{ gap: spacing.sm }}>
-            <Text variant="body" onMedia numberOfLines={3}>
-              {post.caption}
-            </Text>
-            {actions}
-          </View>
-        </View>
-      </Media>
-    </PressableScale>
+        <Media
+          source={post.image}
+          scrim="full"
+          rounded="lg"
+          style={{ height: 460 }}
+          accessibilityIgnoresInvertColors
+          accessibilityLabel={`Photo from ${post.author.name}`}
+        >
+          <Animated.View
+            style={[
+              { flex: 1, justifyContent: "space-between", padding: spacing.md },
+              chromeStyle,
+            ]}
+          >
+            {header}
+            <View style={{ gap: spacing.sm }}>
+              <Text variant="body" onMedia numberOfLines={3}>
+                {post.caption}
+              </Text>
+              {actions}
+            </View>
+          </Animated.View>
+        </Media>
+      </PressableScale>
+
+      {canExpandMedia ? (
+        <Modal
+          visible={expanded}
+          transparent
+          animationType="none"
+          statusBarTranslucent
+          onRequestClose={() => setExpanded(false)}
+        >
+          <Animated.View
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(160)}
+            style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close full-screen photo"
+              onPress={() => setExpanded(false)}
+              style={StyleSheet.absoluteFill}
+            >
+              <Image
+                source={post.image}
+                contentFit="contain"
+                style={StyleSheet.absoluteFill}
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={`Photo from ${post.author.name}`}
+              />
+            </Pressable>
+          </Animated.View>
+        </Modal>
+      ) : null}
+    </>
   );
 });
