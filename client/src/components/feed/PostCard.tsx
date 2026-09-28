@@ -1,6 +1,8 @@
+import { useEvent } from "expo";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { router } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { memo, useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, View, type GestureResponderEvent } from "react-native";
 import Animated, {
@@ -11,7 +13,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import { Avatar, Media, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
+import { Avatar, Loader, Media, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
 import { PollCard } from "./PollCard";
 import type { FeedPost } from "@/src/features/feed/types";
 import { culture, radius, spacing } from "@/src/styles/theme";
@@ -86,6 +88,49 @@ function compact(n: number) {
 }
 
 /**
+ * The feed's video renderer. Same expo-video pattern already proven in
+ * MediaAttachment and the stories viewer: native controls, no autoplay, no
+ * loop. useVideoPlayer ties the player's lifetime to this component, so
+ * scrolling the card out of the list and unmounting it stops playback and
+ * releases the player -- nothing extra to clean up here.
+ */
+function PostVideo({ uri, accessibilityLabel }: { uri: string; accessibilityLabel: string }) {
+  const { colors } = useTheme();
+  const player = useVideoPlayer(uri, (instance) => {
+    instance.loop = false;
+  });
+  const { status } = useEvent(player, "statusChange", { status: player.status });
+
+  return (
+    <View
+      style={{ height: 460, borderRadius: radius.lg, overflow: "hidden", backgroundColor: "#000" }}
+    >
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFillObject}
+        contentFit="cover"
+        nativeControls
+        // Android's default SurfaceView renders in its own compositor layer
+        // outside normal view clipping, so with more than one video mounted
+        // in the same scrolling list it can bleed over neighbouring cards.
+        // textureView composites like an ordinary view instead.
+        surfaceType="textureView"
+        accessibilityLabel={accessibilityLabel}
+      />
+
+      {status === "loading" || status === "idle" ? (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { alignItems: "center", justifyContent: "center" }]}
+        >
+          <Loader size={28} color={colors.onMedia} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/**
  * The post IS the photo. Header and actions float on top of it rather than
  * sitting in chrome above and below, so a scroll reads as a stack of images
  * rather than a stack of boxes.
@@ -127,6 +172,13 @@ export const PostCard = memo(function PostCard({
     router.push({ pathname: "/person/[id]", params: { id: post.author.id } });
   };
 
+  // Photos float header/caption/actions on top of the image via a scrim, so
+  // that text needs light-on-dark styling. Video keeps its own native
+  // transport controls at the bottom of the frame -- overlaying our chrome
+  // there would collide with them -- so its header sits above the frame on
+  // the ordinary card background instead, and wants ordinary text styling.
+  const overlaysMedia = Boolean(post.image) && post.mediaType !== "video";
+
   const header = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
       <PressableScale
@@ -143,14 +195,14 @@ export const PostCard = memo(function PostCard({
       >
         <Avatar uri={post.author.avatar} size={38} />
         <View style={{ flex: 1 }}>
-          <Text variant="label" onMedia={Boolean(post.image)}>
+          <Text variant="label" onMedia={overlaysMedia}>
             {post.author.name}
           </Text>
           <Text
             variant="caption"
             color="textMuted"
-            onMedia={Boolean(post.image)}
-            style={post.image ? { opacity: 0.85 } : undefined}
+            onMedia={overlaysMedia}
+            style={overlaysMedia ? { opacity: 0.85 } : undefined}
           >
             {post.author.hall} · {post.postedAt}
           </Text>
@@ -162,7 +214,7 @@ export const PostCard = memo(function PostCard({
         onPress={() => onOpenOptions?.(post)}
         style={{ minHeight: 44, minWidth: 44, alignItems: "flex-end", justifyContent: "center" }}
       >
-        <Icon name="more" size={18} color={post.image ? colors.onMedia : colors.textMuted} />
+        <Icon name="more" size={18} color={overlaysMedia ? colors.onMedia : colors.textMuted} />
       </PressableScale>
     </View>
   );
@@ -252,6 +304,28 @@ export const PostCard = memo(function PostCard({
         <Text variant="body">{post.caption}</Text>
         {actions}
       </PressableScale>
+    );
+  }
+
+  // Video: header above the frame, transport controls (play/pause/seek/
+  // fullscreen) belong to the native player, caption/actions below. Not
+  // wrapped in a navigate-on-tap Pressable like the photo branch -- the video
+  // body needs direct touches for its own controls, so the comment pill is
+  // the way into the post's detail screen for a video post.
+  if (post.mediaType === "video") {
+    return (
+      <View
+        style={{
+          marginHorizontal: spacing.lg,
+          marginBottom: spacing.lg,
+          gap: spacing.sm,
+        }}
+      >
+        {header}
+        <PostVideo uri={post.image} accessibilityLabel={`Video from ${post.author.name}`} />
+        <Text variant="body">{post.caption}</Text>
+        {actions}
+      </View>
     );
   }
 

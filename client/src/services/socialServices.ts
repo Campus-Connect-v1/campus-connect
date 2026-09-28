@@ -1,11 +1,14 @@
 import { api, request } from "./api";
 
+/** Matches the `posts.media_type` enum column on the server. */
+export type MediaType = "image" | "video" | "text" | "poll";
+
 /** Exactly the shape GET /social/posts/feed returns. */
 export interface ApiPost {
   post_id: string;
   content: string | null;
   media_url: string | null;
-  media_type: string | null;
+  media_type: MediaType | null;
   /** Non-null only when media_type is "poll". */
   poll_id: string | null;
   visibility: "public" | "connections" | "private";
@@ -150,13 +153,14 @@ export type PostVisibility = "public" | "university" | "connections";
 export function createPost(
   content: string,
   mediaUrl?: string,
-  visibility: PostVisibility = "public"
+  visibility: PostVisibility = "public",
+  mediaType: MediaType = "text"
 ) {
   return request<{ post: ApiCreatedPost }>(() =>
     api.post("/social/posts", {
       content,
       media_url: mediaUrl,
-      media_type: mediaUrl ? "image" : "text",
+      media_type: mediaUrl ? mediaType : "text",
       visibility,
     })
   );

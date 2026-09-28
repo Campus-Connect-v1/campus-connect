@@ -1,9 +1,12 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, View } from "react-native";
 
-import { MediaAttachment } from "@/src/components/compose/MediaAttachment";
+import {
+  MediaAttachment,
+  type MediaAttachmentHandle,
+} from "@/src/components/compose/MediaAttachment";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { Button, Icon, InlineNotice, PressableScale, Sticker, Text } from "@/src/components/ui";
 import { useUploadsEnabled } from "@/src/hooks/useUploadsEnabled";
@@ -46,6 +49,7 @@ export default function ComposeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const canUpload = useUploadsEnabled();
+  const mediaRef = useRef<MediaAttachmentHandle>(null);
 
   const stickerColor = useMemo(
     () => ({ post: culture.violet, anonymous: culture.pink })[kind],
@@ -75,6 +79,10 @@ export default function ComposeScreen() {
     const content = text.trim();
     if (!content) return;
 
+    // A video preview keeps playing (and keeps its audio) through an upload
+    // that can take several seconds. Cut it the moment submission begins,
+    // not whenever the screen eventually unmounts.
+    mediaRef.current?.pause();
     setPublishing(true);
     setError(null);
 
@@ -95,7 +103,7 @@ export default function ComposeScreen() {
       mediaUrl = uploaded.url;
     }
 
-    const result = await createPost(content, mediaUrl);
+    const result = await createPost(content, mediaUrl, "public", media?.kind ?? "text");
 
     setPublishing(false);
 
@@ -154,7 +162,14 @@ export default function ComposeScreen() {
 
           {media ? (
             <>
-              <MediaAttachment media={media} onRemove={() => setMedia(null)} />
+              <MediaAttachment
+                ref={mediaRef}
+                media={media}
+                onRemove={() => {
+                  mediaRef.current?.pause();
+                  setMedia(null);
+                }}
+              />
               {canUpload === false ? (
                 <InlineNotice message="Media hosting is not configured on the server, so only your text will be posted." />
               ) : null}
