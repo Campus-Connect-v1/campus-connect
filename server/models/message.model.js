@@ -25,6 +25,8 @@ const messageSchema = new mongoose.Schema(
       authorId: String,
       mediaUrl: String,
       text: String,
+      /** So the chat can show an expired story as expired without asking. */
+      expiresAt: Date,
     },
   },
   { timestamps: true }

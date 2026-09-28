@@ -18,7 +18,7 @@ export const resolveMessageContext = async (context, { senderId, receiverId }) =
 
   try {
     const [[story]] = await db.execute(
-      `SELECT story_id, user_id, media_url, content, story_type
+      `SELECT story_id, user_id, media_url, content, story_type, expires_at
          FROM stories
         WHERE story_id = ? AND is_active = 1`,
       [String(context.refId)]
@@ -40,6 +40,16 @@ export const resolveMessageContext = async (context, { senderId, receiverId }) =
       refId: story.story_id,
       authorId: story.user_id,
       mediaUrl: story.media_url ?? null,
+      /**
+       * Carried so the chat can tell a live story from a dead one WITHOUT a
+       * request. The quote is tappable, and a tap that opens an empty viewer
+       * is worse than one that says the story has gone -- but checking would
+       * mean a round trip per quote in a scrolling list.
+       *
+       * Copied rather than looked up later for the same reason the preview is:
+       * the story row is deleted, and this has to keep answering afterwards.
+       */
+      expiresAt: story.expires_at ?? null,
       // A text story has no media, so its words are the preview; an image
       // story's caption is, when it has one.
       text: story.content ? String(story.content).slice(0, 140) : null,
