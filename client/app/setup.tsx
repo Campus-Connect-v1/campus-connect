@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -98,6 +98,40 @@ function InterestChip({
         {name}
       </Text>
     </PressableScale>
+  );
+}
+
+/**
+ * The actions that end a setup stage, pinned below the scroll area.
+ *
+ * They used to sit at the end of the content, so on stage one you scrolled
+ * past every interest chip to find "Find my people", and on stage two past
+ * every suggestion to find "Skip for now" -- on a long list the way out of
+ * the flow was effectively hidden.
+ *
+ * A sibling of the list rather than an absolutely positioned overlay: it
+ * takes its own height out of the layout, so the list ends where the bar
+ * begins and no content can hide underneath it. `Screen edges={{bottom:true}}`
+ * already pads for the home indicator, so this adds no inset of its own.
+ */
+function ActionBar({ children }: { children: ReactNode }) {
+  const { colors } = useTheme();
+
+  return (
+    <View
+      style={{
+        gap: spacing.sm,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
+        backgroundColor: colors.background,
+        // The list scrolls right up to this edge, so the rule is what stops
+        // the last row from looking like part of the bar.
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+      }}
+    >
+      {children}
+    </View>
   );
 }
 
@@ -396,7 +430,8 @@ export default function SetupScreen() {
           <ScrollView
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing["3xl"], gap: spacing.xl }}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xl, gap: spacing.xl }}
           >
             <Progress stage="profile" />
 
@@ -484,12 +519,18 @@ export default function SetupScreen() {
               </View>
               <Text variant="micro" color="textMuted">{selected.size}/6 SELECTED</Text>
             </View>
+          </ScrollView>
 
+          {/* The notices move with the button they belong to. Left in the
+              scroll content they would render off-screen: saveProfile sets
+              fieldError and returns, so tapping a pinned button while scrolled
+              up would look like nothing happened at all. */}
+          <ActionBar>
             {fieldError ? <InlineNotice message={fieldError} /> : null}
             {error ? <InlineNotice message={error} /> : null}
             <Button label="Find my people" loading={saving} onPress={saveProfile} />
             <Button label="Skip for now" variant="ghost" onPress={skip} />
-          </ScrollView>
+          </ActionBar>
         </KeyboardAvoidingView>
       </Screen>
     );
@@ -526,7 +567,8 @@ export default function SetupScreen() {
         numColumns={2}
         keyExtractor={(item) => item.user_id}
         columnWrapperStyle={{ gap: cardGap }}
-        contentContainerStyle={{ padding: spacing.lg, gap: cardGap, paddingBottom: spacing["3xl"] }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: spacing.lg, gap: cardGap, paddingBottom: spacing.xl }}
         showsVerticalScrollIndicator={false}
         refreshing={suggestions.refreshing}
         onRefresh={suggestions.refresh}
@@ -559,15 +601,23 @@ export default function SetupScreen() {
           </View>
         )}
         ListFooterComponent={
-          <View style={{ paddingTop: spacing.lg, gap: spacing.sm }}>
-            <Button label="Enter Campus Connect" loading={finishing} onPress={finish} />
-            <Button label="Skip for now" variant="ghost" onPress={skip} />
-            <Text variant="caption" color="textMuted" style={{ textAlign: "center" }}>
-              You can update your interests and profile anytime from You.
-            </Text>
-          </View>
+          // Only the reassurance stays in the scroll. Carrying it into the bar
+          // as well would make a permanent three-line block out of what is one
+          // line of small print, on the screen with the least room to spare.
+          <Text
+            variant="caption"
+            color="textMuted"
+            style={{ textAlign: "center", paddingTop: spacing.lg }}
+          >
+            You can update your interests and profile anytime from You.
+          </Text>
         }
       />
+
+      <ActionBar>
+        <Button label="Enter Campus Connect" loading={finishing} onPress={finish} />
+        <Button label="Skip for now" variant="ghost" onPress={skip} />
+      </ActionBar>
     </Screen>
   );
 }
