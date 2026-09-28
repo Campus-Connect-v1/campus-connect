@@ -53,6 +53,11 @@ export interface ApiMessageContext {
   authorId: string;
   mediaUrl: string | null;
   text: string | null;
+  /**
+   * When the quoted story expires. Null on messages sent before this was
+   * carried, which are treated as still open rather than assumed dead.
+   */
+  expiresAt?: string | null;
 }
 
 export interface ApiMessage {

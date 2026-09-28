@@ -3,11 +3,14 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  runOnJS,
   useAnimatedStyle,
-  useSharedValue,
-  withTiming,
   useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -114,7 +117,7 @@ function VideoStory({ uri, paused }: { uri: string; paused: boolean }) {
 export default function StoryViewerScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { userId } = useLocalSearchParams<{ userId: string }>();
+  const { userId, storyId } = useLocalSearchParams<{ userId: string; storyId?: string }>();
   const { user } = useSession();
 
   /**
@@ -194,6 +197,48 @@ export default function StoryViewerScreen() {
   const [showViewers, setShowViewers] = useState(false);
   const started = useRef(false);
 
+  /**
+   * Swipe down to leave, the way every story viewer works.
+   *
+   * activeOffsetY([-16, 16]) is what stops this fighting the taps and the
+   * long-press-to-pause that own this screen: the pan does not engage until
+   * the finger has travelled vertically, so a tap to advance is still a tap.
+   * failOffsetX keeps a horizontal swipe out of it.
+   *
+   * The card follows the finger and is dismissed on either distance or
+   * velocity, so a quick flick works without dragging the whole way down.
+   * Anything short of that springs back, which is what tells the reader the
+   * gesture exists.
+   */
+  const dragY = useSharedValue(0);
+
+  const dismiss = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-16, 16])
+        .failOffsetX([-24, 24])
+        .onUpdate((event) => {
+          // Downward only. Upward drag would otherwise lift the story off the
+          // top of the screen with nothing behind it.
+          dragY.value = Math.max(0, event.translationY);
+        })
+        .onEnd((event) => {
+          if (event.translationY > 120 || event.velocityY > 900) {
+            runOnJS(router.back)();
+            return;
+          }
+          dragY.value = withSpring(0, { damping: 18, stiffness: 180 });
+        }),
+    [dragY]
+  );
+
+  const dismissStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragY.value }],
+    // Corners round as it lifts, so it reads as a card being pulled away
+    // rather than the screen sliding off.
+    borderRadius: dragY.value > 0 ? 18 : 0,
+  }));
+
   useFocusEffect(
     useCallback(() => {
       setPaused(false);
@@ -204,9 +249,26 @@ export default function StoryViewerScreen() {
   useEffect(() => {
     if (started.current || stories.length === 0) return;
     started.current = true;
+
+    /**
+     * An explicit storyId wins over "first unseen".
+     *
+     * Opening from a chat quote means the reader asked for THAT story, not for
+     * wherever this person's rail happened to be left off. If it is no longer
+     * in the list it has expired, and falling back to the unseen rule is the
+     * right answer rather than an empty screen.
+     */
+    if (storyId) {
+      const asked = stories.findIndex((s) => s.story_id === storyId);
+      if (asked !== -1) {
+        setIndex(asked);
+        return;
+      }
+    }
+
     const firstUnseen = stories.findIndex((s) => !s.has_viewed);
     setIndex(firstUnseen === -1 ? 0 : firstUnseen);
-  }, [stories]);
+  }, [stories, storyId]);
 
   const current: ApiStory | undefined = stories[index];
   const isOwn = group?.author.user_id === user?.id;
@@ -248,230 +310,232 @@ export default function StoryViewerScreen() {
   const authorName = [group.author.first_name, group.author.last_name].filter(Boolean).join(" ");
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#000" }}>
-      {/* The story itself */}
-      <View style={{ flex: 1 }}>
-        {current?.story_type === "video" && current.media_url ? (
-          <VideoStory uri={current.media_url} paused={paused} />
-        ) : current?.story_type === "image" && current.media_url ? (
-          <Image
-            source={current.media_url}
-            contentFit="contain"
-            style={{ flex: 1 }}
-            accessibilityLabel={`Story from ${authorName}`}
-          />
-        ) : current?.story_type === "repost" && current.reposted_post ? (
-          <View style={{ flex: 1, justifyContent: "center", padding: spacing.xl }}>
-            {/*
-              The sharer's own caption, above the post being shared.
+    <GestureDetector gesture={dismiss}>
+      <Animated.View style={[{ flex: 1, backgroundColor: "#000", overflow: "hidden" }, dismissStyle]}>
+        {/* The story itself */}
+        <View style={{ flex: 1 }}>
+          {current?.story_type === "video" && current.media_url ? (
+            <VideoStory uri={current.media_url} paused={paused} />
+          ) : current?.story_type === "image" && current.media_url ? (
+            <Image
+              source={current.media_url}
+              contentFit="contain"
+              style={{ flex: 1 }}
+              accessibilityLabel={`Story from ${authorName}`}
+            />
+          ) : current?.story_type === "repost" && current.reposted_post ? (
+            <View style={{ flex: 1, justifyContent: "center", padding: spacing.xl }}>
+              {/*
+                The sharer's own caption, above the post being shared.
 
-              It was saved correctly and simply never rendered: this branch
-              showed reposted_post.content (the ORIGINAL post's text) while
-              current.content (what the sharer typed) was only rendered in the
-              plain-text-story branch below. So the share went out and the
-              comment on it vanished.
-            */}
-            {current.content ? (
-              <Text variant="body" onMedia numberOfLines={4} style={{ marginBottom: spacing.md }}>
-                {current.content}
-              </Text>
-            ) : null}
-
-            <View
-              style={{
-                borderRadius: radius.lg,
-                overflow: "hidden",
-                backgroundColor: "rgba(255,255,255,0.08)",
-              }}
-            >
-              {current.reposted_post.media_url ? (
-                <Image
-                  source={current.reposted_post.media_url}
-                  contentFit="cover"
-                  style={{ width: "100%", height: 320 }}
-                />
+                It was saved correctly and simply never rendered: this branch
+                showed reposted_post.content (the ORIGINAL post's text) while
+                current.content (what the sharer typed) was only rendered in the
+                plain-text-story branch below. So the share went out and the
+                comment on it vanished.
+              */}
+              {current.content ? (
+                <Text variant="body" onMedia numberOfLines={4} style={{ marginBottom: spacing.md }}>
+                  {current.content}
+                </Text>
               ) : null}
-              <View style={{ padding: spacing.md, gap: spacing.xs }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
-                  <Avatar
-                    uri={current.reposted_post.author.profile_picture_url ?? undefined}
-                    size={28}
+
+              <View
+                style={{
+                  borderRadius: radius.lg,
+                  overflow: "hidden",
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                }}
+              >
+                {current.reposted_post.media_url ? (
+                  <Image
+                    source={current.reposted_post.media_url}
+                    contentFit="cover"
+                    style={{ width: "100%", height: 320 }}
                   />
-                  <Text variant="label" onMedia>
-                    {[
-                      current.reposted_post.author.first_name,
-                      current.reposted_post.author.last_name,
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  </Text>
-                </View>
-                {current.reposted_post.content ? (
-                  <Text variant="body" onMedia numberOfLines={6}>
-                    {current.reposted_post.content}
-                  </Text>
                 ) : null}
+                <View style={{ padding: spacing.md, gap: spacing.xs }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+                    <Avatar
+                      uri={current.reposted_post.author.profile_picture_url ?? undefined}
+                      size={28}
+                    />
+                    <Text variant="label" onMedia>
+                      {[
+                        current.reposted_post.author.first_name,
+                        current.reposted_post.author.last_name,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    </Text>
+                  </View>
+                  {current.reposted_post.content ? (
+                    <Text variant="body" onMedia numberOfLines={6}>
+                      {current.reposted_post.content}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
             </View>
-          </View>
-        ) : (
-          <View
-            style={{
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "center",
-              padding: spacing["2xl"],
-              backgroundColor: textStoryBackground,
-            }}
-          >
-            <Text
-              variant="title"
-              style={{ textAlign: "center", color: foregroundOn(textStoryBackground) }}
+          ) : (
+            <View
+              style={{
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                padding: spacing["2xl"],
+                backgroundColor: textStoryBackground,
+              }}
             >
-              {current?.content}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Tap zones: the left half of the screen goes back, the right half
-          advances — no dead zone in the middle. Holding anywhere pauses. */}
-      <View style={[StyleSheet.absoluteFill, { flexDirection: "row" }]} pointerEvents="box-none">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Previous story"
-          onPress={back}
-          onLongPress={() => setPaused(true)}
-          onPressOut={() => setPaused(false)}
-          delayLongPress={180}
-          style={{ flex: 1 }}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Next story"
-          onPress={advance}
-          onLongPress={() => setPaused(true)}
-          onPressOut={() => setPaused(false)}
-          delayLongPress={180}
-          style={{ flex: 1 }}
-        />
-      </View>
-
-      {/* Chrome */}
-      <View
-        style={{
-          position: "absolute",
-          top: insets.top + spacing.xs,
-          left: spacing.md,
-          right: spacing.md,
-          gap: spacing.sm,
-        }}
-      >
-        <Progress
-          count={stories.length}
-          index={index}
-          duration={STORY_MS}
-          paused={paused}
-          onDone={advance}
-        />
-
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          <PressableScale
-            accessibilityRole="link"
-            accessibilityLabel={isOwn ? "Open your profile" : `Open ${authorName}'s profile`}
-            onPress={() => {
-              router.push(isOwn ? "/(tabs)/profile" : `/person/${group.author.user_id}`);
-            }}
-            style={{
-              flex: 1,
-              minHeight: 44,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: spacing.sm,
-            }}
-          >
-            <Avatar uri={group.author.profile_picture_url ?? undefined} size={34} />
-            <View style={{ flex: 1 }}>
-              <Text variant="label" onMedia>
-                {isOwn ? "Your story" : authorName}
-              </Text>
-              <Text variant="caption" onMedia style={{ opacity: 0.8 }}>
-                {current ? timeAgo(current.created_at) : ""}
+              <Text
+                variant="title"
+                style={{ textAlign: "center", color: foregroundOn(textStoryBackground) }}
+              >
+                {current?.content}
               </Text>
             </View>
-          </PressableScale>
-
-          {isOwn && current ? (
-            <PressableScale
-              accessibilityRole="button"
-              accessibilityLabel="See who viewed this story"
-              onPress={() => {
-                // Paused while the sheet is up, so the story does not advance
-                // out from under the list the user is reading.
-                setPaused(true);
-                setShowViewers(true);
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing["3xs"],
-                minHeight: 44,
-                paddingHorizontal: spacing.xs,
-              }}
-            >
-              <Icon name="visible" size={18} color={colors.onMedia} />
-              <Text variant="caption" onMedia>
-                Views
-              </Text>
-            </PressableScale>
-          ) : null}
-
-          <PressableScale
-            accessibilityRole="button"
-            accessibilityLabel="Close stories"
-            onPress={() => router.back()}
-            style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
-          >
-            <Icon name="close" size={21} color={colors.onMedia} />
-          </PressableScale>
+          )}
         </View>
-      </View>
 
-      {/* Reply bar. Only on someone else's story: replying to your own would
-          open a conversation with yourself, which the server rejects anyway.
-          Absolutely positioned so it sits over the story rather than shrinking
-          it, and lifted by the keyboard so the input stays reachable. */}
-      {!isOwn && current ? (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        {/* Tap zones: the left half of the screen goes back, the right half
+            advances — no dead zone in the middle. Holding anywhere pauses. */}
+        <View style={[StyleSheet.absoluteFill, { flexDirection: "row" }]} pointerEvents="box-none">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Previous story"
+            onPress={back}
+            onLongPress={() => setPaused(true)}
+            onPressOut={() => setPaused(false)}
+            delayLongPress={180}
+            style={{ flex: 1 }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Next story"
+            onPress={advance}
+            onLongPress={() => setPaused(true)}
+            onPressOut={() => setPaused(false)}
+            delayLongPress={180}
+            style={{ flex: 1 }}
+          />
+        </View>
+
+        {/* Chrome */}
+        <View
           style={{
             position: "absolute",
+            top: insets.top + spacing.xs,
             left: spacing.md,
             right: spacing.md,
-            bottom: insets.bottom + spacing.md,
+            gap: spacing.sm,
           }}
         >
-          <StoryReplyBar
-            authorId={group.author.user_id}
-            storyId={current.story_id}
-            authorName={authorName}
-            // The story must not advance while the keyboard is up, or the
-            // reply lands against a story the sender is no longer looking at.
-            onFocusChange={setPaused}
+          <Progress
+            count={stories.length}
+            index={index}
+            duration={STORY_MS}
+            paused={paused}
+            onDone={advance}
           />
-        </KeyboardAvoidingView>
-      ) : null}
 
-      {isOwn && current ? (
-        <StoryViewers
-          storyId={current.story_id}
-          visible={showViewers}
-          onClose={() => {
-            setShowViewers(false);
-            setPaused(false);
-          }}
-        />
-      ) : null}
-    </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+            <PressableScale
+              accessibilityRole="link"
+              accessibilityLabel={isOwn ? "Open your profile" : `Open ${authorName}'s profile`}
+              onPress={() => {
+                router.push(isOwn ? "/(tabs)/profile" : `/person/${group.author.user_id}`);
+              }}
+              style={{
+                flex: 1,
+                minHeight: 44,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.sm,
+              }}
+            >
+              <Avatar uri={group.author.profile_picture_url ?? undefined} size={34} />
+              <View style={{ flex: 1 }}>
+                <Text variant="label" onMedia>
+                  {isOwn ? "Your story" : authorName}
+                </Text>
+                <Text variant="caption" onMedia style={{ opacity: 0.8 }}>
+                  {current ? timeAgo(current.created_at) : ""}
+                </Text>
+              </View>
+            </PressableScale>
+
+            {isOwn && current ? (
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel="See who viewed this story"
+                onPress={() => {
+                  // Paused while the sheet is up, so the story does not advance
+                  // out from under the list the user is reading.
+                  setPaused(true);
+                  setShowViewers(true);
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing["3xs"],
+                  minHeight: 44,
+                  paddingHorizontal: spacing.xs,
+                }}
+              >
+                <Icon name="visible" size={18} color={colors.onMedia} />
+                <Text variant="caption" onMedia>
+                  Views
+                </Text>
+              </PressableScale>
+            ) : null}
+
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel="Close stories"
+              onPress={() => router.back()}
+              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+            >
+              <Icon name="close" size={21} color={colors.onMedia} />
+            </PressableScale>
+          </View>
+        </View>
+
+        {/* Reply bar. Only on someone else's story: replying to your own would
+            open a conversation with yourself, which the server rejects anyway.
+            Absolutely positioned so it sits over the story rather than shrinking
+            it, and lifted by the keyboard so the input stays reachable. */}
+        {!isOwn && current ? (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{
+              position: "absolute",
+              left: spacing.md,
+              right: spacing.md,
+              bottom: insets.bottom + spacing.md,
+            }}
+          >
+            <StoryReplyBar
+              authorId={group.author.user_id}
+              storyId={current.story_id}
+              authorName={authorName}
+              // The story must not advance while the keyboard is up, or the
+              // reply lands against a story the sender is no longer looking at.
+              onFocusChange={setPaused}
+            />
+          </KeyboardAvoidingView>
+        ) : null}
+
+        {isOwn && current ? (
+          <StoryViewers
+            storyId={current.story_id}
+            visible={showViewers}
+            onClose={() => {
+              setShowViewers(false);
+              setPaused(false);
+            }}
+          />
+        ) : null}
+      </Animated.View>
+    </GestureDetector>
   );
 }
