@@ -19,6 +19,12 @@ export interface ApiConversation {
     content: string;
     senderId: string;
     timestamp: string;
+    /**
+     * What the last message replied to, if anything. Only the kind: the list
+     * needs to say "Replied to your story", not reproduce the quote, which
+     * already travels on the message itself.
+     */
+    contextKind?: "story" | null;
   };
   /** Already narrowed to the caller's own count by the controller. */
   unreadCount: number;

@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
+import { useScrollToTop } from "@react-navigation/native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -442,6 +443,15 @@ export default function HomeScreen() {
   // No minVisible: it leaves the screen completely, inset included, rather
   // than parking a strip behind the status bar.
   const header = useHideOnScroll();
+
+  /**
+   * Tapping the active tab returns to the top of the feed.
+   *
+   * useScrollToTop rather than a hand-rolled tabPress listener: it is the
+   * navigation library's own binding, so it also covers the iOS status-bar
+   * tap, and it detaches itself when the screen is not focused.
+   */
+  useScrollToTop(listRef as never);
 
   /**
    * Posts published while this feed is open, held back rather than inserted.

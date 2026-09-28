@@ -11,8 +11,28 @@ import {
   fetchConversations,
   type ApiConversation,
 } from "@/src/services/conversationServices";
+import { useSession } from "@/src/services/SessionContext";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
+
+/**
+ * The one line under a name in the list.
+ *
+ * A story reply is usually a single emoji, and on its own "😂" says nothing
+ * about what was found funny. Naming what it answered is the whole value of
+ * the row -- the quote itself stays on the message, in the thread.
+ *
+ * Story replies always travel toward the story's owner, so who sent it is
+ * enough to decide whose story it was.
+ */
+function preview(conversation: ApiConversation, viewerId?: string): string {
+  const last = conversation.lastMessage;
+  if (!last?.content) return "No messages yet";
+  if (last.contextKind !== "story") return last.content;
+
+  const mine = last.senderId === viewerId;
+  return `${mine ? "Replied to their story" : "Replied to your story"}: ${last.content}`;
+}
 
 function when(iso?: string) {
   if (!iso) return "";
@@ -25,6 +45,8 @@ function when(iso?: string) {
 }
 
 function Row({ conversation }: { conversation: ApiConversation }) {
+  const { user } = useSession();
+  const viewerId = user?.id;
   const { colors } = useTheme();
   const other = conversation.otherParticipant;
   const name = other?.username || other?.email?.split("@")[0] || "Someone";
@@ -68,7 +90,7 @@ function Row({ conversation }: { conversation: ApiConversation }) {
           </Text>
         </View>
         <Text variant="caption" color={unread ? "textPrimary" : "textMuted"} numberOfLines={1}>
-          {conversation.lastMessage?.content ?? "No messages yet"}
+          {preview(conversation, viewerId)}
         </Text>
       </View>
 

@@ -1,6 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, View, useWindowDimensions } from "react-native";
+import { useScrollToTop } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
@@ -88,6 +89,8 @@ export default function ProfileScreen() {
   // refetch this screen does not do.
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const listRef = useRef<FlatList<FeedPost>>(null);
+  // Tapping the active tab returns to the top.
+  useScrollToTop(listRef as never);
 
   const heroHeight = Math.max(380, height * 0.52);
 
