@@ -5,6 +5,7 @@ import { Swipeable } from "react-native-gesture-handler";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { Avatar, EmptyState, Icon, PressableScale, SkeletonList, Text } from "@/src/components/ui";
+import { conversationPreview } from "@/src/features/messages/preview";
 import { useAsync } from "@/src/hooks/useAsync";
 import {
   deleteConversation,
@@ -14,25 +15,6 @@ import {
 import { useSession } from "@/src/services/SessionContext";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
-
-/**
- * The one line under a name in the list.
- *
- * A story reply is usually a single emoji, and on its own "😂" says nothing
- * about what was found funny. Naming what it answered is the whole value of
- * the row -- the quote itself stays on the message, in the thread.
- *
- * Story replies always travel toward the story's owner, so who sent it is
- * enough to decide whose story it was.
- */
-function preview(conversation: ApiConversation, viewerId?: string): string {
-  const last = conversation.lastMessage;
-  if (!last?.content) return "No messages yet";
-  if (last.contextKind !== "story") return last.content;
-
-  const mine = last.senderId === viewerId;
-  return `${mine ? "Replied to their story" : "Replied to your story"}: ${last.content}`;
-}
 
 function when(iso?: string) {
   if (!iso) return "";
@@ -90,7 +72,7 @@ function Row({ conversation }: { conversation: ApiConversation }) {
           </Text>
         </View>
         <Text variant="caption" color={unread ? "textPrimary" : "textMuted"} numberOfLines={1}>
-          {preview(conversation, viewerId)}
+          {conversationPreview(conversation, viewerId)}
         </Text>
       </View>
 
