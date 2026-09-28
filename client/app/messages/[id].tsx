@@ -64,11 +64,30 @@ function QuotedStory({ context, mine }: { context: ApiMessageContext; mine: bool
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: spacing.sm,
+          gap: spacing.md,
           marginBottom: spacing.xs,
-          paddingLeft: spacing.sm,
-          paddingRight: spacing.xs,
-          paddingVertical: spacing.xs,
+          paddingLeft: spacing.md,
+          paddingRight: spacing.sm,
+          paddingVertical: spacing.sm,
+          /**
+           * The quote sets the bubble's width, rather than the other way round.
+           *
+           * A bubble sizes to its content, so a one-emoji reply -- which is
+           * most of them -- made a bubble barely wider than the emoji and the
+           * quote inside it was crushed into two cramped lines beside the
+           * thumbnail. A floor here means the quote reads the same whether the
+           * reply is "😂" or a paragraph.
+           *
+           * 200 is the largest round number that still fits inside the 78%
+           * cap on a 320pt screen (which leaves 218pt of bubble interior), and
+           * it leaves the text column ~113pt next to a 40pt thumbnail. At 168
+           * the text had 81pt and still wrapped awkwardly, which was the
+           * cramped look this is fixing.
+           */
+          minWidth: 200,
+          // Matches the thumbnail plus its padding, so a quote with one short
+          // line is not shorter than a quote with a picture in it.
+          minHeight: 56,
           borderRadius: radius.sm,
           // A translucent wash rather than a fixed colour, so one rule reads
           // correctly on the violet of your own bubble and on the surface of
@@ -78,7 +97,7 @@ function QuotedStory({ context, mine }: { context: ApiMessageContext; mine: bool
           borderLeftColor: mine ? culture.warmWhite : culture.violet,
         }}
       >
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, gap: 3 }}>
           <Text variant="micro" style={{ color: tint, opacity: 0.8 }}>
             STORY
           </Text>
@@ -92,8 +111,8 @@ function QuotedStory({ context, mine }: { context: ApiMessageContext; mine: bool
           <Image
             source={{ uri: context.mediaUrl }}
             style={{
-              width: 38,
-              height: 38,
+              width: 40,
+              height: 40,
               borderRadius: radius.sm,
               // The thumbnail is kept even when expired -- it is what makes the
               // quote recognisable -- but dimmed, so the block does not look
@@ -140,7 +159,9 @@ function Bubble({ message }: { message: ChatMessage }) {
       <Text
         variant="caption"
         style={{
-          marginTop: 2,
+          // 2pt put the clock almost on the message's baseline, which is a lot
+          // of the cramped feel on a one-line reply.
+          marginTop: 4,
           opacity: 0.7,
           color: message.mine ? culture.warmWhite : colors.textMuted,
         }}
