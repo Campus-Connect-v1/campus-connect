@@ -35,7 +35,17 @@ export const signUpload = (req, res) => {
       .json({ message: `resource_type must be one of: ${RESOURCE_TYPES.join(", ")}` });
   }
 
+  // The video editor sends its edit configuration as a Cloudinary
+  // transformation string (built client-side by
+  // features/video/editor/transformations.ts) to apply at upload time.
+  // Bounded so this endpoint cannot become a way to hand Cloudinary an
+  // arbitrarily large instruction string.
+  const eager = req.body?.eager;
+  if (eager !== undefined && (typeof eager !== "string" || eager.length > 2000)) {
+    return res.status(400).json({ message: "eager must be a string of at most 2000 characters" });
+  }
+
   // The folder is derived from the authenticated user, never from the request
   // body, so a client cannot write into someone else's folder.
-  res.json(buildSignature({ userId: req.user.id, kind }));
+  res.json(buildSignature({ userId: req.user.id, kind, eager }));
 };

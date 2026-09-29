@@ -5,8 +5,10 @@ import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, View } 
 
 import { MediaAttachment } from "@/src/components/compose/MediaAttachment";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
+import { VideoUploadFlow } from "@/src/components/video/VideoUploadFlow";
 import { Button, Icon, InlineNotice, PressableScale, Sticker, Text } from "@/src/components/ui";
 import { useUploadsEnabled } from "@/src/hooks/useUploadsEnabled";
+import { useVideoUpload } from "@/src/hooks/useVideoUpload";
 import {
   captureWithCamera,
   pickFromLibrary,
@@ -41,11 +43,33 @@ export default function ComposeScreen() {
 
   const [text, setText] = useState("");
   const [media, setMedia] = useState<PickedMedia | null>(null);
+  // Set only when `media` came back from the video module: that flow already
+  // uploaded (and edited/processed) the file as part of picking it, so
+  // publish() must not hand it to uploadMedia() a second time.
+  const [preUploadedVideoUrl, setPreUploadedVideoUrl] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const canUpload = useUploadsEnabled();
+  const video = useVideoUpload({ kind: "posts" });
+
+  const attachVideo = async () => {
+    setError(null);
+    const result = await video.open();
+    if (!result) return;
+    Haptics.selectionAsync();
+    setPreUploadedVideoUrl(result.url);
+    setMedia({
+      uri: result.thumbnailUrl ?? result.url,
+      kind: "video",
+      width: result.width,
+      height: result.height,
+      duration: result.durationMs,
+      fileName: null,
+      fileSize: result.metadata.processedFileSizeBytes,
+    });
+  };
 
   const stickerColor = useMemo(
     () => ({ post: culture.violet, anonymous: culture.pink })[kind],
@@ -65,6 +89,10 @@ export default function ComposeScreen() {
       );
       return;
     }
+    if (result.status === "error") {
+      setError(result.message);
+      return;
+    }
     if (result.status === "picked") {
       Haptics.selectionAsync();
       setMedia(result.media);
@@ -82,7 +110,9 @@ export default function ComposeScreen() {
     // server rejects a media_url that is not from our own cloud. A failed
     // upload stops the publish rather than quietly posting text alone.
     let mediaUrl: string | undefined;
-    if (media && canUpload) {
+    if (media && preUploadedVideoUrl) {
+      mediaUrl = preUploadedVideoUrl;
+    } else if (media && canUpload) {
       setUploading(true);
       const uploaded = await uploadMedia(media, "posts");
       setUploading(false);
@@ -107,6 +137,7 @@ export default function ComposeScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setText("");
     setMedia(null);
+    setPreUploadedVideoUrl(null);
 
     router.replace("/(tabs)/home");
   };
@@ -154,7 +185,13 @@ export default function ComposeScreen() {
 
           {media ? (
             <>
-              <MediaAttachment media={media} onRemove={() => setMedia(null)} />
+              <MediaAttachment
+                media={media}
+                onRemove={() => {
+                  setMedia(null);
+                  setPreUploadedVideoUrl(null);
+                }}
+              />
               {canUpload === false ? (
                 <InlineNotice message="Media hosting is not configured on the server, so only your text will be posted." />
               ) : null}
@@ -178,11 +215,7 @@ export default function ComposeScreen() {
                 label="Photo"
                 onPress={() => handlePick(() => pickFromLibrary("image"))}
               />
-              <AttachButton
-                icon="video"
-                label="Video"
-                onPress={() => handlePick(() => pickFromLibrary("video"))}
-              />
+              <AttachButton icon="video" label="Video" onPress={attachVideo} />
               <AttachButton
                 icon="camera"
                 label="Camera"
@@ -199,6 +232,8 @@ export default function ComposeScreen() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <VideoUploadFlow video={video} />
     </SettingsShell>
   );
 }

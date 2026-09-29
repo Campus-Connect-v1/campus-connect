@@ -53,7 +53,8 @@
         "expo-image-picker",
         {
           "photosPermission": "Campus Connect uses your photos so you can attach them to posts and set your profile picture.",
-          "cameraPermission": "Campus Connect uses your camera so you can capture a photo for a post or your profile picture."
+          "cameraPermission": "Campus Connect uses your camera so you can capture a photo or video for a post.",
+          "microphonePermission": "Campus Connect uses your microphone to record audio with your videos."
         }
       ],
       [

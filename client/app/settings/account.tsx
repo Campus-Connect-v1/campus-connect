@@ -61,6 +61,10 @@ export default function AccountSettingsScreen() {
       );
       return;
     }
+    if (result.status === "error") {
+      setError(result.message);
+      return;
+    }
     if (result.status !== "picked") return;
 
     Haptics.selectionAsync();
