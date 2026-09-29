@@ -1,11 +1,14 @@
 import { api, request } from "./api";
 
+/** Matches the `posts.media_type` enum column on the server. */
+export type MediaType = "image" | "video" | "text" | "poll";
+
 /** Exactly the shape GET /social/posts/feed returns. */
 export interface ApiPost {
   post_id: string;
   content: string | null;
   media_url: string | null;
-  media_type: string | null;
+  media_type: MediaType | null;
   /**
    * The home rail's category chip, or null. Null on every post written before
    * topics existed, and on anyone who skipped the picker -- those still appear
@@ -167,13 +170,14 @@ export function createPost(
   content: string,
   mediaUrl?: string,
   visibility: PostVisibility = "public",
-  topic?: string | null
+  topic?: string | null,
+  mediaType: MediaType = "image"
 ) {
   return request<{ post: ApiCreatedPost }>(() =>
     api.post("/social/posts", {
       content,
       media_url: mediaUrl,
-      media_type: mediaUrl ? "image" : "text",
+      media_type: mediaUrl ? mediaType : "text",
       visibility,
       ...(topic ? { topic } : {}),
     })

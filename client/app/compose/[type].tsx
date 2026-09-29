@@ -1,9 +1,12 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, View } from "react-native";
 
-import { MediaAttachment } from "@/src/components/compose/MediaAttachment";
+import {
+  MediaAttachment,
+  type MediaAttachmentHandle,
+} from "@/src/components/compose/MediaAttachment";
 import { COMPOSER_TOPICS } from "@/src/features/feed/topics";
 import { useUploadQueue } from "@/src/services/UploadQueueContext";
 import { MentionSuggestions } from "@/src/components/social/MentionSuggestions";
@@ -64,6 +67,7 @@ export default function ComposeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const canUpload = useUploadsEnabled();
+  const mediaRef = useRef<MediaAttachmentHandle>(null);
 
   const stickerColor = useMemo(
     () => ({ post: culture.violet, anonymous: culture.pink })[kind],
@@ -108,6 +112,10 @@ export default function ComposeScreen() {
     const content = mentions.serialize(text).trim();
     if (!content) return;
 
+    // A video preview keeps playing (and keeps its audio) through an upload
+    // that can take several seconds. Cut it the moment submission begins,
+    // not whenever the screen eventually unmounts.
+    mediaRef.current?.pause();
     setError(null);
 
     const attachment = media && canUpload ? media : null;
@@ -121,13 +129,18 @@ export default function ComposeScreen() {
       kind: "posts",
       media: attachment,
       commit: async (mediaUrl) => {
-        const result = await createPost(content, mediaUrl ?? undefined, "public", topic);
+        const result = await createPost(
+          content,
+          mediaUrl ?? undefined,
+          "public",
+          topic,
+          attachment?.kind ?? "text"
+        );
         return result.success
           ? { ok: true }
           : { ok: false, error: `${label} failed: ${result.error}` };
       },
     });
-
     setText("");
     setMedia(null);
     router.replace("/(tabs)/home");
@@ -235,7 +248,14 @@ export default function ComposeScreen() {
 
           {media ? (
             <>
-              <MediaAttachment media={media} onRemove={() => setMedia(null)} />
+              <MediaAttachment
+                ref={mediaRef}
+                media={media}
+                onRemove={() => {
+                  mediaRef.current?.pause();
+                  setMedia(null);
+                }}
+              />
               {canUpload === false ? (
                 <InlineNotice message="Media hosting is not configured on the server, so only your text will be posted." />
               ) : null}
