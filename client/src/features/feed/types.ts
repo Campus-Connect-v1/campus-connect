@@ -12,6 +12,8 @@ export interface FeedPost {
   postedAt: string;
   caption: string;
   image?: string;
+  /** Only meaningful when `image` is set; undefined/"image" both render as a photo. */
+  mediaType?: "image" | "video";
   topic?: string;
   /** Present when the post is a poll; drives the poll card. */
   pollId?: string;

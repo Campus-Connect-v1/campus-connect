@@ -3,9 +3,9 @@ import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } f
 import Animated, { SlideInLeft, SlideOutLeft, FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Avatar, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
+import { Avatar, CountBadge, Icon, type IconName, PressableScale, Text } from "@/src/components/ui";
 import { useAttention } from "@/src/services/AttentionContext";
-import { culture, radius, spacing } from "@/src/styles/theme";
+import { spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 export interface ProfileDrawerProps {
@@ -118,21 +118,7 @@ export default function ProfileDrawer({
                 </Text>
 
                 {waiting ? (
-                  <View
-                    style={{
-                      minWidth: 22,
-                      height: 22,
-                      paddingHorizontal: 6,
-                      borderRadius: radius.full,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: culture.pink,
-                    }}
-                  >
-                    <Text variant="caption" style={{ color: culture.warmWhite, fontSize: 11 }}>
-                      {waiting > 9 ? "9+" : waiting}
-                    </Text>
-                  </View>
+                  <CountBadge count={waiting} size={22} max={9} />
                 ) : null}
               </PressableScale>
             );

@@ -129,6 +129,16 @@ export interface ApiUserCard {
    * university cache to get it.
    */
   same_campus?: boolean;
+  /**
+   * The short label the mention composer inserts and shows: `kofi.mensah`.
+   * Derived server-side from the email local part (falling back to the name),
+   * because the email itself is never sent to a client.
+   *
+   * NOT unique, and never used to resolve a mention -- across 43 university
+   * domains two people can share a local part. The user_id in the stored
+   * marker is what resolves.
+   */
+  mention_handle?: string;
 }
 
 /**

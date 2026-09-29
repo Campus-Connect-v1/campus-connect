@@ -4,14 +4,16 @@ import { Alert, FlatList, RefreshControl, View } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
-import { Avatar, EmptyState, Icon, PressableScale, SkeletonList, Text } from "@/src/components/ui";
+import { Avatar, CountBadge, EmptyState, Icon, PressableScale, SkeletonList, Text } from "@/src/components/ui";
+import { conversationPreview } from "@/src/features/messages/preview";
 import { useAsync } from "@/src/hooks/useAsync";
 import {
   deleteConversation,
   fetchConversations,
   type ApiConversation,
 } from "@/src/services/conversationServices";
-import { culture, radius, spacing } from "@/src/styles/theme";
+import { useSession } from "@/src/services/SessionContext";
+import { spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 function when(iso?: string) {
@@ -25,6 +27,8 @@ function when(iso?: string) {
 }
 
 function Row({ conversation }: { conversation: ApiConversation }) {
+  const { user } = useSession();
+  const viewerId = user?.id;
   const { colors } = useTheme();
   const other = conversation.otherParticipant;
   const name = other?.username || other?.email?.split("@")[0] || "Someone";
@@ -68,26 +72,12 @@ function Row({ conversation }: { conversation: ApiConversation }) {
           </Text>
         </View>
         <Text variant="caption" color={unread ? "textPrimary" : "textMuted"} numberOfLines={1}>
-          {conversation.lastMessage?.content ?? "No messages yet"}
+          {conversationPreview(conversation, viewerId)}
         </Text>
       </View>
 
       {unread ? (
-        <View
-          style={{
-            minWidth: 20,
-            height: 20,
-            paddingHorizontal: 5,
-            borderRadius: radius.full,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: culture.pink,
-          }}
-        >
-          <Text variant="micro" style={{ color: colors.onMedia, fontSize: 10 }}>
-            {conversation.unreadCount > 9 ? "9+" : conversation.unreadCount}
-          </Text>
-        </View>
+        <CountBadge count={conversation.unreadCount} size={20} max={9} />
       ) : null}
     </PressableScale>
   );

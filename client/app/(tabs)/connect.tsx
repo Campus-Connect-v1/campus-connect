@@ -1,7 +1,8 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Linking, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
+import { useScrollToTop } from "@react-navigation/native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -74,6 +75,10 @@ function label(metres: number) {
 }
 
 export default function ConnectScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  // Tapping the active tab returns to the top.
+  useScrollToTop(scrollRef as never);
+
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -439,6 +444,7 @@ export default function ConnectScreen() {
         </View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
           refreshControl={

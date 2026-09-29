@@ -8,20 +8,28 @@
     "scheme": "campusconnect",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1565d730-4f88-4944-88fd-5bfa0fe51445"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.campusconnect.app"
+      "bundleIdentifier": "com.lesliepaulajayi.campusconnect",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.campusconnect.app",
+      "package": "com.lesliepaulajayi.campusconnect",
       "googleServicesFile": "./google-services.json"
     },
     "web": {
@@ -37,9 +45,9 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#F8F7F4",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#161616"
           }
         }
       ],
@@ -75,9 +83,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "9f6dadfc-e553-4855-8cb8-688dfe5fa41f"
+        "projectId": "1565d730-4f88-4944-88fd-5bfa0fe51445"
       }
     },
-    "owner": "joycelli"
+    "owner": "lesliepaul-23"
   }
 }

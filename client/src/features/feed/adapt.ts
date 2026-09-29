@@ -35,6 +35,7 @@ export function adaptPost(post: ApiPost): FeedPost {
     postedAt: since(post.created_at),
     caption: post.content ?? "",
     image: post.media_url ?? undefined,
+    mediaType: post.media_type === "video" ? "video" : undefined,
     pollId: post.poll_id ?? undefined,
     likes: post.stats.like_count,
     comments: post.stats.comment_count,

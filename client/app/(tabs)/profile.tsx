@@ -1,6 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, View, useWindowDimensions } from "react-native";
+import { useScrollToTop } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
@@ -88,6 +89,8 @@ export default function ProfileScreen() {
   // refetch this screen does not do.
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const listRef = useRef<FlatList<FeedPost>>(null);
+  // Tapping the active tab returns to the top.
+  useScrollToTop(listRef as never);
 
   const heroHeight = Math.max(380, height * 0.52);
 
@@ -107,11 +110,11 @@ export default function ProfileScreen() {
 
   const userId = user?.id;
   const posts = useAsync(
-    useCallback(
-      () =>
-        userId ? fetchPostsByAuthor(userId) : Promise.resolve({ success: true as const, data: [] }),
-      [userId]
-    ),
+    useCallback(async () => {
+      if (!userId) return { success: true as const, data: [] };
+      const result = await fetchPostsByAuthor(userId);
+      return result.success ? { ...result, data: result.data.posts } : result;
+    }, [userId]),
     [userId]
   );
 
@@ -171,6 +174,12 @@ export default function ProfileScreen() {
         data={myPosts}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
+        // Same reasoning as the home feed: these are tall media cards, and the
+        // defaults mount far more of them before first paint than a screen can
+        // show.
+        initialNumToRender={4}
+        maxToRenderPerBatch={5}
+        windowSize={9}
         contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
         refreshControl={
           <RefreshControl
@@ -379,7 +388,8 @@ export default function ProfileScreen() {
         }
         renderItem={({ item }) => (
           <PostCard
-            post={{ ...item, saved: store.isSaved(item.id) }}
+            post={item}
+            saved={store.isSaved(item.id)}
             onToggleLike={() => {}}
             onToggleSave={store.toggle}
             onOpenOptions={setOptions}

@@ -31,6 +31,9 @@ import { db } from "../config/db.js";
 import { emitToPostExcept, emitToCampus, emitToUser } from "../realtime.js";
 import { getFollowingCountModel } from "../models/follow.model.js";
 import { logHandled } from "../middleware/observability.js";
+import { syncPostMentions, syncCommentMentions } from "../models/mention.model.js";
+import { stripMentions } from "../utils/mentions.js";
+import { normaliseTopic } from "../utils/postTopics.js";
 
 /**
  * The socket that issued this request, if any.
@@ -76,6 +79,7 @@ export const createPost = async (req, res) => {
       media_type = "text",
       visibility = "connections",
       expires_at,
+      topic,
     } = req.body;
 
     if (!content && !media_url) {
@@ -102,9 +106,41 @@ export const createPost = async (req, res) => {
       media_type,
       visibility,
       expires_at: expires_at || null,
+      // Validated against the allowlist; anything else files the post under no
+      // topic rather than failing the post.
+      topic: normaliseTopic(topic),
     };
 
     const post = await createPostModel(postData);
+
+    /**
+     * Mentions. Fire-and-forget for the same reason as everything below it:
+     * being named in a post must not be able to fail the post.
+     *
+     * This runs BEFORE the new_post fan-out so a mentioned connection gets the
+     * specific notification first. They will receive both -- being named is a
+     * different event from the author posting -- and the order is what decides
+     * which one they see at the top.
+     */
+    syncPostMentions({ postId: post.post_id, content, actorId: userId })
+      .then(async (mentioned) => {
+        if (!mentioned.length) return;
+        const name = await actorName(userId);
+        notifyMany(
+          mentioned.map((user) => user.user_id),
+          {
+            actorId: userId,
+            type: "mention",
+            resourceType: "post",
+            resourceId: post.post_id,
+            title: `${name} mentioned you in a post`,
+            // Stripped: the stored text carries `@[Name](user_id)` markers and
+            // a notification body is read as plain text.
+            body: content ? stripMentions(String(content)).slice(0, 140) : undefined,
+          }
+        );
+      })
+      .catch((error) => console.error("mention fan-out failed:", error.message));
 
     // Fire-and-forget, same as the like/comment notifications below: a
     // notification failure must never turn a successful post into a 500.
@@ -118,7 +154,7 @@ export const createPost = async (req, res) => {
           resourceType: "post",
           resourceId: post.post_id,
           title: `${name} shared a new post`,
-          body: content ? String(content).slice(0, 140) : undefined,
+          body: content ? stripMentions(String(content)).slice(0, 140) : undefined,
         });
       })
       .catch((error) => console.error("new_post fan-out failed:", error.message));
@@ -157,6 +193,8 @@ export const createPost = async (req, res) => {
             content: post.content ?? null,
             media_url: post.media_url ?? null,
             media_type: post.media_type,
+        topic: post.topic ?? null,
+            topic: post.topic ?? null,
             poll_id: post.poll_id ?? null,
             visibility: post.visibility,
             created_at: post.created_at ?? new Date().toISOString(),
@@ -210,6 +248,7 @@ export const createPost = async (req, res) => {
         content: post.content,
         media_url: post.media_url,
         media_type: post.media_type,
+        topic: post.topic ?? null,
         poll_id: post.poll_id || null,
         visibility: post.visibility,
         expires_at: post.expires_at,
@@ -262,7 +301,18 @@ export const getFeedPosts = async (req, res) => {
           : FEED_MODES.DISCOVERY;
     }
 
-    const posts = await getFeedPostsModel(userId, pageSize, parseInt(offset), cursor, mode);
+    // Unrecognised topics are dropped rather than rejected: a stale chip in an
+    // older client should show the whole feed, not an error.
+    const topic = normaliseTopic(req.query.topic);
+
+    const posts = await getFeedPostsModel(
+      userId,
+      pageSize,
+      parseInt(offset),
+      cursor,
+      mode,
+      topic
+    );
 
     // A short page means the end of the feed; sending no cursor is how the
     // client knows to stop asking rather than looping on an empty response.
@@ -282,6 +332,7 @@ export const getFeedPosts = async (req, res) => {
         content: post.content,
         media_url: post.media_url,
         media_type: post.media_type,
+        topic: post.topic ?? null,
         poll_id: post.poll_id || null,
         visibility: post.visibility,
         created_at: post.created_at,
@@ -332,6 +383,7 @@ export const getPost = async (req, res) => {
         content: post.content,
         media_url: post.media_url,
         media_type: post.media_type,
+        topic: post.topic ?? null,
         poll_id: post.poll_id || null,
         visibility: post.visibility,
         created_at: post.created_at,
@@ -505,6 +557,33 @@ export const addComment = async (req, res) => {
       [userId]
     );
 
+    /**
+     * Mentions in a comment. A person named here gets the "mentioned you"
+     * notification even when they are not the post author and not following
+     * the thread -- being named is the whole point of the gesture.
+     *
+     * notifyMany drops the actor, so mentioning yourself is silently ignored,
+     * and the post author is deliberately NOT excluded: if you both comment on
+     * their post and name them, they hear about the mention as well.
+     */
+    syncCommentMentions({ commentId: comment.comment_id, content, actorId: userId })
+      .then(async (mentioned) => {
+        if (!mentioned.length) return;
+        const name = await actorName(userId);
+        notifyMany(
+          mentioned.map((user) => user.user_id),
+          {
+            actorId: userId,
+            type: "mention",
+            resourceType: "post",
+            resourceId: post_id,
+            title: `${name} mentioned you in a comment`,
+            body: stripMentions(String(content || "")).slice(0, 140),
+          }
+        );
+      })
+      .catch((error) => console.error("comment mention fan-out failed:", error.message));
+
     const commentAuthor = await postAuthorToNotify(post_id, userId);
     if (commentAuthor) {
       notify({
@@ -515,7 +594,7 @@ export const addComment = async (req, res) => {
         resourceId: post_id,
         actorName: await actorName(userId),
         action: "commented on your post",
-        body: String(content || "").slice(0, 140),
+        body: stripMentions(String(content || "")).slice(0, 140),
       });
     }
 
@@ -667,6 +746,32 @@ export const updatePost = async (req, res) => {
 
     await updatePostModel(post_id, userId, content);
 
+    /**
+     * Re-index on edit, so the mention table tracks the text rather than the
+     * history of the text: a mention removed by an edit stops existing, and
+     * one added by an edit starts.
+     *
+     * syncMentions returns only the newly named, so fixing a typo does not
+     * notify everyone in the sentence a second time.
+     */
+    syncPostMentions({ postId: post_id, content, actorId: userId })
+      .then(async (mentioned) => {
+        if (!mentioned.length) return;
+        const name = await actorName(userId);
+        notifyMany(
+          mentioned.map((user) => user.user_id),
+          {
+            actorId: userId,
+            type: "mention",
+            resourceType: "post",
+            resourceId: post_id,
+            title: `${name} mentioned you in a post`,
+            body: stripMentions(content).slice(0, 140),
+          }
+        );
+      })
+      .catch((error) => console.error("mention re-index failed:", error.message));
+
     broadcastPost(req, post_id, "post:updated", { content, user_id: userId });
 
     res.status(200).json({
@@ -697,6 +802,25 @@ export const updateComment = async (req, res) => {
     if (content === null) return;
 
     await updateCommentModel(comment_id, userId, content);
+
+    // Re-index, for the same reason as updatePost above.
+    syncCommentMentions({ commentId: comment_id, content, actorId: userId })
+      .then(async (mentioned) => {
+        if (!mentioned.length) return;
+        const name = await actorName(userId);
+        notifyMany(
+          mentioned.map((user) => user.user_id),
+          {
+            actorId: userId,
+            type: "mention",
+            resourceType: "post",
+            resourceId: post_id,
+            title: `${name} mentioned you in a comment`,
+            body: stripMentions(content).slice(0, 140),
+          }
+        );
+      })
+      .catch((error) => console.error("comment mention re-index failed:", error.message));
 
     broadcastPost(req, post_id, "comment:updated", {
       comment_id,

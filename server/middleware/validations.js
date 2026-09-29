@@ -102,9 +102,20 @@ export const forgotPasswordValidation = (data) =>
 
 export const resetPasswordValidation = (data) =>
   Joi.object({
-    token: Joi.string().required().trim().messages({
-      "string.empty": "Reset token is required",
+    email: Joi.string().email().required().trim().lowercase().messages({
+      "string.email": "Please provide a valid email address",
+      "string.empty": "Email is required",
     }),
+    // Exactly six digits. Validating the shape here keeps obviously malformed
+    // input away from bcrypt, which is deliberately slow.
+    code: Joi.string()
+      .required()
+      .trim()
+      .pattern(/^\d{6}$/)
+      .messages({
+        "string.empty": "Enter the code from your email",
+        "string.pattern.base": "The code is six digits",
+      }),
     password: Joi.string()
       .min(8)
       .max(128)

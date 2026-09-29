@@ -11,8 +11,9 @@ services:
     name: campus-connect-api
     runtime: node
     rootDir: server
-    # Free plan spins down after 15 min idle. .github/workflows/keep-awake.yml
-    # pings /api/health on a schedule to prevent that. Note the free tier also
+    # Free plan spins down after 15 min idle. server.js pings its own public
+    # /api/health every 10 minutes to prevent that (keep-awake.yml is only a
+    # backstop -- GitHub runs its schedule hours late). Note the free tier also
     # caps at 750 instance-hours/month across ALL free services -- one service
     # held awake 24/7 uses ~744, so this fits with almost no headroom. A second
     # free service would exceed it.
