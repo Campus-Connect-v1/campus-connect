@@ -316,35 +316,40 @@ const emailTemplates = {
     }),
   }),
 
-  passwordReset: (resetToken, name = "there") => {
-    const link = `${process.env.CLIENT_URL || ""}/reset-password?token=${resetToken}`;
-    return {
-      subject: "Reset your Campus Connect password",
-      text:
-        `Hi ${name},\n\nReset your Campus Connect password here:\n${link}\n\n` +
-        `This link expires in 1 hour. If you didn't request it, ignore this email — ` +
-        `your password stays unchanged.`,
-      html: layout({
-        title: "Reset your password",
-        preview: "Reset your Campus Connect password — this link expires in 1 hour.",
-        body: `
-          ${h1("Reset your password")}
-          ${p(`Hi ${name}, we received a request to reset the password on your Campus Connect account. Choose a new one using the button below.`)}
-          ${button(link, "Choose a new password")}
-          <p class="cc-muted" style="margin:0 0 16px;font-size:13px;line-height:1.6;color:${MUTED};">
-            This link expires in <strong style="color:#374151;">1 hour</strong>.
-            If the button doesn't work, paste this into your browser:
-          </p>
-          <p style="margin:0;font-size:12px;line-height:1.6;word-break:break-all;">
-            <a href="${link}" style="color:${BRAND};text-decoration:underline;">${link}</a>
-          </p>
-          ${rule}
-          ${small("Didn't request this? Ignore this email and your password will stay as it is.")}
-        `,
-        footerNote: "Campus Connect — connecting students across campus.",
-      }),
-    };
-  },
+  /**
+   * Sends a short CODE, not a link.
+   *
+   * The app asks the user to type a code into the reset screen, so a link was
+   * the wrong shape twice over: it opened a web page the app cannot complete
+   * the flow in, and the only thing pasteable out of it was a 200 character
+   * JWT.
+   */
+  passwordReset: (code, name = "there") => ({
+    subject: `${code} is your Campus Connect reset code`,
+    text:
+      `Hi ${name},\n\nYour Campus Connect password reset code is: ${code}\n\n` +
+      `Enter it in the app to choose a new password. It expires in 15 minutes. ` +
+      `If you didn't request it, ignore this email — your password stays unchanged.`,
+    html: layout({
+      title: "Your reset code",
+      preview: `${code} — your Campus Connect reset code, valid for 15 minutes.`,
+      body: `
+        ${h1("Your reset code")}
+        ${p(`Hi ${name}, enter this code in the app to choose a new password.`)}
+        <p style="margin:0 0 20px;text-align:center;">
+          <span style="display:inline-block;padding:14px 26px;border-radius:12px;background:#F3F4F6;
+                       font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:30px;
+                       letter-spacing:8px;font-weight:700;color:#111827;">${code}</span>
+        </p>
+        <p class="cc-muted" style="margin:0 0 16px;font-size:13px;line-height:1.6;color:${MUTED};">
+          This code expires in <strong style="color:#374151;">15 minutes</strong> and can be used once.
+        </p>
+        ${rule}
+        ${small("Didn't request this? Ignore this email and your password will stay as it is. Never share this code with anyone.")}
+      `,
+      footerNote: "Campus Connect — connecting students across campus.",
+    }),
+  }),
 
   passwordResetSuccess: (_unused, name = "there") => ({
     subject: "Your Campus Connect password was changed",
@@ -471,8 +476,10 @@ export const sendOTPEmail = async (email, otp, first_name, last_name) => {
   return await sendEmail(email, "otpVerification", { otp, first_name });
 };
 
-export const sendPasswordResetEmail = async (email, resetToken, name) => {
-  return await sendEmail(email, "passwordReset", { resetToken, name });
+/** `code` is the six digit reset code; sendEmail forwards it as the template's
+ *  first argument via the same slot the OTP uses. */
+export const sendPasswordResetEmail = async (email, code, name) => {
+  return await sendEmail(email, "passwordReset", { resetToken: code, name });
 };
 
 export const sendPasswordResetSuccessEmail = async (email, name) => {

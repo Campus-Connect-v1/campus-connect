@@ -51,10 +51,16 @@ export function requestPasswordReset(email: string) {
  * The token arrives by email, so the user types or pastes it; there is no deep
  * link registered for it yet.
  */
-export function resetPassword(token: string, password: string) {
+/**
+ * `email` travels with the code because a six digit code is not unique across
+ * users -- unlike the signed token this replaced, it carries no identity of
+ * its own, so the server needs to be told whose code it is.
+ */
+export function resetPassword(email: string, code: string, password: string) {
   return request<{ message: string; passwordUpdated: boolean }>(() =>
     api.post("/auth/reset-password", {
-      token,
+      email,
+      code,
       password,
       confirmPassword: password,
     })

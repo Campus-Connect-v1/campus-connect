@@ -9,13 +9,22 @@ import { resetPassword } from "@/src/services/authServices";
 import { spacing } from "@/src/styles/theme";
 
 export default function ResetPasswordScreen() {
-  // Prefilled when a deep link carries it; typed in from the email otherwise.
-  const { token: initialToken, email } = useLocalSearchParams<{
+  // Both arrive from the forgot-password screen; either can be typed instead.
+  const { token: initialCode, email: initialEmail } = useLocalSearchParams<{
     token?: string;
     email?: string;
   }>();
 
-  const [token, setToken] = useState(initialToken ?? "");
+  const [code, setCode] = useState(initialCode ?? "");
+  /**
+   * The code alone cannot identify anyone.
+   *
+   * It is six digits with no claims in it, unlike the signed token this
+   * replaced, so the server has to be told whose code it is. It is normally
+   * carried through from the previous screen; the field below appears only
+   * when it was not, rather than making everyone retype it.
+   */
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -23,7 +32,8 @@ export default function ResetPasswordScreen() {
   const [done, setDone] = useState(false);
 
   const submit = async () => {
-    if (!token.trim()) return setError("Paste the code from your email.");
+    if (!email.trim()) return setError("Enter the email you asked for the code with.");
+    if (!/^\d{6}$/.test(code.trim())) return setError("The code is the six digits from your email.");
     if (password.length < 8) return setError("Use at least 8 characters.");
     if (password.length > 128) return setError("Use no more than 128 characters.");
     if (!/[a-z]/.test(password)) return setError("Include a lowercase letter.");
@@ -37,7 +47,7 @@ export default function ResetPasswordScreen() {
     setBusy(true);
     setError(null);
 
-    const result = await resetPassword(token.trim(), password);
+    const result = await resetPassword(email.trim(), code.trim(), password);
     setBusy(false);
 
     if (!result.success) {
@@ -87,18 +97,39 @@ export default function ResetPasswordScreen() {
             Set a new password
           </Text>
           <Text variant="body" onMedia style={{ opacity: 0.85 }}>
-            {email
-              ? `We sent a code to ${email}. Paste it below with your new password.`
-              : "Paste the code from your email, then choose a new password."}
+            {initialEmail
+              ? `We sent a six digit code to ${initialEmail}. Enter it below with your new password.`
+              : "Enter the six digit code from your email, then choose a new password."}
           </Text>
+
+          {/* Only when the previous screen did not carry it. */}
+          {initialEmail ? null : (
+            <Field
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              placeholder="you@university.edu.gh"
+            />
+          )}
 
           <Field
             label="Code from email"
-            value={token}
-            onChangeText={setToken}
+            value={code}
+            // Digits only, six of them: the keyboard, the length and the
+            // one-time-code hint all say the same thing, so the field cannot
+            // be mistaken for the old pasteable token.
+            onChangeText={(next) => setCode(next.replace(/\D/g, "").slice(0, 6))}
+            keyboardType="number-pad"
+            maxLength={6}
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="Paste the code"
+            placeholder="123456"
           />
 
           <Field

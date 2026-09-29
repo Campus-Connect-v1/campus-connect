@@ -20,6 +20,7 @@ import {
   verifyOTPValidation,
   resendOTPValidation,
 } from "../middleware/validations.js";
+import { issueResetCode, verifyResetCode } from "../utils/passwordResetCodes.js";
 import {
   sendOTPEmail,
   sendWelcomeEmail,
@@ -282,31 +283,33 @@ export const forgotPassword = async (req, res) => {
     if (!user) {
       // Don't reveal that the email doesn't exist for security.
       return res.status(200).json({
-        message: "If the email exists, a password reset link has been sent",
+        message: "If the email exists, a reset code has been sent",
         suggestion: `Please check the email address ${email}`,
       });
     }
 
-    // Generate reset token
-    const resetToken = jwt.sign(
-      { id: user.user_id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
-    );
+    /**
+     * A short code, stored hashed, rather than a signed token in a link.
+     *
+     * The app asks the user to type a code into the reset screen. A JWT is
+     * ~200 characters, so the old link was unusable there twice over: it
+     * opened a web page the app cannot finish the flow in, and nothing in it
+     * was short enough to retype.
+     */
+    const code = await issueResetCode(user.user_id);
 
     try {
-      await sendPasswordResetEmail(email, resetToken, user.first_name);
+      await sendPasswordResetEmail(email, code, user.first_name);
 
-      // Only log token in development
       if (process.env.NODE_ENV === "development") {
-        console.log(`Password reset token for ${email}: ${resetToken}`);
+        console.log(`Password reset code for ${email}: ${code}`);
       }
 
       return res.status(200).json({
-        message: "If the email exists, a password reset link has been sent",
+        message: "If the email exists, a reset code has been sent",
         emailSent: true,
-        resetToken:
-          process.env.NODE_ENV === "development" ? resetToken : undefined,
+        // Development only, so the flow can be walked without a mailbox.
+        resetCode: process.env.NODE_ENV === "development" ? code : undefined,
       });
     } catch (emailError) {
       console.error("Failed to send reset email:", emailError);
@@ -330,34 +333,49 @@ export const resetPassword = async (req, res) => {
     const { error } = resetPasswordValidation(req.body);
     if (error) return handleValidationError(error, res);
 
-    const { token, password } = req.body;
+    const { email, code, password } = req.body;
 
-    // Verify reset token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (jwtError) {
+    /**
+     * One reply for every failure below.
+     *
+     * A six digit code is only safe because guessing is capped, and telling
+     * the caller WHICH part failed undoes that: "no code for this address"
+     * reveals which emails have accounts, and distinguishing "expired" from
+     * "wrong" tells a script whether to keep going. The user is told the same
+     * thing in all cases, and the real reason is logged, not returned.
+     */
+    const refuse = (reason) => {
+      if (process.env.NODE_ENV === "development") {
+        console.log(`Password reset refused for ${email}: ${reason}`);
+      }
       return res.status(400).json({
-        message: "Invalid or expired reset token",
-        suggestion: "Please request a new password reset link",
+        message: "That code is not valid, or it has expired",
+        suggestion: "Ask for a new code and try again",
       });
-    }
+    };
+
+    const user = await findUserByEmail(email);
+    // Deliberately identical to a wrong code: an unknown address must not be
+    // distinguishable from a bad guess.
+    if (!user) return refuse("no such user");
+
+    const check = await verifyResetCode(user.user_id, code);
+    if (!check.ok) return refuse(check.reason);
 
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Update user password
-    const updated = await updateUserPassword(decoded.email, hashedPassword);
+    const updated = await updateUserPassword(user.email, hashedPassword);
     if (!updated) {
       return res.status(404).json({
         message: "User not found",
-        suggestion: "Please check your reset token and try again",
+        suggestion: "Please request a new code and try again",
       });
     }
 
     try {
-      const user = await findUserByEmail(decoded.email);
-      await sendPasswordResetSuccessEmail(decoded.email, user.first_name);
+      await sendPasswordResetSuccessEmail(user.email, user.first_name);
     } catch (emailError) {
       console.error("Failed to send success email:", emailError);
       // Don't fail the reset if email fails
