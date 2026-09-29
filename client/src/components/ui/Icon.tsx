@@ -11,6 +11,8 @@ import Compass01Icon from "@hugeicons/core-free-icons/Compass01Icon";
 import ImageAdd01Icon from "@hugeicons/core-free-icons/ImageAdd01Icon";
 import PlayIcon from "@hugeicons/core-free-icons/PlayIcon";
 import Video01Icon from "@hugeicons/core-free-icons/Video01Icon";
+import VolumeHighIcon from "@hugeicons/core-free-icons/VolumeHighIcon";
+import VolumeMute01Icon from "@hugeicons/core-free-icons/VolumeMute01Icon";
 import Edit02Icon from "@hugeicons/core-free-icons/Edit02Icon";
 import FavouriteIcon from "@hugeicons/core-free-icons/FavouriteIcon";
 import FireIcon from "@hugeicons/core-free-icons/FireIcon";
@@ -91,6 +93,8 @@ export const ICONS = {
   compass: Compass01Icon,
 
   visible: ViewIcon,
+  soundOn: VolumeHighIcon,
+  soundOff: VolumeMute01Icon,
   hidden: ViewOffIcon,
   settings: Settings02Icon,
   privacy: LockKeyIcon,

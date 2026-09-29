@@ -1,6 +1,13 @@
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
+import {
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  View,
+  useWindowDimensions,
+  type ViewToken,
+} from "react-native";
 import { useScrollToTop } from "@react-navigation/native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -454,6 +461,33 @@ export default function HomeScreen() {
   const header = useHideOnScroll();
 
   /**
+   * Which post is on screen enough to be worth playing.
+   *
+   * Autoplay has to be driven from the list, not the card: every mounted card
+   * would otherwise start its own video and you would hear three at once. Only
+   * this id plays.
+   *
+   * Both of these are refs because FlatList captures them on first render and
+   * throws if either identity changes afterwards.
+   */
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+
+  const viewabilityConfig = useRef({
+    // Most of the card has to be showing, so a video does not start while it
+    // is still a sliver at the bottom of the screen.
+    itemVisiblePercentThreshold: 65,
+    // Scrolling straight past should not trigger anything.
+    minimumViewTime: 120,
+  });
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const firstPost = viewableItems.find((entry) => entry.item?.kind === "post");
+      setActiveVideoId(firstPost ? (firstPost.item as { post: FeedPost }).post.id : null);
+    }
+  );
+
+  /**
    * Tapping the active tab returns to the top of the feed.
    *
    * useScrollToTop rather than a hand-rolled tabPress listener: it is the
@@ -794,6 +828,8 @@ export default function HomeScreen() {
         ref={listRef}
         onScroll={header.onScroll}
         scrollEventThrottle={16}
+        viewabilityConfig={viewabilityConfig.current}
+        onViewableItemsChanged={onViewableItemsChanged.current}
         data={rows}
         // The slot index keys the injected rows: two suggestion blocks in one
         // feed would otherwise collide on a constant key and FlatList would
@@ -923,6 +959,7 @@ export default function HomeScreen() {
               <PostCard
                 post={item.post}
                 saved={saved.isSaved(item.post.id)}
+                active={item.post.id === activeVideoId}
                 onToggleLike={toggleLike}
                 onToggleSave={toggleSave}
                 onOpenOptions={setOptions}

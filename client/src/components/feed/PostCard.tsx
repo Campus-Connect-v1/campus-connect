@@ -23,6 +23,18 @@ import { useTheme } from "@/src/styles/useTheme";
 interface Props {
   post: FeedPost;
   /**
+   * True when this is the card the reader is actually looking at.
+   *
+   * Only this card's video plays. Driven by the list's viewability callback
+   * rather than by the card itself, because a card can stay mounted well
+   * outside the viewport and those must stay silent.
+   *
+   * Defaults to false, so a surface that does not manage it -- a profile
+   * grid, a saved list -- simply has videos that wait to be tapped instead of
+   * several playing at once.
+   */
+  active?: boolean;
+  /**
    * Saved state as a separate primitive, overriding `post.saved`.
    *
    * This exists so a list does not have to spread a new post object per row to
@@ -99,18 +111,70 @@ function compact(n: number) {
 }
 
 /**
- * The feed's video renderer. Same expo-video pattern already proven in
- * MediaAttachment and the stories viewer: native controls, no autoplay, no
- * loop. useVideoPlayer ties the player's lifetime to this component, so
- * scrolling the card out of the list and unmounting it stops playback and
- * releases the player -- nothing extra to clean up here.
+ * The feed's video: it plays itself, and the controls are gestures.
+ *
+ * `active` comes from the list's viewability callback, not from this
+ * component. Every mounted card would otherwise start its own video and you
+ * would hear three at once; only the card the reader is actually looking at
+ * plays.
+ *
+ * Muted to begin with, always. Autoplaying sound into a lecture hall is the
+ * fastest way to make someone close the app, so sound is something the reader
+ * turns on with a tap rather than something that happens to them.
+ *
+ * No nativeControls. A transport bar over a feed video is chrome the reader
+ * never asked for; holding and releasing is faster than finding a pause
+ * button, and it leaves the picture uncovered the rest of the time.
  */
-function PostVideo({ uri, accessibilityLabel }: { uri: string; accessibilityLabel: string }) {
+function PostVideo({
+  uri,
+  accessibilityLabel,
+  active,
+}: {
+  uri: string;
+  accessibilityLabel: string;
+  active: boolean;
+}) {
   const { colors } = useTheme();
+  const [muted, setMuted] = useState(true);
+  /** Set while a finger is down, so the badge can say what the hold is doing. */
+  const [gesture, setGesture] = useState<"none" | "paused" | "fast">("none");
+
   const player = useVideoPlayer(uri, (instance) => {
-    instance.loop = false;
+    // Feed video loops: a fifteen second clip that stops dead is a card that
+    // looks broken rather than finished.
+    instance.loop = true;
+    instance.muted = true;
   });
   const { status } = useEvent(player, "statusChange", { status: player.status });
+
+  // Play and pause follow the list, not the component's lifetime: a card can
+  // stay mounted well outside the viewport, and those must be silent.
+  useEffect(() => {
+    if (active) player.play();
+    else {
+      player.pause();
+      // Back to the start, so returning to a card begins the clip again
+      // rather than resuming something half-watched.
+      player.currentTime = 0;
+    }
+  }, [active, player]);
+
+  useEffect(() => {
+    player.muted = muted;
+  }, [muted, player]);
+
+  const hold = (mode: "paused" | "fast") => {
+    setGesture(mode);
+    if (mode === "paused") player.pause();
+    else player.playbackRate = 2;
+  };
+
+  const release = () => {
+    setGesture("none");
+    player.playbackRate = 1;
+    if (active) player.play();
+  };
 
   return (
     <View
@@ -120,7 +184,7 @@ function PostVideo({ uri, accessibilityLabel }: { uri: string; accessibilityLabe
         player={player}
         style={StyleSheet.absoluteFillObject}
         contentFit="cover"
-        nativeControls
+        nativeControls={false}
         // Android's default SurfaceView renders in its own compositor layer
         // outside normal view clipping, so with more than one video mounted
         // in the same scrolling list it can bleed over neighbouring cards.
@@ -128,6 +192,76 @@ function PostVideo({ uri, accessibilityLabel }: { uri: string; accessibilityLabe
         surfaceType="textureView"
         accessibilityLabel={accessibilityLabel}
       />
+
+      {/* Two zones. The right third is the 2x zone, the rest pauses -- the
+          same split TikTok and YouTube use, so the gesture is already learned.
+          delayLongPress is short because this is a hold, not a long press:
+          the default 500ms feels broken when you expect it to pause on
+          contact. */}
+      <View style={[StyleSheet.absoluteFillObject, { flexDirection: "row" }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={muted ? "Unmute video" : "Mute video"}
+          onPress={() => setMuted((current) => !current)}
+          onLongPress={() => hold("paused")}
+          onPressOut={release}
+          delayLongPress={160}
+          style={{ flex: 2 }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Hold to play at double speed"
+          onPress={() => setMuted((current) => !current)}
+          onLongPress={() => hold("fast")}
+          onPressOut={release}
+          delayLongPress={160}
+          style={{ flex: 1 }}
+        />
+      </View>
+
+      {/* What the hold is doing. Without it a paused video is indistinguishable
+          from one that has stalled on a bad connection. */}
+      {gesture !== "none" ? (
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFillObject,
+            { alignItems: "center", justifyContent: "center" },
+          ]}
+        >
+          <View
+            style={{
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.xs,
+              borderRadius: radius.full,
+              backgroundColor: "rgba(0,0,0,0.55)",
+            }}
+          >
+            <Text variant="label" style={{ color: colors.onMedia }}>
+              {gesture === "fast" ? "2x" : "Paused"}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Sound state, always visible: a muted video with no indicator just
+          looks like a video with no audio. */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: spacing.sm,
+          right: spacing.sm,
+          width: 30,
+          height: 30,
+          borderRadius: radius.full,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "rgba(0,0,0,0.55)",
+        }}
+      >
+        <Icon name={muted ? "soundOff" : "soundOn"} size={15} color={colors.onMedia} />
+      </View>
 
       {status === "loading" || status === "idle" ? (
         <View
@@ -151,6 +285,7 @@ function PostVideo({ uri, accessibilityLabel }: { uri: string; accessibilityLabe
  */
 export const PostCard = memo(function PostCard({
   post,
+  active = false,
   saved,
   onToggleLike,
   onToggleSave,
@@ -336,7 +471,11 @@ export const PostCard = memo(function PostCard({
         }}
       >
         {header}
-        <PostVideo uri={post.image} accessibilityLabel={`Video from ${post.author.name}`} />
+        <PostVideo
+          uri={post.image}
+          accessibilityLabel={`Video from ${post.author.name}`}
+          active={active}
+        />
         <MentionText variant="body" content={post.caption} />
         {actions}
       </View>
