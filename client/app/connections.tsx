@@ -4,14 +4,7 @@ import { FlatList, RefreshControl, View } from "react-native";
 
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { UserRow } from "@/src/components/social/UserRow";
-import {
-  EmptyState,
-  Icon,
-  InlineNotice,
-  PressableScale,
-  SkeletonList,
-  Text,
-} from "@/src/components/ui";
+import { CountBadge, EmptyState, Icon, InlineNotice, PressableScale, SkeletonList, Text } from "@/src/components/ui";
 import { useAsync } from "@/src/hooks/useAsync";
 import { useAttention } from "@/src/services/AttentionContext";
 import {
@@ -219,24 +212,12 @@ export default function ConnectionsScreen() {
                 {option.label}
               </Text>
               {option.count > 0 ? (
-                <View
-                  style={{
-                    minWidth: 18,
-                    paddingHorizontal: 5,
-                    borderRadius: radius.full,
-                    backgroundColor: active ? colors.background : culture.pink,
-                  }}
-                >
-                  <Text
-                    variant="caption"
-                    style={{
-                      fontSize: 10,
-                      color: active ? colors.textPrimary : culture.warmWhite,
-                    }}
-                  >
-                    {option.count}
-                  </Text>
-                </View>
+                <CountBadge
+                  count={option.count}
+                  size={18}
+                  background={active ? colors.background : culture.pink}
+                  color={active ? colors.textPrimary : undefined}
+                />
               ) : null}
             </PressableScale>
           );

@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, RefreshControl, ScrollView, View, useWindowDimensions } from "react-native";
+import { useScrollToTop } from "@react-navigation/native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -10,6 +11,7 @@ import { ProfileNudge } from "@/src/components/profile/ProfileNudge";
 import { StoryRail } from "@/src/components/stories/StoryRail";
 import ProfileDrawer from "@/src/components/layout/profile-drawer";
 import {
+  CountBadge,
   Avatar,
   EmptyState,
   Icon,
@@ -22,7 +24,6 @@ import {
   SectionHeader,
   Sticker,
   Text,
-  type IconName,
 } from "@/src/components/ui";
 import { adaptEvent } from "@/src/features/events/adapt";
 import { type CampusEvent } from "@/src/features/events/types";
@@ -37,6 +38,8 @@ import { useSavedPosts } from "@/src/services/SavedPostsContext";
 import { useSession } from "@/src/services/SessionContext";
 import { fetchFeed, likePost, unlikePost, type ApiPost } from "@/src/services/socialServices";
 import { useFeedRealtime } from "@/src/hooks/useFeedRealtime";
+import { useHideOnScroll } from "@/src/hooks/useHideOnScroll";
+import { FEED_CATEGORIES, topicFor } from "@/src/features/feed/topics";
 import { onNewPost } from "@/src/services/socket";
 import { fetchUniversityById } from "@/src/services/universityServices";
 import { useUnread } from "@/src/services/UnreadContext";
@@ -46,14 +49,6 @@ import { TAB_BAR_CLEARANCE, tabBarTop } from "@/src/styles/layout";
 import { culture, foregroundOn, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
-const CATEGORIES: { label: string; icon: IconName; color: string; route?: "/(tabs)/events" }[] = [
-  { label: "Trending", icon: "trending", color: culture.pink },
-  { label: "Events", icon: "events", color: culture.yellow, route: "/(tabs)/events" },
-  { label: "Sports", icon: "sports", color: culture.lime },
-  { label: "Academic", icon: "academic", color: culture.violet },
-  { label: "Music", icon: "entertainment", color: culture.pink },
-  { label: "Food", icon: "food", color: culture.yellow },
-];
 
 function CategoryRail({ active, onChange }: { active: string; onChange: (label: string) => void }) {
   const { colors } = useTheme();
@@ -69,7 +64,7 @@ function CategoryRail({ active, onChange }: { active: string; onChange: (label: 
         alignItems: "center",
       }}
     >
-      {CATEGORIES.map((category) => {
+      {FEED_CATEGORIES.map((category) => {
         const selected = category.label === active;
         return (
           <PressableScale
@@ -78,8 +73,13 @@ function CategoryRail({ active, onChange }: { active: string; onChange: (label: 
             accessibilityState={{ selected }}
             accessibilityLabel={`Show ${category.label}`}
             onPress={() => {
+              // Events leaves the screen, so selecting it would leave the rail
+              // showing a filter that is not applied when you come back.
+              if (category.route) {
+                router.push(category.route);
+                return;
+              }
               onChange(category.label);
-              if (category.route) router.push(category.route);
             }}
             style={{
               minHeight: 44,
@@ -376,9 +376,20 @@ export default function HomeScreen() {
   const display = useMemo(() => (profile ? adaptProfile(profile) : null), [profile]);
   const firstName = (display?.name || user?.name || "").split(" ")[0];
 
+  /**
+   * The category chip drives the feed request, so switching chips refetches.
+   *
+   * Filtering the already-loaded page client-side would have been cheaper, but
+   * it filters 20 posts rather than the feed: pick Food and you would see the
+   * food posts that happened to be in the first page and nothing else, with no
+   * way to page further. The server does the filtering so a category is a real
+   * view of the whole feed.
+   */
+  const activeTopic = topicFor(category);
+
   const feed = useAsync(
-    useCallback(() => fetchFeed(20, 0), []),
-    []
+    useCallback(() => fetchFeed(20, 0, null, activeTopic), [activeTopic]),
+    [activeTopic]
   );
 
   const people = useAsync(
@@ -434,6 +445,22 @@ export default function HomeScreen() {
   // the second call and fetch the same page twice.
   const fetching = useRef(false);
   const listRef = useRef<FlatList<FeedRow>>(null);
+  // The bar positions itself absolutely, which does NOT inherit Screen's top
+  // padding -- it was rendering up behind the status bar. It owns the inset
+  // now, and Screen is told to skip it so the two do not both apply it.
+  //
+  // No minVisible: it leaves the screen completely, inset included, rather
+  // than parking a strip behind the status bar.
+  const header = useHideOnScroll();
+
+  /**
+   * Tapping the active tab returns to the top of the feed.
+   *
+   * useScrollToTop rather than a hand-rolled tabPress listener: it is the
+   * navigation library's own binding, so it also covers the iOS status-bar
+   * tap, and it detaches itself when the screen is not focused.
+   */
+  useScrollToTop(listRef as never);
 
   /**
    * Posts published while this feed is open, held back rather than inserted.
@@ -606,7 +633,7 @@ export default function HomeScreen() {
   const peopleAtTop = recommendations.length > 0 && posts.length <= FIRST_SLOT;
 
   return (
-    <Screen>
+    <Screen edges={{ top: false }}>
       <OfflineBanner />
       <ProfileDrawer
         isVisible={drawerOpen}
@@ -657,15 +684,138 @@ export default function HomeScreen() {
         />
       ) : null}
 
-      <FlatList
+      {/* Lifted out of ListHeaderComponent so it stays put. A sibling of the
+          list rather than an absolute overlay: it takes its own height out of
+          the layout, so the feed ends where the bar begins and no post can
+          scroll underneath it. The greeting, stories and category rail stay in
+          the list header and still scroll away -- only the campus and the
+          three controls are worth the permanent vertical space. */}
+      <Animated.View
+        onLayout={header.onHeaderLayout}
+        style={[
+          {
+            // Absolute, so the feed passes UNDER it as it slides away. That is
+            // the whole effect, and it is why the list gets a paddingTop of the
+            // measured height instead of the bar taking layout space.
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+            // Opaque, for the same reason: posts travel behind this.
+            backgroundColor: colors.background,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: spacing.lg,
+            paddingTop: insets.top + spacing.xs,
+            paddingBottom: spacing.sm,
+            // The two icon buttons read as one control group, so the gap
+            // between them is tighter than the gap to the campus name.
+            gap: spacing["3xs"],
+          },
+          header.headerStyle,
+        ]}
+      >
+        <View style={{ flex: 1, marginRight: spacing.xs }}>
+          <Text variant="micro" color="textMuted">
+            CAMPUS CONNECT
+          </Text>
+          <Text variant="label" numberOfLines={1}>
+            {campus ?? "Your campus"}
+          </Text>
+        </View>
+        {/* Create left the tab bar (it is an action, not a
+            destination), so this is its primary entry point. */}
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Create a post, event or group"
+          onPress={() => router.push("/(tabs)/create")}
+          style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="create" size={22} color={colors.textPrimary} />
+        </PressableScale>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={
+            unread.count ? `Notifications, ${unread.count} unread` : "Notifications"
+          }
+          onPress={() => router.push("/notifications")}
+          style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="notification" size={21} color={colors.textPrimary} />
+          {unread.count ? (
+            <CountBadge
+              count={unread.count}
+              size={16}
+              max={9}
+              // A ring in the screen colour, so the badge reads as separate
+              // from the bell it overlaps rather than merging into it.
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 6,
+                borderWidth: 1.5,
+                borderColor: colors.background,
+              }}
+            />
+          ) : null}
+        </PressableScale>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={
+            attention.hasAny
+              ? `Open profile menu, ${attention.connectionRequests} waiting`
+              : "Open profile menu"
+          }
+          onPress={() => setDrawerOpen(true)}
+        >
+          <Avatar uri={display?.avatar ?? undefined} size={42} />
+          {/* A plain dot, not a count. This is a nudge to open the menu;
+              the number belongs on the row that leads to the thing. */}
+          {attention.hasAny ? (
+            <View
+              style={{
+                position: "absolute",
+                top: -1,
+                right: -1,
+                width: 13,
+                height: 13,
+                borderRadius: radius.full,
+                backgroundColor: culture.pink,
+                borderWidth: 2,
+                borderColor: colors.background,
+              }}
+            />
+          ) : null}
+        </PressableScale>
+      </Animated.View>
+
+      <Animated.FlatList
         ref={listRef}
+        onScroll={header.onScroll}
+        scrollEventThrottle={16}
         data={rows}
         // The slot index keys the injected rows: two suggestion blocks in one
         // feed would otherwise collide on a constant key and FlatList would
         // recycle one over the other.
         keyExtractor={(item) => (item.kind === "post" ? item.post.id : `people-${item.slot}`)}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+        // Tuned for tall cards. A feed row is a ~460pt media card, so the
+        // defaults (initialNumToRender 10, windowSize 21) mount roughly ten
+        // full-screen images before first paint and keep ten screens of them
+        // alive. These are deliberately conservative rather than minimal:
+        // windowSize 9 still holds about four screens either side, which is
+        // more than a fast flick covers.
+        initialNumToRender={4}
+        maxToRenderPerBatch={5}
+        windowSize={9}
+        // Measured, never assumed: a guessed height leaves a permanent gap or
+        // hides the first row the moment the campus name wraps or the type
+        // scale changes.
+        contentContainerStyle={{
+          paddingTop: header.headerHeight,
+          paddingBottom: TAB_BAR_CLEARANCE,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={feed.refreshing}
@@ -682,103 +832,6 @@ export default function HomeScreen() {
         }
         ListHeaderComponent={
           <View style={{ gap: spacing.xl, paddingBottom: spacing.lg }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: spacing.lg,
-                // The two icon buttons read as one control group, so the gap
-                // between them is tighter than the gap to the campus name.
-                gap: spacing["3xs"],
-              }}
-            >
-              <View style={{ flex: 1, marginRight: spacing.xs }}>
-                <Text variant="micro" color="textMuted">
-                  CAMPUS CONNECT
-                </Text>
-                <Text variant="label" numberOfLines={1}>
-                  {campus ?? "Your campus"}
-                </Text>
-              </View>
-              {/* Create left the tab bar (it is an action, not a
-                  destination), so this is its primary entry point. */}
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel="Create a post, event or group"
-                onPress={() => router.push("/(tabs)/create")}
-                style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
-              >
-                <Icon name="create" size={22} color={colors.textPrimary} />
-              </PressableScale>
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel={
-                  unread.count ? `Notifications, ${unread.count} unread` : "Notifications"
-                }
-                onPress={() => router.push("/notifications")}
-                style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
-              >
-                <Icon name="notification" size={21} color={colors.textPrimary} />
-                {unread.count ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: 8,
-                      right: 6,
-                      minWidth: 16,
-                      height: 16,
-                      paddingHorizontal: 4,
-                      borderRadius: radius.full,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: culture.pink,
-                      borderWidth: 1.5,
-                      borderColor: colors.background,
-                    }}
-                  >
-                    <Text
-                      variant="micro"
-                      style={{
-                        color: foregroundOn(culture.pink),
-                        fontSize: 9,
-                        lineHeight: 11,
-                      }}
-                    >
-                      {unread.count > 9 ? "9+" : unread.count}
-                    </Text>
-                  </View>
-                ) : null}
-              </PressableScale>
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel={
-                  attention.hasAny
-                    ? `Open profile menu, ${attention.connectionRequests} waiting`
-                    : "Open profile menu"
-                }
-                onPress={() => setDrawerOpen(true)}
-              >
-                <Avatar uri={display?.avatar ?? undefined} size={42} />
-                {/* A plain dot, not a count. This is a nudge to open the menu;
-                    the number belongs on the row that leads to the thing. */}
-                {attention.hasAny ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -1,
-                      right: -1,
-                      width: 13,
-                      height: 13,
-                      borderRadius: radius.full,
-                      backgroundColor: culture.pink,
-                      borderWidth: 2,
-                      borderColor: colors.background,
-                    }}
-                  />
-                ) : null}
-              </PressableScale>
-            </View>
-
             <View style={{ paddingHorizontal: spacing.lg, gap: spacing.xs }}>
               <Text variant="title">
                 {firstName ? `WHAT'S GOOD, ${firstName.toUpperCase()}?` : "WHAT'S GOOD?"}
@@ -825,6 +878,17 @@ export default function HomeScreen() {
               actionLabel="Try again"
               onAction={feed.reload}
             />
+          ) : activeTopic ? (
+            // A filtered feed empties for a different reason than the main one,
+            // and the generic copy ("follow a few people") would be advice that
+            // does not apply. It also has to say which filter is on, or an
+            // empty screen reads as a broken feed rather than a quiet category.
+            <EmptyState
+              title={`Nothing under ${category} yet`}
+              body={`No one has posted to ${category} recently. Post the first one, or tap Trending to see everything.`}
+              actionLabel={`Post to ${category}`}
+              onAction={() => router.push("/compose/post")}
+            />
           ) : (
             <EmptyState
               title="Nothing here yet"
@@ -857,7 +921,8 @@ export default function HomeScreen() {
               entering={index < 4 ? FadeIn.delay(index * 45).duration(200) : undefined}
             >
               <PostCard
-                post={{ ...item.post, saved: saved.isSaved(item.post.id) }}
+                post={item.post}
+                saved={saved.isSaved(item.post.id)}
                 onToggleLike={toggleLike}
                 onToggleSave={toggleSave}
                 onOpenOptions={setOptions}

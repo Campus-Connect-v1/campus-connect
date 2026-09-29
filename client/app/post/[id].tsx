@@ -1,8 +1,10 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
+import { MentionText } from "@/src/components/social/MentionText";
+import { MentionSuggestions } from "@/src/components/social/MentionSuggestions";
+import { useMentionAutocomplete } from "@/src/features/mentions/useMentionAutocomplete";
 import { useCallback, useRef, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PostCard } from "@/src/components/feed/PostCard";
 import { PostOptionsSheet } from "@/src/components/feed/PostOptionsSheet";
@@ -63,6 +65,9 @@ function CommentRow({
 }) {
   const { colors } = useTheme();
   const name = [comment.author.first_name, comment.author.last_name].filter(Boolean).join(" ");
+
+  const openAuthor = () =>
+    router.push({ pathname: "/person/[id]", params: { id: comment.author.user_id } });
   // A reply is inset rather than given its own card, so a thread reads as one
   // conversation instead of a stack of boxes.
   const isReply = Boolean(comment.parent_comment_id);
@@ -91,7 +96,19 @@ function CommentRow({
         paddingLeft: spacing.lg + (isReply ? spacing.xl : 0),
       }}
     >
-      <Avatar uri={comment.author.profile_picture_url ?? undefined} size={34} />
+      {/* The avatar and the name open the author's profile; the comment body
+          does not. Keeping them separate matters here, because the body's
+          press gesture is already spoken for by the long-press edit/delete on
+          your own comment -- one element cannot own both without the
+          navigation stealing that gesture. Same identity-row rule PostCard
+          follows, so an author tap goes to the same place everywhere. */}
+      <PressableScale
+        accessibilityRole="link"
+        accessibilityLabel={`View ${name}'s profile`}
+        onPress={() => openAuthor()}
+      >
+        <Avatar uri={comment.author.profile_picture_url ?? undefined} size={34} />
+      </PressableScale>
       <PressableScale
         accessibilityRole={isOwn ? "button" : "text"}
         accessibilityLabel={
@@ -102,7 +119,13 @@ function CommentRow({
         style={{ flex: 1, gap: 2 }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
-          <Text variant="label">{name}</Text>
+          <PressableScale
+            accessibilityRole="link"
+            accessibilityLabel={`View ${name}'s profile`}
+            onPress={() => openAuthor()}
+          >
+            <Text variant="label">{name}</Text>
+          </PressableScale>
           <Text variant="caption" color="textMuted">
             {since(comment.created_at)}
           </Text>
@@ -112,7 +135,7 @@ function CommentRow({
             </Text>
           ) : null}
         </View>
-        <Text variant="body">{comment.content}</Text>
+        <MentionText variant="body" content={comment.content} />
       </PressableScale>
 
       <PressableScale
@@ -148,13 +171,19 @@ function CommentRow({
 
 export default function PostCommentsScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile } = useSession();
   const saved = useSavedPosts();
   const inputRef = useRef<TextInput>(null);
 
   const [draft, setDraft] = useState("");
+  const mentions = useMentionAutocomplete({
+    text: draft,
+    onChange: (next) => {
+      setDraft(next);
+      setError(null);
+    },
+  });
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extra, setExtra] = useState<ApiComment[]>([]);
@@ -299,13 +328,18 @@ export default function PostCommentsScreen() {
    */
   const startEditingComment = (comment: ApiComment) => {
     setEditingComment(comment);
-    setDraft(comment.content);
+    // hydrate, not the raw content: the stored text carries
+    // `@[joyce.elli](user_3)` markers, and dropping those into the input would
+    // show the writer the brackets and the id. It also re-registers them, so
+    // editing the sentence around a mention does not silently unlink it.
+    setDraft(mentions.hydrate(comment.content));
     inputRef.current?.focus();
   };
 
   const cancelEditing = () => {
     setEditingComment(null);
     setDraft("");
+    mentions.reset();
   };
 
   const confirmDeleteComment = (comment: ApiComment) =>
@@ -329,7 +363,10 @@ export default function PostCommentsScreen() {
     ]);
 
   const send = async () => {
-    const content = draft.trim();
+    // The draft holds plain `@handle` text, which is what the writer sees.
+    // The stored markers are assembled here, from the people they actually
+    // picked -- see useMentionAutocomplete.
+    const content = mentions.serialize(draft).trim();
     if (!content || sending) return;
 
     setSending(true);
@@ -368,6 +405,10 @@ export default function PostCommentsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setExtra((current) => [...current, result.data]);
     setDraft("");
+    // Clear the handle registry with the draft. Left to accumulate, a handle
+    // picked in an earlier comment would still resolve in a later one the user
+    // only typed by hand.
+    mentions.reset();
   };
 
   return (
@@ -375,7 +416,19 @@ export default function PostCommentsScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={insets.top + 56}
+        /**
+         * No keyboardVerticalOffset.
+         *
+         * SettingsShell renders its header IN FLOW and this sits below it, so
+         * the frame React Native measures already excludes the top inset and
+         * the header. The offset it used to pass described both again, and a
+         * larger offset makes RN think the keyboard reaches higher than it
+         * does -- so it padded ~100pt too much and left a band of background
+         * between the composer and the keyboard.
+         *
+         * An offset is for a KeyboardAvoidingView that is the root with a
+         * header floating OVER it. That is not this.
+         */
       >
         <FlatList
           data={all}
@@ -460,6 +513,14 @@ export default function PostCommentsScreen() {
           </View>
         ) : null}
 
+        <MentionSuggestions
+          open={mentions.open}
+          query={mentions.query}
+          loading={mentions.loading}
+          people={mentions.suggestions}
+          onSelect={mentions.select}
+        />
+
         <View
           style={{
             flexDirection: "row",
@@ -474,31 +535,43 @@ export default function PostCommentsScreen() {
           }}
         >
           <Avatar uri={profile?.profile_picture_url ?? undefined} size={34} />
-          <TextInput
-            ref={inputRef}
-            accessibilityLabel={editingComment ? "Edit your comment" : "Write a comment"}
-            placeholder={editingComment ? "Edit your comment" : "Write a comment"}
-            placeholderTextColor={colors.textMuted}
-            multiline
-            autoCapitalize="sentences"
-            value={draft}
-            onChangeText={(value) => {
-              setDraft(value);
-              setError(null);
-            }}
+          {/* The box carries the height and the centring; the input sizes to
+              its own text. A minHeight on the TextInput itself top-aligns the
+              first line on iOS and leaves a gap beneath it, which is what made
+              the placeholder sit high. */}
+          <View
             style={{
               flex: 1,
-              maxHeight: 120,
               minHeight: 44,
+              maxHeight: 120,
+              justifyContent: "center",
               borderRadius: radius.lg,
               backgroundColor: colors.surface,
-              color: colors.textPrimary,
-              ...inputTextStyle(true),
-              paddingHorizontal: spacing.md,
-              paddingTop: spacing.xs + 2,
-              paddingBottom: spacing.xs + 2,
             }}
-          />
+          >
+            <TextInput
+              ref={inputRef}
+              accessibilityLabel={editingComment ? "Edit your comment" : "Write a comment"}
+              placeholder={editingComment ? "Edit your comment" : "Write a comment"}
+              placeholderTextColor={colors.textMuted}
+              multiline
+              autoCapitalize="sentences"
+              value={draft}
+              onChangeText={mentions.handleChangeText}
+              onSelectionChange={mentions.onSelectionChange}
+              // Controlled for exactly the one render after a mention is
+              // inserted, so the caret lands past the marker; undefined the rest
+              // of the time, because a permanently controlled selection fights
+              // the user for the caret on every keystroke.
+              selection={mentions.selection}
+              style={{
+                color: colors.textPrimary,
+                ...inputTextStyle(true),
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.xs,
+              }}
+            />
+          </View>
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Send comment"

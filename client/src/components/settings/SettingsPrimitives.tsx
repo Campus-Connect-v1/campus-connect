@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { Switch, View } from "react-native";
 
-import { Icon, PressableScale, Screen, Text, type IconName } from "@/src/components/ui";
+import { CountBadge, Icon, type IconName, PressableScale, Screen, Text } from "@/src/components/ui";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -94,21 +94,7 @@ export function SettingsRow({
       {/* A count here, unlike the tab bar dot: this is where the user is
           deciding whether the trip is worth it. */}
       {waiting ? (
-        <View
-          style={{
-            minWidth: 22,
-            height: 22,
-            paddingHorizontal: 6,
-            borderRadius: radius.full,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: culture.pink,
-          }}
-        >
-          <Text variant="caption" style={{ color: culture.warmWhite, fontSize: 11 }}>
-            {waiting > 9 ? "9+" : waiting}
-          </Text>
-        </View>
+        <CountBadge count={waiting} size={22} max={9} />
       ) : null}
 
       {onPress ? <Icon name="forward" size={17} color={colors.textMuted} /> : null}

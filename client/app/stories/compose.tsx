@@ -14,7 +14,7 @@ import {
   type PickResult,
 } from "@/src/services/media";
 import { createStory, type StoryVisibility } from "@/src/services/storyServices";
-import { uploadMedia } from "@/src/services/uploadServices";
+import { useUploadQueue } from "@/src/services/UploadQueueContext";
 import { culture, foregroundOn, inputTextStyle, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -39,9 +39,8 @@ export default function StoryComposeScreen() {
   const [background, setBackground] = useState(BACKGROUNDS[0]);
   const [media, setMedia] = useState<PickedMedia | null>(null);
   const [visibility, setVisibility] = useState<StoryVisibility>("connections");
-  const [busy, setBusy] = useState(false);
-  const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { enqueue } = useUploadQueue();
   const [permissionBlocked, setPermissionBlocked] = useState(false);
 
   const isRepost = Boolean(repost);
@@ -68,57 +67,68 @@ export default function StoryComposeScreen() {
 
   const canPost = isRepost || (mode === "text" ? text.trim().length > 0 : Boolean(media));
 
-  const post = async () => {
-    if (!canPost || busy) return;
+  /**
+   * Queues the story and leaves at once, the same as the post composer.
+   *
+   * A story is the case this matters most for: it is usually a photo or a
+   * video, taken seconds ago and not compressed, so the upload is the longest
+   * part and holding the screen for it is the difference between posting one
+   * and giving up.
+   *
+   * Everything checkable before leaving is still checked here -- media
+   * hosting, an empty story -- because those cannot be fixed from a toast.
+   */
+  const post = () => {
+    if (!canPost) return;
 
-    setBusy(true);
+    if (!isRepost && mode === "media") {
+      if (!media) return;
+      if (!canUpload) {
+        setError("Media hosting is not configured on the server, so this cannot post.");
+        return;
+      }
+    }
+
     setError(null);
 
-    try {
-      if (isRepost) {
-        setStage("Sharing");
-        const result = await createStory({
-          story_type: "repost",
-          repost_post_id: repost,
-          content: text.trim() || undefined,
-          visibility,
-        });
-        if (!result.success) return setError(result.error);
-      } else if (mode === "text") {
-        setStage("Posting");
-        const result = await createStory({
-          story_type: "text",
-          content: text.trim(),
-          background_color: background,
-          visibility,
-        });
-        if (!result.success) return setError(result.error);
-      } else {
-        if (!media) return;
-        if (!canUpload) {
-          return setError("Media hosting is not configured on the server, so this cannot post.");
-        }
+    const caption = text.trim();
+    // Text and repost stories have nothing to upload, so they go straight to
+    // the commit step and the bar is only ever briefly on screen.
+    const attachment = !isRepost && mode === "media" ? media : null;
 
-        setStage("Uploading");
-        const uploaded = await uploadMedia(media, "posts");
-        if (!uploaded.success) return setError(uploaded.error);
+    enqueue({
+      label: "Story",
+      kind: "posts",
+      media: attachment,
+      commit: async (mediaUrl: string | null) => {
+        const result = isRepost
+          ? await createStory({
+              story_type: "repost",
+              repost_post_id: repost,
+              content: caption || undefined,
+              visibility,
+            })
+          : mode === "text"
+            ? await createStory({
+                story_type: "text",
+                content: caption,
+                background_color: background,
+                visibility,
+              })
+            : await createStory({
+                // The picker's guess, since the queue reports the URL but not
+                // what Cloudinary decided the file was.
+                story_type: media?.kind === "video" ? "video" : "image",
+                media_url: mediaUrl ?? undefined,
+                content: caption || undefined,
+                visibility,
+              });
 
-        setStage("Posting");
-        const result = await createStory({
-          story_type: uploaded.kind,
-          media_url: uploaded.url,
-          content: text.trim() || undefined,
-          visibility,
-        });
-        if (!result.success) return setError(result.error);
-      }
+        return result.success ? { ok: true } : { ok: false, error: `Story failed: ${result.error}` };
+      },
+    });
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(tabs)/home");
-    } finally {
-      setBusy(false);
-      setStage(null);
-    }
+    router.replace("/(tabs)/home");
   };
 
   return (
@@ -334,8 +344,9 @@ export default function StoryComposeScreen() {
           ) : null}
 
           <Button
-            label={stage ?? "Share to story"}
-            loading={busy}
+            // No loading state: nothing is awaited here any more. Progress
+            // lives on the bar at the top of the window.
+            label="Share to story"
             disabled={!canPost}
             onPress={post}
           />

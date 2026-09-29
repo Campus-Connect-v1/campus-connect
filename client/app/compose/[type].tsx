@@ -7,6 +7,10 @@ import {
   MediaAttachment,
   type MediaAttachmentHandle,
 } from "@/src/components/compose/MediaAttachment";
+import { COMPOSER_TOPICS } from "@/src/features/feed/topics";
+import { useUploadQueue } from "@/src/services/UploadQueueContext";
+import { MentionSuggestions } from "@/src/components/social/MentionSuggestions";
+import { useMentionAutocomplete } from "@/src/features/mentions/useMentionAutocomplete";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
 import { Button, Icon, InlineNotice, PressableScale, Sticker, Text } from "@/src/components/ui";
 import { useUploadsEnabled } from "@/src/hooks/useUploadsEnabled";
@@ -16,9 +20,8 @@ import {
   type PickedMedia,
   type PickResult,
 } from "@/src/services/media";
-import { uploadMedia } from "@/src/services/uploadServices";
 import { createPost } from "@/src/services/socialServices";
-import { culture, inputTextStyle, radius, spacing } from "@/src/styles/theme";
+import { culture, foregroundOn, inputTextStyle, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 const COPY = {
@@ -43,9 +46,24 @@ export default function ComposeScreen() {
   const copy = COPY[kind];
 
   const [text, setText] = useState("");
+  /**
+   * Optional, and null by default.
+   *
+   * A required picker would be a tax on every post to serve the rail, and a
+   * pre-selected one would file posts under a category the writer never chose.
+   * An untagged post still reaches the main feed; it just does not appear
+   * under a chip.
+   */
+  const [topic, setTopic] = useState<string | null>(null);
+  const { enqueue } = useUploadQueue();
+  const mentions = useMentionAutocomplete({
+    text,
+    onChange: (next) => {
+      setText(next);
+      setError(null);
+    },
+  });
   const [media, setMedia] = useState<PickedMedia | null>(null);
-  const [publishing, setPublishing] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const canUpload = useUploadsEnabled();
@@ -75,47 +93,56 @@ export default function ComposeScreen() {
     }
   };
 
-  const publish = async () => {
-    const content = text.trim();
+  /**
+   * Hands the work to the upload queue and leaves immediately.
+   *
+   * This used to hold the composer open until Cloudinary had the whole file,
+   * which on a campus connection is a long time to stare at a spinner for
+   * something the user has already decided to do. The screen closes now and
+   * the upload finishes behind whatever they do next; the bar at the top of
+   * the window reports it, and a toast plus a haptic confirm it.
+   *
+   * The cost is that a failure surfaces after the composer has gone, which is
+   * why the toast names what failed rather than just saying something went
+   * wrong. Errors that can be caught BEFORE leaving -- empty text -- are still
+   * caught here.
+   */
+  const publish = () => {
+    // Plain `@handle` while composing; markers only at the point of storing.
+    const content = mentions.serialize(text).trim();
     if (!content) return;
 
     // A video preview keeps playing (and keeps its audio) through an upload
     // that can take several seconds. Cut it the moment submission begins,
     // not whenever the screen eventually unmounts.
     mediaRef.current?.pause();
-    setPublishing(true);
     setError(null);
 
-    // The file goes to Cloudinary first: the post needs a hosted URL, and the
-    // server rejects a media_url that is not from our own cloud. A failed
-    // upload stops the publish rather than quietly posting text alone.
-    let mediaUrl: string | undefined;
-    if (media && canUpload) {
-      setUploading(true);
-      const uploaded = await uploadMedia(media, "posts");
-      setUploading(false);
+    const attachment = media && canUpload ? media : null;
+    // A plain noun, not copy.sticker -- that is the composer's headline
+    // ("SAY SOMETHING"), and the pill was reading "Sharing say something".
+    // Anonymous posts are still posts.
+    const label = "Post";
 
-      if (!uploaded.success) {
-        setPublishing(false);
-        setError(uploaded.error);
-        return;
-      }
-      mediaUrl = uploaded.url;
-    }
-
-    const result = await createPost(content, mediaUrl, "public", media?.kind ?? "text");
-
-    setPublishing(false);
-
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    enqueue({
+      label,
+      kind: "posts",
+      media: attachment,
+      commit: async (mediaUrl) => {
+        const result = await createPost(
+          content,
+          mediaUrl ?? undefined,
+          "public",
+          topic,
+          attachment?.kind ?? "text"
+        );
+        return result.success
+          ? { ok: true }
+          : { ok: false, error: `${label} failed: ${result.error}` };
+      },
+    });
     setText("");
     setMedia(null);
-
     router.replace("/(tabs)/home");
   };
 
@@ -143,10 +170,11 @@ export default function ComposeScreen() {
             autoCapitalize="sentences"
             autoCorrect
             value={text}
-            onChangeText={(value) => {
-              setText(value);
-              setError(null);
-            }}
+            onChangeText={mentions.handleChangeText}
+            onSelectionChange={mentions.onSelectionChange}
+            // Controlled only for the render that follows an insert, so the
+            // caret lands past the marker rather than past the visible label.
+            selection={mentions.selection}
             style={{
               minHeight: media ? 110 : 180,
               borderRadius: radius.lg,
@@ -159,6 +187,64 @@ export default function ComposeScreen() {
               textAlignVertical: "top",
             }}
           />
+
+          <MentionSuggestions
+            open={mentions.open}
+            query={mentions.query}
+            loading={mentions.loading}
+            people={mentions.suggestions}
+            onSelect={mentions.select}
+          />
+
+          {kind === "post" ? (
+            <View style={{ gap: spacing.sm }}>
+              <Text variant="micro" color="textMuted">
+                ADD A CATEGORY (OPTIONAL)
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+                {COMPOSER_TOPICS.map((option) => {
+                  const selected = option.topic === topic;
+                  return (
+                    <PressableScale
+                      key={option.topic}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Category ${option.label}`}
+                      // Tapping the selected chip clears it: with no "none"
+                      // option, choosing a category by accident would
+                      // otherwise be permanent for that post.
+                      onPress={() => setTopic(selected ? null : option.topic)}
+                      style={{
+                        minHeight: 40,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: spacing.xs,
+                        paddingHorizontal: spacing.sm,
+                        borderRadius: radius.full,
+                        backgroundColor: selected ? option.color : colors.surface,
+                        borderWidth: 1,
+                        borderColor: selected ? option.color : colors.border,
+                      }}
+                    >
+                      <Icon
+                        name={option.icon}
+                        size={15}
+                        color={selected ? foregroundOn(option.color) : colors.textSecondary}
+                      />
+                      <Text
+                        variant="label"
+                        style={{
+                          color: selected ? foregroundOn(option.color) : colors.textSecondary,
+                        }}
+                      >
+                        {option.label}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
 
           {media ? (
             <>
@@ -207,8 +293,9 @@ export default function ComposeScreen() {
           ) : null}
 
           <Button
-            label={uploading ? "Uploading media" : copy.action}
-            loading={publishing}
+            // No loading state: the button does not wait for anything any
+            // more. The bar at the top of the window owns progress now.
+            label={copy.action}
             disabled={!text.trim()}
             onPress={publish}
           />

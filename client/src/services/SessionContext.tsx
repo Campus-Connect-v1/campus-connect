@@ -1,5 +1,6 @@
 import { router } from "expo-router";
 
+import { clearStoryGroups } from "../features/stories/cache";
 import { disconnectSocket, getSocket } from "./socket";
 import { registerForPushNotificationsAsync, unregisterPushNotificationsAsync } from "./notifications";
 import {
@@ -148,6 +149,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // Before clearing local state: the socket authenticates with the token
     // this is about to drop, and it must not stay open as the previous user.
     disconnectSocket();
+    clearStoryGroups();
     setUser(null);
     setProfile(null);
     setStats(null);
@@ -164,6 +166,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // The socket authenticated with the now-expired token; leaving it open
       // would keep pushing the previous session's events at the sign-in screen.
       disconnectSocket();
+      clearStoryGroups();
       setUser(null);
       setProfile(null);
       setStats(null);

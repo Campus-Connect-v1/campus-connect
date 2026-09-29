@@ -30,6 +30,7 @@ import {
   getCourses,
 } from "../controllers/user.controller.js";
 import authenticate from "../middleware/auth.js";
+import { cacheResponse } from "../utils/responseCache.js";
 import {
   updateProfileValidation,
   interestValidation,
@@ -279,9 +280,13 @@ router.get("/search", searchValidation, searchUsers);
  *     tags: [Discovery]
  *     summary: Get connection recommendations
  */
+// The heaviest query in the API (a users self-join plus four derived-table
+// joins). Ten minutes of staleness is invisible here, and the caller's own
+// connection writes clear it immediately (user.controller.js).
 router.get(
   "/recommendations",
   recommendationsValidation,
+  cacheResponse({ tag: "recs", ttl: 10 * 60, scope: "user" }),
   getConnectionRecommendations
 );
 

@@ -20,6 +20,20 @@ export interface MediaProps extends Omit<ImageProps, "style"> {
 }
 
 export function Media({ scrim, children, rounded = "md", style, ...rest }: MediaProps) {
+  /**
+   * Ties the loaded image to the URL it came from.
+   *
+   * FlatList recycles a row's views for a different post as you scroll. Without
+   * this, expo-image keeps showing the PREVIOUS post's photo in that recycled
+   * view until the new one finishes downloading, so a fast scroll shows the
+   * wrong picture under the right caption. Changing the key clears it instead.
+   *
+   * An explicit recyclingKey on the caller still wins.
+   */
+  const source = rest.source as { uri?: string } | string | number | undefined;
+  const uri =
+    typeof source === "string" ? source : typeof source === "object" ? source?.uri : undefined;
+
   return (
     <View
       style={[
@@ -27,7 +41,13 @@ export function Media({ scrim, children, rounded = "md", style, ...rest }: Media
         style as ViewStyle,
       ]}
     >
-      <Image contentFit="cover" transition={220} {...rest} style={StyleSheet.absoluteFill} />
+      <Image
+        contentFit="cover"
+        transition={220}
+        recyclingKey={uri}
+        {...rest}
+        style={StyleSheet.absoluteFill}
+      />
       {scrim ? (
         <LinearGradient
           colors={

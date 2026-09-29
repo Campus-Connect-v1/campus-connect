@@ -2,6 +2,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { db } from "../config/db.js";
 import { emitToUser } from "../realtime.js";
+import { sendToUsers } from "../services/push/index.js";
 
 // How long two identical unread notifications are treated as the same event.
 // Sized for double-taps and retried requests, not for genuine repeat activity.
@@ -16,8 +17,6 @@ const FAN_OUT_CHUNK_SIZE = 500;
 // notify() swallows its errors, so a rejected INSERT would vanish silently.
 const TITLE_MAX = 255;
 const BODY_MAX = 500;
-const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
-const EXPO_PUSH_CHUNK_SIZE = 100;
 
 // How long a notification stays open to being bundled into. Six hours because
 // a like on a morning post and a like that afternoon are the same event to the
@@ -36,63 +35,6 @@ const MAX_PUSHES_PER_HOUR = 12;
 
 const clamp = (value, max) =>
   typeof value === "string" && value.length > max ? value.slice(0, max) : value;
-
-const isExpoPushToken = (token) =>
-  typeof token === "string" &&
-  /^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/.test(token);
-
-const sendExpoPushBatch = async (messages) => {
-  if (!messages.length) return;
-  const headers = {
-    Accept: "application/json",
-    "Accept-Encoding": "gzip, deflate",
-    "Content-Type": "application/json",
-  };
-  if (process.env.EXPO_ACCESS_TOKEN) {
-    headers.Authorization = `Bearer ${process.env.EXPO_ACCESS_TOKEN}`;
-  }
-
-  const response = await fetch(EXPO_PUSH_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(messages),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Expo push answered ${response.status}`);
-  }
-
-  const payload = await response.json();
-  const tickets = Array.isArray(payload.data) ? payload.data : [];
-
-  // Accepted messages get a ticket id; the receipt for it is collected later,
-  // which is where DeviceNotRegistered normally shows up.
-  void recordTickets(tickets, messages);
-
-  const invalidTokens = [];
-  tickets.forEach((ticket, index) => {
-    if (ticket.status === "error") {
-      console.error(
-        "Expo push ticket error:",
-        ticket.message,
-        ticket.details || ""
-      );
-      if (ticket.details?.error === "DeviceNotRegistered" && messages[index]?.to) {
-        invalidTokens.push(messages[index].to);
-      }
-    }
-  });
-
-  if (invalidTokens.length) {
-    const placeholders = invalidTokens.map(() => "?").join(",");
-    await db.execute(
-      `UPDATE user_push_tokens
-       SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-       WHERE expo_push_token IN (${placeholders})`,
-      invalidTokens
-    );
-  }
-};
 
 /**
  * "HH:MM:SS" in the given IANA zone, or null if the zone is unrecognised.
@@ -166,76 +108,43 @@ const pushAllowed = async (userId) => {
   }
 };
 
+// Delivery itself lives in services/push. What stays here is the notification
+// policy: whether this user should be buzzed right now, and recording that
+// they were so the hourly ceiling and bundle cooldown can see it.
 const deliverPush = async (notification) => {
   if (!(await pushAllowed(notification.user_id))) return;
 
-  const [rows] = await db.execute(
-    `SELECT pt.expo_push_token
-     FROM user_push_tokens pt
-     JOIN users u ON u.user_id = pt.user_id
-     WHERE pt.user_id = ? AND pt.is_active = 1 AND u.notification_push = 1`,
-    [notification.user_id]
-  );
-  const tokens = rows.map((row) => row.expo_push_token).filter(isExpoPushToken);
+  const { accepted } = await sendToUsers([notification.user_id], {
+    title: notification.title,
+    body: notification.body,
+    data: {
+      notification_id: notification.notification_id,
+      type: notification.type,
+      resource_type: notification.resource_type,
+      resource_id: notification.resource_id,
+    },
+  });
 
-  for (let i = 0; i < tokens.length; i += EXPO_PUSH_CHUNK_SIZE) {
-    const messages = tokens.slice(i, i + EXPO_PUSH_CHUNK_SIZE).map((to) => ({
-      to,
-      sound: "default",
-      title: notification.title,
-      body: notification.body || undefined,
-      data: {
-        notification_id: notification.notification_id,
-        type: notification.type,
-        resource_type: notification.resource_type,
-        resource_id: notification.resource_id,
-      },
-    }));
-    await sendExpoPushBatch(messages);
-
-    // Stamped after a successful send, so a failed push does not consume the
-    // hourly allowance or start the bundle cooldown.
-    if (notification.notification_id) {
-      await db.execute(
-        `UPDATE notifications SET last_pushed_at = NOW() WHERE notification_id = ?`,
-        [notification.notification_id]
-      );
-    }
-  }
-};
-
-const deliverPushMany = async (userIds, notification) => {
-  for (let i = 0; i < userIds.length; i += FAN_OUT_CHUNK_SIZE) {
-    const chunk = userIds.slice(i, i + FAN_OUT_CHUNK_SIZE);
-    const placeholders = chunk.map(() => "?").join(",");
-    const [rows] = await db.execute(
-      `SELECT pt.expo_push_token
-       FROM user_push_tokens pt
-       JOIN users u ON u.user_id = pt.user_id
-       WHERE pt.is_active = 1
-         AND u.notification_push = 1
-         AND pt.user_id IN (${placeholders})`,
-      chunk
+  // Stamped only when a device accepted it, so a failed push does not consume
+  // the hourly allowance or start the bundle cooldown.
+  if (accepted > 0 && notification.notification_id) {
+    await db.execute(
+      `UPDATE notifications SET last_pushed_at = NOW() WHERE notification_id = ?`,
+      [notification.notification_id]
     );
-    const tokens = rows.map((row) => row.expo_push_token).filter(isExpoPushToken);
-
-    for (let offset = 0; offset < tokens.length; offset += EXPO_PUSH_CHUNK_SIZE) {
-      await sendExpoPushBatch(
-        tokens.slice(offset, offset + EXPO_PUSH_CHUNK_SIZE).map((to) => ({
-          to,
-          sound: "default",
-          title: notification.title,
-          body: notification.body || undefined,
-          data: {
-            type: notification.type,
-            resource_type: notification.resourceType,
-            resource_id: notification.resourceId,
-          },
-        }))
-      );
-    }
   }
 };
+
+const deliverPushMany = (userIds, notification) =>
+  sendToUsers(userIds, {
+    title: notification.title,
+    body: notification.body,
+    data: {
+      type: notification.type,
+      resource_type: notification.resourceType,
+      resource_id: notification.resourceId,
+    },
+  });
 
 /**
  * Create a single notification.
@@ -690,171 +599,5 @@ export const clearNotificationsModel = async (userId) => {
     return result.affectedRows || 0;
   } catch (error) {
     throw new Error(`Database error in clearNotifications: ${error.message}`);
-  }
-};
-
-export const registerPushTokenModel = async (
-  userId,
-  { token, platform = "unknown", deviceId = null }
-) => {
-  if (!isExpoPushToken(token)) throw new Error("Invalid Expo push token");
-  const tokenId = `push_${uuidv4()}`;
-  await db.execute(
-    `INSERT INTO user_push_tokens
-       (token_id, user_id, expo_push_token, platform, device_id, is_active)
-     VALUES (?, ?, ?, ?, ?, 1)
-     ON DUPLICATE KEY UPDATE
-       user_id = VALUES(user_id),
-       platform = VALUES(platform),
-       device_id = VALUES(device_id),
-       is_active = 1,
-       updated_at = CURRENT_TIMESTAMP`,
-    [tokenId, userId, token, platform, deviceId]
-  );
-  return { token, platform, device_id: deviceId };
-};
-
-export const unregisterPushTokenModel = async (userId, token) => {
-  const [result] = await db.execute(
-    `UPDATE user_push_tokens
-     SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-     WHERE user_id = ? AND expo_push_token = ?`,
-    [userId, token]
-  );
-  return result.affectedRows > 0;
-};
-
-// ---------------------------------------------------------------------------
-// Delivery receipts
-//
-// Expo's push API is two-phase. POST /send returns a ticket per message, which
-// only says the message was accepted for delivery. Whether the device actually
-// received it is answered later by GET /getPushNotificationReceipts, keyed by
-// ticket id.
-//
-// This matters for one reason: DeviceNotRegistered -- the app was uninstalled
-// or the token rotated -- almost always surfaces in the RECEIPT, not the
-// ticket. Inspecting only tickets, as this file did, prunes a small minority
-// of dead tokens and leaves the rest active forever, so every future fan-out
-// keeps paying to send to phones that will never receive anything.
-// ---------------------------------------------------------------------------
-
-// getReceipts, not getPushNotificationReceipts -- the latter 404s. Probed
-// against the live API rather than trusted from memory.
-const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
-const RECEIPT_CHUNK_SIZE = 300;
-
-/** Remember a ticket so its receipt can be collected later. */
-const recordTickets = async (tickets, messages) => {
-  const rows = [];
-  tickets.forEach((ticket, index) => {
-    const to = messages[index]?.to;
-    if (ticket?.status === "ok" && ticket.id && to) rows.push([ticket.id, to]);
-  });
-
-  if (!rows.length) return;
-
-  try {
-    const placeholders = rows.map(() => "(?, ?)").join(", ");
-    await db.execute(
-      `INSERT IGNORE INTO push_receipts (ticket_id, expo_push_token) VALUES ${placeholders}`,
-      rows.flat()
-    );
-  } catch (error) {
-    // Losing a receipt row costs us one token cleanup, not a notification.
-    console.error("recordTickets failed:", error.message);
-  }
-};
-
-/**
- * Collect outstanding receipts and deactivate the tokens that failed.
- *
- * Safe to call on a timer. Expo keeps receipts for roughly 24 hours, so
- * anything older is abandoned rather than retried forever.
- *
- * Returns a small summary, which is what makes it testable without a device.
- */
-export const processPushReceipts = async () => {
-  const summary = { checked: 0, deactivated: 0, errors: 0 };
-
-  try {
-    const [pending] = await db.execute(
-      `SELECT ticket_id, expo_push_token
-       FROM push_receipts
-       WHERE checked_at IS NULL
-         AND created_at > NOW() - INTERVAL 24 HOUR
-       ORDER BY created_at ASC
-       LIMIT ${RECEIPT_CHUNK_SIZE}`
-    );
-
-    if (pending.length === 0) {
-      // Opportunistically drop rows too old to ever resolve, so the table does
-      // not grow without bound on a quiet instance.
-      await db.execute(
-        `DELETE FROM push_receipts WHERE created_at < NOW() - INTERVAL 48 HOUR`
-      );
-      return summary;
-    }
-
-    const byTicket = new Map(pending.map((r) => [r.ticket_id, r.expo_push_token]));
-
-    const headers = { Accept: "application/json", "Content-Type": "application/json" };
-    if (process.env.EXPO_ACCESS_TOKEN) {
-      headers.Authorization = `Bearer ${process.env.EXPO_ACCESS_TOKEN}`;
-    }
-
-    const response = await fetch(EXPO_RECEIPTS_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ ids: [...byTicket.keys()] }),
-    });
-
-    if (!response.ok) throw new Error(`Expo receipts answered ${response.status}`);
-
-    const payload = await response.json();
-    const receipts = payload?.data ?? {};
-    const dead = [];
-    const resolved = [];
-
-    for (const [ticketId, receipt] of Object.entries(receipts)) {
-      resolved.push(ticketId);
-      summary.checked++;
-      if (receipt?.status !== "error") continue;
-
-      summary.errors++;
-      const reason = receipt.details?.error;
-      if (reason === "DeviceNotRegistered") {
-        const token = byTicket.get(ticketId);
-        if (token) dead.push(token);
-      } else {
-        // MessageTooBig, MessageRateExceeded, InvalidCredentials -- ours to
-        // fix, not the device's, so the token stays active.
-        console.error("push receipt error:", reason, receipt.message ?? "");
-      }
-    }
-
-    if (dead.length) {
-      const placeholders = dead.map(() => "?").join(",");
-      const [result] = await db.execute(
-        `UPDATE user_push_tokens
-         SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-         WHERE expo_push_token IN (${placeholders}) AND is_active = 1`,
-        dead
-      );
-      summary.deactivated = result.affectedRows;
-    }
-
-    if (resolved.length) {
-      const placeholders = resolved.map(() => "?").join(",");
-      await db.execute(
-        `UPDATE push_receipts SET checked_at = NOW() WHERE ticket_id IN (${placeholders})`,
-        resolved
-      );
-    }
-
-    return summary;
-  } catch (error) {
-    console.error("processPushReceipts failed:", error.message);
-    return summary;
   }
 };

@@ -1,7 +1,13 @@
 import express from "express";
 import { getUniversityDomains } from "../controllers/university.controller.js";
 import { campusController } from "../controllers/university.controller.js";
+import { cacheResponse } from "../utils/responseCache.js";
 const router = express.Router();
+
+// Every route here is a public, read-only lookup of reference data that only
+// the admin API changes, and admin.routes.js invalidates this tag on any
+// write -- so an hour is safe, and the app requests these on most screens.
+router.use(cacheResponse({ tag: "university", ttl: 60 * 60 }));
 
 /**
  * @swagger

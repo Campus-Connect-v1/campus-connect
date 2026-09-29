@@ -1,5 +1,7 @@
 // socket.js
 import { Server } from "socket.io";
+import { resolveMessageContext } from "./utils/messageContext.js";
+import { isOwnMediaUrl } from "./config/cloudinary.js";
 import Message from "./models/message.model.js";
 import Conversation from "./models/conversation.model.js"; // NEW
 import { findByEmail, findById } from "./models/user.model.js";
@@ -135,7 +137,7 @@ export default function socketServer(httpServer) {
       console.log(`✅ User connected: ${userId} (${socket.id})`);
     }
 
-    socket.on("send_message", async ({ receiverId, content }) => {
+    socket.on("send_message", async ({ receiverId, content, context, media }) => {
       try {
         const senderId = socket.user.id;
         console.log(`📨 Message from ${senderId} to ${receiverId}`);
@@ -161,11 +163,39 @@ export default function socketServer(httpServer) {
           `✅ Receiver found: ${receiver.email} (ID: ${actualReceiverId})`
         );
 
+        // Resolved from the story row, not from the payload: see
+        // utils/messageContext.js for why the client is not trusted with the
+        // text and image of its own quote. Null when it does not check out,
+        // and the message is then sent as an ordinary one.
+        /**
+         * Only media we host. `media.url` is a client-supplied string, so
+         * without this a message could point anywhere -- a pixel that reports
+         * when it was opened, or a URL whose contents change later. Same rule
+         * createPost already applies to post media.
+         *
+         * A rejected attachment drops to a text message rather than failing
+         * the send, so a bad upload costs the picture, not the message.
+         */
+        const attachment =
+          media?.url && isOwnMediaUrl(media.url)
+            ? { url: media.url, type: media.type === "video" ? "video" : "image" }
+            : null;
+
+        const resolvedContext = await resolveMessageContext(context, {
+          senderId,
+          receiverId: actualReceiverId,
+        });
+
         // Save message in MongoDB (EXISTING CODE - UNCHANGED)
         const msg = await Message.create({
           senderId: senderId,
           receiverId: actualReceiverId,
-          content: content,
+          // An attachment can travel with no caption, but the column is
+          // required, so an empty body becomes a single space rather than
+          // failing validation.
+          content: content || (attachment ? " " : content),
+          ...(resolvedContext ? { context: resolvedContext } : {}),
+          ...(attachment ? { media: attachment } : {}),
         });
 
         console.log("💾 Message saved to MongoDB");
@@ -231,7 +261,9 @@ export default function socketServer(httpServer) {
               "Campus user",
             email: receiver.email,
           },
-          content: content,
+          content: msg.content,
+          context: resolvedContext,
+          media: attachment,
           createdAt: msg.createdAt,
         };
 

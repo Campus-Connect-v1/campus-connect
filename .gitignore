@@ -7,3 +7,8 @@
 .env.local
 **/.env
 **/.env.local
+
+# Firebase service-account keys. These are send-authority for push and
+# must never reach the repo, whatever they are named.
+*firebase-adminsdk*.json
+*service-account*.json

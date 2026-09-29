@@ -9,6 +9,12 @@ export interface ApiPost {
   content: string | null;
   media_url: string | null;
   media_type: MediaType | null;
+  /**
+   * The home rail's category chip, or null. Null on every post written before
+   * topics existed, and on anyone who skipped the picker -- those still appear
+   * in the main feed, just not under a chip.
+   */
+  topic: string | null;
   /** Non-null only when media_type is "poll". */
   poll_id: string | null;
   visibility: "public" | "connections" | "private";
@@ -51,7 +57,12 @@ export interface FeedPage {
  * back to it when no cursor has been issued yet — which also means this works
  * unchanged against a server that predates cursors.
  */
-export async function fetchFeed(limit = 20, offset = 0, cursor: string | null = null) {
+export async function fetchFeed(
+  limit = 20,
+  offset = 0,
+  cursor: string | null = null,
+  topic: string | null = null
+) {
   const result = await request<{
     count: number;
     posts?: ApiPost[];
@@ -60,7 +71,12 @@ export async function fetchFeed(limit = 20, offset = 0, cursor: string | null = 
     mode?: string;
   }>(() =>
     api.get("/social/posts/feed", {
-      params: cursor ? { limit, cursor } : { limit, offset },
+      params: {
+        ...(cursor ? { limit, cursor } : { limit, offset }),
+        // Omitted entirely when unset, so a server that predates topics sees
+        // exactly the request it saw before.
+        ...(topic ? { topic } : {}),
+      },
     })
   );
 
@@ -154,7 +170,8 @@ export function createPost(
   content: string,
   mediaUrl?: string,
   visibility: PostVisibility = "public",
-  mediaType: MediaType = "text"
+  topic?: string | null,
+  mediaType: MediaType = "image"
 ) {
   return request<{ post: ApiCreatedPost }>(() =>
     api.post("/social/posts", {
@@ -162,6 +179,7 @@ export function createPost(
       media_url: mediaUrl,
       media_type: mediaUrl ? mediaType : "text",
       visibility,
+      ...(topic ? { topic } : {}),
     })
   );
 }

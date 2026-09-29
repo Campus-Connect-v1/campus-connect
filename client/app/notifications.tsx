@@ -46,6 +46,7 @@ const ICON_FOR: Record<string, IconName> = {
   group_invite: "connect",
   story_view: "visible",
   new_post: "home",
+  mention: "profile",
 };
 
 function since(iso: string) {

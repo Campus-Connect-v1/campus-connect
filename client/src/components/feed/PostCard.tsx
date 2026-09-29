@@ -14,6 +14,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { Avatar, Loader, Media, PressableScale, Text, Icon, type IconName } from "@/src/components/ui";
+import { MentionText } from "@/src/components/social/MentionText";
 import { PollCard } from "./PollCard";
 import type { FeedPost } from "@/src/features/feed/types";
 import { culture, radius, spacing } from "@/src/styles/theme";
@@ -21,6 +22,16 @@ import { useTheme } from "@/src/styles/useTheme";
 
 interface Props {
   post: FeedPost;
+  /**
+   * Saved state as a separate primitive, overriding `post.saved`.
+   *
+   * This exists so a list does not have to spread a new post object per row to
+   * inject it. `{ ...item.post, saved }` builds a fresh object on every render,
+   * which defeats the memo below completely -- the props never compare equal,
+   * so every visible card re-rendered whenever anything on the screen changed.
+   * A boolean compares by value and costs nothing.
+   */
+  saved?: boolean;
   onToggleLike: (id: string) => void;
   onToggleSave: (id: string) => void;
   /** Opens the overflow menu. Omitted where the menu does not apply. */
@@ -140,12 +151,15 @@ function PostVideo({ uri, accessibilityLabel }: { uri: string; accessibilityLabe
  */
 export const PostCard = memo(function PostCard({
   post,
+  saved,
   onToggleLike,
   onToggleSave,
   onOpenOptions,
   linkToDetail = true,
 }: Props) {
   const { colors } = useTheme();
+  // Falls back to the flag on the post, for callers that already carry it.
+  const isSaved = saved ?? post.saved;
   const openComments = linkToDetail ? () => router.push(`/post/${post.id}`) : undefined;
 
   // On the post's own detail screen there is nowhere left for a tap on the
@@ -244,11 +258,11 @@ export const PostCard = memo(function PostCard({
       <View style={{ flex: 1 }} />
       <StatPill
         icon="save"
-        label={post.saved ? "Saved" : "Save"}
-        active={post.saved}
+        label={isSaved ? "Saved" : "Save"}
+        active={isSaved}
         tint={culture.yellow}
         foreground={culture.ink}
-        accessibilityLabel={post.saved ? "Remove from saved" : "Save"}
+        accessibilityLabel={isSaved ? "Remove from saved" : "Save"}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onToggleSave(post.id);
@@ -277,7 +291,7 @@ export const PostCard = memo(function PostCard({
         }}
       >
         {header}
-        <Text variant="body">{post.caption}</Text>
+        <MentionText variant="body" content={post.caption} />
         <PollCard pollId={post.pollId} />
         {actions}
       </PressableScale>
@@ -301,7 +315,7 @@ export const PostCard = memo(function PostCard({
         }}
       >
         {header}
-        <Text variant="body">{post.caption}</Text>
+        <MentionText variant="body" content={post.caption} />
         {actions}
       </PressableScale>
     );
@@ -323,7 +337,7 @@ export const PostCard = memo(function PostCard({
       >
         {header}
         <PostVideo uri={post.image} accessibilityLabel={`Video from ${post.author.name}`} />
-        <Text variant="body">{post.caption}</Text>
+        <MentionText variant="body" content={post.caption} />
         {actions}
       </View>
     );
@@ -362,9 +376,7 @@ export const PostCard = memo(function PostCard({
           >
             {header}
             <View style={{ gap: spacing.sm }}>
-              <Text variant="body" onMedia numberOfLines={3}>
-                {post.caption}
-              </Text>
+              <MentionText variant="body" onMedia numberOfLines={3} content={post.caption} />
               {actions}
             </View>
           </Animated.View>

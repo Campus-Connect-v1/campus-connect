@@ -3,6 +3,8 @@ import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { UploadIndicator } from "@/src/components/upload/UploadIndicator";
+import { UploadQueueProvider } from "@/src/services/UploadQueueContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { addNotificationResponseListener } from "@/src/services/notifications";
@@ -87,9 +89,15 @@ export default function RootLayout() {
                 <UnreadProvider>
                   <AttentionProvider>
                     <LocationSharingProvider>
-                      <Themed>
-                        <Stack screenOptions={{ headerShown: false }} />
-                      </Themed>
+                      {/* Above the navigator, so an upload started in the
+                          composer keeps running after that screen closes --
+                          which is the whole point of it. */}
+                      <UploadQueueProvider>
+                        <Themed>
+                          <Stack screenOptions={{ headerShown: false }} />
+                          <UploadIndicator />
+                        </Themed>
+                      </UploadQueueProvider>
                     </LocationSharingProvider>
                   </AttentionProvider>
                 </UnreadProvider>
