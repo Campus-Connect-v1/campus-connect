@@ -305,7 +305,7 @@ export const getFeedPostsModel = async (
     const likesQuery = `
       SELECT post_id, COUNT(*) as like_count 
       FROM post_likes 
-      WHERE post_id IN (${placeholders})
+      WHERE post_id IN (${placeholders}) AND user_id IN (SELECT user_id FROM users WHERE is_active = 1)
       GROUP BY post_id
     `;
     const [likeCounts] = await db.execute(likesQuery, postIds);
@@ -314,7 +314,7 @@ export const getFeedPostsModel = async (
     const commentsQuery = `
       SELECT post_id, COUNT(*) as comment_count 
       FROM post_comments 
-      WHERE post_id IN (${placeholders}) AND is_active = 1
+      WHERE post_id IN (${placeholders}) AND is_active = 1 AND user_id IN (SELECT user_id FROM users WHERE is_active = 1)
       GROUP BY post_id
     `;
     const [commentCounts] = await db.execute(commentsQuery, postIds);
@@ -374,8 +374,8 @@ export const getPostByIdModel = async (postId, userId) => {
         pol.poll_id
       FROM posts p
       JOIN users u ON p.user_id = u.user_id
-      LEFT JOIN post_likes pl ON p.post_id = pl.post_id
-      LEFT JOIN post_comments pc ON p.post_id = pc.post_id AND pc.is_active = 1
+      LEFT JOIN post_likes pl ON p.post_id = pl.post_id AND pl.user_id IN (SELECT user_id FROM users WHERE is_active = 1)
+      LEFT JOIN post_comments pc ON p.post_id = pc.post_id AND pc.is_active = 1 AND pc.user_id IN (SELECT user_id FROM users WHERE is_active = 1)
       LEFT JOIN polls pol ON pol.post_id = p.post_id
       WHERE p.post_id = ? AND p.is_active = 1 AND u.is_active = 1
       GROUP BY p.post_id
@@ -485,6 +485,7 @@ export const getPostCommentsModel = async (postId, limit = 50, offset = 0, viewe
       LEFT JOIN (
         SELECT comment_id, COUNT(*) AS like_count
         FROM comment_likes
+        WHERE user_id IN (SELECT user_id FROM users WHERE is_active = 1)
         GROUP BY comment_id
       ) cl ON cl.comment_id = pc.comment_id
       LEFT JOIN comment_likes mine
@@ -628,8 +629,8 @@ export const getPostCountsModel = async (postId) => {
   try {
     const [[counts]] = await db.execute(
       `SELECT
-         (SELECT COUNT(*) FROM post_likes WHERE post_id = ?) AS like_count,
-         (SELECT COUNT(*) FROM post_comments WHERE post_id = ? AND is_active = 1) AS comment_count`,
+         (SELECT COUNT(*) FROM post_likes WHERE post_id = ? AND user_id IN (SELECT user_id FROM users WHERE is_active = 1)) AS like_count,
+         (SELECT COUNT(*) FROM post_comments WHERE post_id = ? AND is_active = 1 AND user_id IN (SELECT user_id FROM users WHERE is_active = 1)) AS comment_count`,
       [postId, postId]
     );
 
@@ -724,7 +725,7 @@ export const getCommentLikeStateModel = async (commentId, userId) => {
   try {
     const [[row]] = await db.execute(
       `SELECT
-         (SELECT COUNT(*) FROM comment_likes WHERE comment_id = ?) AS like_count,
+         (SELECT COUNT(*) FROM comment_likes WHERE comment_id = ? AND user_id IN (SELECT user_id FROM users WHERE is_active = 1)) AS like_count,
          (SELECT COUNT(*) FROM comment_likes WHERE comment_id = ? AND user_id = ?) AS liked`,
       [commentId, commentId, userId]
     );
@@ -815,8 +816,8 @@ export const getSavedPostsModel = async (userId, limit = 50, offset = 0) => {
          p.created_at, p.expires_at,
          u.user_id AS author_id, u.first_name, u.last_name,
          u.profile_picture_url, u.profile_headline,
-         (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id) AS like_count,
-         (SELECT COUNT(*) FROM post_comments WHERE post_id = p.post_id AND is_active = 1) AS comment_count,
+         (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id AND user_id IN (SELECT user_id FROM users WHERE is_active = 1)) AS like_count,
+         (SELECT COUNT(*) FROM post_comments WHERE post_id = p.post_id AND is_active = 1 AND user_id IN (SELECT user_id FROM users WHERE is_active = 1)) AS comment_count,
          (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id AND user_id = ?) AS has_liked,
          pol.poll_id
        FROM saved_posts sp
@@ -909,8 +910,8 @@ export const getUserPostsModel = async (
         p.visibility, p.created_at, p.expires_at,
         u.first_name, u.last_name, u.profile_picture_url, u.profile_headline,
         pol.poll_id,
-        (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id) AS like_count,
-        (SELECT COUNT(*) FROM post_comments WHERE post_id = p.post_id AND is_active = 1) AS comment_count,
+        (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id AND user_id IN (SELECT user_id FROM users WHERE is_active = 1)) AS like_count,
+        (SELECT COUNT(*) FROM post_comments WHERE post_id = p.post_id AND is_active = 1 AND user_id IN (SELECT user_id FROM users WHERE is_active = 1)) AS comment_count,
         (SELECT COUNT(*) FROM post_likes WHERE post_id = p.post_id AND user_id = ?) AS has_liked,
         (SELECT COUNT(*) FROM saved_posts WHERE post_id = p.post_id AND user_id = ?) AS has_saved
       FROM posts p
