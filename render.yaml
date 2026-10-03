@@ -86,3 +86,23 @@ services:
         value: red
       - key: WARNING
         value: yellow
+
+  # Public website: landing page, privacy policy, terms, support and account
+  # deletion -- the URLs App Store Connect and Google Play require. Static
+  # sites are free and do not count toward the 750 free instance-hours the API
+  # above uses, so this does not put the API at risk of being suspended.
+  #
+  # rootDir limits auto-deploys to commits that touch site/.
+  - type: web
+    name: campus-connect-site
+    runtime: static
+    rootDir: site
+    branch: main
+    buildCommand: node build.mjs
+    staticPublishPath: dist
+    autoDeployTrigger: commit
+    envVars:
+      # Shown on every page as the contact address. The build fails without
+      # it, so a placeholder can never reach production.
+      - key: SUPPORT_EMAIL
+        sync: false
