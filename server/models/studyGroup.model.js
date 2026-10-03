@@ -10,7 +10,7 @@ export class StudyGroup {
     FROM study_groups sg
     JOIN users u ON sg.created_by = u.user_id
     JOIN universities uni ON sg.university_id = uni.university_id
-    LEFT JOIN group_members gm ON sg.group_id = gm.group_id
+    LEFT JOIN group_members gm ON sg.group_id = gm.group_id AND gm.user_id IN (SELECT user_id FROM users WHERE is_active = 1)
     WHERE 1=1
   `;
     const params = [];
@@ -59,7 +59,7 @@ export class StudyGroup {
       FROM study_groups sg
       JOIN users u ON sg.created_by = u.user_id
       JOIN universities uni ON sg.university_id = uni.university_id
-      LEFT JOIN group_members gm ON sg.group_id = gm.group_id
+      LEFT JOIN group_members gm ON sg.group_id = gm.group_id AND gm.user_id IN (SELECT user_id FROM users WHERE is_active = 1)
       WHERE sg.group_id = ?
       GROUP BY sg.group_id
     `;

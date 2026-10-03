@@ -1,5 +1,6 @@
 import db from "../config/db.js";
 import { v4 as uuidv4 } from "uuid";
+import { forgetAccountStatus } from "../utils/accountStatus.js";
 
 // Get user by ID
 export const findById = async (userId) => {
@@ -1125,6 +1126,7 @@ export const deleteProfileModel = async (
     await conn.execute(`DELETE FROM user_sessions WHERE user_id = ?`, [userId]);
 
     await conn.commit();
+    forgetAccountStatus(userId);
 
     return {
       archived: archiveResult.affectedRows > 0,
@@ -1196,6 +1198,7 @@ export const recoverProfileModel = async (userId) => {
     await conn.execute(`DELETE FROM user_archive WHERE user_id = ?`, [userId]);
 
     await conn.commit();
+    forgetAccountStatus(userId);
 
     return { restored: restoreResult.affectedRows > 0 };
   } catch (error) {

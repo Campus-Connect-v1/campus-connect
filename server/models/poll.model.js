@@ -123,7 +123,7 @@ export const getPollOptionCountsModel = async (pollId) => {
          o.position,
          COUNT(v.vote_id) AS vote_count
        FROM poll_options o
-       LEFT JOIN poll_votes v ON v.option_id = o.option_id
+       LEFT JOIN poll_votes v ON v.option_id = o.option_id AND v.user_id IN (SELECT user_id FROM users WHERE is_active = 1)
        WHERE o.poll_id = ?
        GROUP BY o.option_id, o.option_text, o.position
        ORDER BY o.position ASC`,

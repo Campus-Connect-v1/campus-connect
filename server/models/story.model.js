@@ -320,7 +320,7 @@ export const getStoryByIdModel = async (storyId, viewerId) => {
         u.first_name,
         u.last_name,
         u.profile_picture_url,
-        (SELECT COUNT(*) FROM story_views v WHERE v.story_id = s.story_id) AS view_count,
+        (SELECT COUNT(*) FROM story_views v WHERE v.story_id = s.story_id AND v.user_id IN (SELECT user_id FROM users WHERE is_active = 1)) AS view_count,
         (SELECT COUNT(*) FROM story_views v2
           WHERE v2.story_id = s.story_id AND v2.user_id = ?) AS has_viewed,
         ${CAN_VIEW} AS can_view

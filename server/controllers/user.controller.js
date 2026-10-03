@@ -127,23 +127,25 @@ export const deleteProfile = async (req, res) => {
     const userId = req.user.id;
     const { deletion_reason, password } = req.body;
 
-    // Password confirmation. The client always sends one, so this branch
-    // always runs -- which is why the three undefined identifiers it used to
-    // reference (getUserByIdModel, bcrypt, deleteProfileModel, none of them
-    // imported) made account deletion a guaranteed ReferenceError and a
-    // generic 500. findById was already imported and is the right function;
-    // getUserByIdModel does not exist in the model at all.
-    if (password) {
-      const user = await findById(userId);
+    // Password confirmation. It used to reference three undefined identifiers
+    // (getUserByIdModel, bcrypt, deleteProfileModel, none of them imported),
+    // which made account deletion a guaranteed ReferenceError and a generic
+    // 500. findById was already imported and is the right function.
+    //
+    // Required server-side, not just in the app: without it, anything holding
+    // a token -- a stolen one included -- could delete the account outright.
+    // An account created with Google has no password to confirm; for those
+    // the token is the only credential there is.
+    const user = await findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Account not found" });
+    }
 
-      if (!user || !user.password_hash) {
-        return res.status(401).json({
-          message:
-            "Invalid password. Please confirm your password to delete your account.",
-        });
-      }
-
-      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    if (user.password_hash) {
+      const isPasswordValid =
+        typeof password === "string" &&
+        password.length > 0 &&
+        (await bcrypt.compare(password, user.password_hash));
 
       if (!isPasswordValid) {
         return res.status(401).json({

@@ -21,8 +21,7 @@
 // so deleting the users row removes posts (and through them comments, likes,
 // polls, mentions, reports and saves of those posts), comments, likes,
 // stories, story views, connections, follows, events the user created (and
-// their RSVPs), study groups the user created (and their members), group
-// memberships, RSVPs, notifications sent to or caused by the user, push
+// their RSVPs), group memberships, RSVPs, notifications sent to or caused by the user, push
 // tokens, sessions, interests, courses, availability, privacy settings and
 // password-reset codes. The tables WITHOUT a foreign key to users are cleaned
 // explicitly, before the users row:
@@ -30,6 +29,12 @@
 //   otps            keyed by email, not user id; matched on the archived email
 //   push_receipts   keyed by push token; matched through user_push_tokens
 //   user_archive    the archived copy itself
+//
+// Study groups the user created are handed to another member first (see
+// purgeMysql), so only a group nobody else belongs to is cascaded away.
+// Events the user created are not handed on: an event is its organiser's, and
+// it has been hidden since the account was deactivated, so its attendees
+// already saw it disappear 30 days earlier.
 //
 // Order per account: media, then MongoDB, then one MySQL transaction. MongoDB
 // and Cloudinary cannot join the transaction, so they go first. If the MySQL
@@ -121,6 +126,31 @@ const purgeMysql = async (userId, archivedEmail) => {
     await conn.execute(`DELETE FROM audit_logs WHERE user_id = ?`, [userId]);
     if (archivedEmail) {
       await conn.execute(`DELETE FROM otps WHERE email = ?`, [archivedEmail]);
+    }
+
+    // Study groups belong to their members as much as to whoever created
+    // them, so the cascade from the users row must not take them away from
+    // everyone else. Each group is handed to an active admin, or failing that
+    // the longest-standing active member, before the creator is deleted. Only
+    // a group with nobody left in it goes with the cascade.
+    const [groups] = await conn.execute(
+      `SELECT group_id FROM study_groups WHERE created_by = ?`,
+      [userId]
+    );
+    for (const { group_id } of groups) {
+      const [[heir]] = await conn.execute(
+        `SELECT m.user_id FROM group_members m
+           JOIN users u ON u.user_id = m.user_id AND u.is_active = 1
+          WHERE m.group_id = ? AND m.user_id <> ?
+          ORDER BY m.role = 'admin' DESC, m.joined_at ASC
+          LIMIT 1`,
+        [group_id, userId]
+      );
+      if (!heir) continue;
+      await conn.execute(`UPDATE study_groups SET created_by = ? WHERE group_id = ?`,
+        [heir.user_id, group_id]);
+      await conn.execute(`UPDATE group_members SET role = 'creator' WHERE group_id = ? AND user_id = ?`,
+        [group_id, heir.user_id]);
     }
 
     // The is_active guard re-checks inside the transaction, so an account

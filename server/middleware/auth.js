@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
+import { isAccountActive } from "../utils/accountStatus.js";
 
-export const authenticate = (req, res, next) => {
+export const authenticate = async (req, res, next) => {
   // Check if JWT_SECRET is available
   if (!process.env.JWT_SECRET) {
     console.error("Error: JWT_SECRET is not defined in environment variables");
@@ -22,10 +23,9 @@ export const authenticate = (req, res, next) => {
 
   const token = parts[1];
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
     if (err.name === "TokenExpiredError") {
       return res.status(401).json({ message: "Token expired" });
@@ -35,5 +35,19 @@ export const authenticate = (req, res, next) => {
       return res.status(401).json({ message: "Token verification failed" });
     }
   }
+
+  // A valid signature only proves the token was issued, not that the account
+  // still exists: a deleted account's token stays valid until it expires.
+  try {
+    if (!(await isAccountActive(decoded.id))) {
+      return res.status(401).json({ message: "Account is no longer active" });
+    }
+  } catch (err) {
+    console.error("Account status check failed:", err.message);
+    return res.status(503).json({ message: "Service temporarily unavailable" });
+  }
+
+  req.user = decoded;
+  next();
 };
 export default authenticate;
