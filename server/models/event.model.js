@@ -255,13 +255,16 @@ export class Event {
     FROM events e
     JOIN event_attendees ea ON e.event_id = ea.event_id
     JOIN universities uni ON e.university_id = uni.university_id
-    WHERE ea.user_id = '${userId}'
+    WHERE ea.user_id = ?
     ORDER BY e.start_time ASC
     LIMIT ${limitNum} OFFSET ${offset}
   `;
+    // userId is bound, never interpolated: it was pasted into the SQL as a
+    // quoted string. LIMIT and OFFSET stay inline because they are integers
+    // parsed above, and mysql2's execute() rejects placeholders there.
 
     try {
-      const [events] = await db.execute(query);
+      const [events] = await db.execute(query, [userId]);
       //   console.log("Events user is attending:", events); // for debugging the event failure. but the problem was the req.user.user_id which was wrong. it was req.user.id
       return events;
     } catch (error) {
