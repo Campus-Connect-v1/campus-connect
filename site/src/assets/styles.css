@@ -28,7 +28,7 @@ body {
   font: 400 17px/1.6 "Gilroy", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-img { max-width: 100%; display: block; }
+img { max-width: 100%; height: auto; display: block; }
 a { color: var(--link); text-underline-offset: 3px; }
 h1, h2, h3 { line-height: 1.15; margin: 0 0 .5em; }
 h1, .display { font-family: "Blackbold", "Gilroy", sans-serif; font-weight: 400; letter-spacing: .3px; }
