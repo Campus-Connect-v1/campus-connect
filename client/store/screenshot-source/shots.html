@@ -1,0 +1,365 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: G; src: url(../../assets/fonts/Gilroy-Regular.ttf); font-weight: 400; }
+@font-face { font-family: G; src: url(../../assets/fonts/Gilroy-Medium.ttf); font-weight: 500; }
+@font-face { font-family: G; src: url(../../assets/fonts/Gilroy-SemiBold.ttf); font-weight: 600; }
+@font-face { font-family: BB; src: url(../../assets/fonts/Blackbold/Blackbold.ttf); }
+:root {
+  --violet: #6C3BFF; --pink: #FF3D81; --yellow: #FFD84D; --lime: #B8FF5A;
+  --warm: #F8F7F4; --ink: #161616; --sunken: #EEECE7; --border: #E4E1DA;
+  --text2: #4B4740; --muted: #8A847A;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #888; font-family: G, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+img { display: block; object-fit: cover; }
+
+/* ---------- marketing slide ---------- */
+.slide { width: 440px; height: 956px; position: relative; overflow: hidden; }
+.slide .copy { position: absolute; top: 56px; left: 32px; right: 32px; text-align: center; z-index: 2; }
+.slide h1 { font-family: BB; font-weight: 400; font-size: 39px; line-height: 1.0; letter-spacing: 0.2px; }
+.slide .sub { font-size: 16.5px; font-weight: 500; line-height: 1.32; margin-top: 14px; opacity: 0.82; }
+.deco { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+
+.phone { position: absolute; left: 50%; top: 252px; width: 330px; height: 697px; margin-left: -165px;
+  background: #0d0d0d; border-radius: 56px; padding: 10px; z-index: 1;
+  box-shadow: 0 30px 60px rgba(0,0,0,.28), 0 0 0 1.5px rgba(255,255,255,.12) inset; }
+.phone .screen { width: 310px; height: 677px; border-radius: 46px; overflow: hidden; position: relative; background: var(--warm); }
+.phone .screen > .ui { width: 440px; height: 961px; transform: scale(0.70455); transform-origin: 0 0; position: relative; overflow: hidden; color: var(--ink); }
+.island { position: absolute; top: 19px; left: 50%; width: 90px; height: 26px; margin-left: -45px; background: #000; border-radius: 20px; z-index: 50; }
+
+/* ---------- in-app UI ---------- */
+.status { height: 62px; display: flex; align-items: center; justify-content: space-between; padding: 6px 38px 0 46px; font-weight: 600; font-size: 17px; position: relative; z-index: 40; }
+.status .r { display: flex; gap: 6px; align-items: center; }
+.tabbar { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); background: rgba(22,22,22,.92); border-radius: 999px; padding: 8px; display: flex; gap: 6px; align-items: center; z-index: 30; box-shadow: 0 10px 30px rgba(0,0,0,.22); }
+.tabbar .t { width: 50px; height: 50px; display: grid; place-items: center; color: rgba(255,255,255,.65); }
+.tabbar .t.on { width: auto; padding: 0 18px 0 14px; border-radius: 999px; display: flex; gap: 8px; font-weight: 600; font-size: 15px; }
+.row { display: flex; align-items: center; }
+.av { border-radius: 999px; object-fit: cover; flex: none; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; background: #fff; border: 1px solid var(--border); white-space: nowrap; }
+.h-title { font-family: BB; font-size: 34px; font-weight: 400; letter-spacing: .2px; }
+.muted { color: var(--muted); }
+.card { background: #fff; border-radius: 18px; }
+.scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,.72) 100%); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 999px; font-weight: 600; font-size: 14px; padding: 9px 16px; }
+.stack img { width: 24px; height: 24px; border-radius: 999px; border: 2px solid #fff; margin-left: -8px; }
+.stack img:first-child { margin-left: 0; }
+</style>
+</head>
+<body>
+<div id="out"></div>
+
+<script>
+// ---------- icons (stroke, rounded, Hugeicons-like) ----------
+const P = {
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4M17.5 14.8c2.2.5 3.6 2.3 4 5.2"/>',
+  cal: '<rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
+  map: '<path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.6"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4.3 4-6.5 8-6.5s7.2 2.2 8 6.5"/>',
+  heart: '<path d="M12 20.5s-8.5-5-8.5-11A4.8 4.8 0 0 1 12 6.8a4.8 4.8 0 0 1 8.5 2.7c0 6-8.5 11-8.5 11z"/>',
+  comment: '<path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20.5l1.6-5A8.5 8.5 0 1 1 21 11.5z"/>',
+  share: '<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>',
+  save: '<path d="M6 3.5h12v17.5l-6-4.5-6 4.5z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  send: '<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h10"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  pin: '<path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.6"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+  img: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  door: '<path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17M3 21h18"/><circle cx="15" cy="12" r="1"/>',
+  wifi: '<path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1"/>',
+  grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  edit: '<path d="M4 20h4L19.5 8.5a2.8 2.8 0 0 0-4-4L4 16z"/>',
+  locate: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+};
+const I = (n, s = 22, c = 'currentColor', w = 1.8, fill = 'none') =>
+  `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${fill}" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
+const im = (n) => `img/${n}.jpg`;
+
+const status = (dark) => `<div class="status" style="color:${dark ? '#fff' : 'var(--ink)'}">
+  <span>9:41</span>
+  <span class="r">
+    <svg width="19" height="12" viewBox="0 0 19 12" fill="currentColor"><rect x="0" y="8" width="3.2" height="4" rx="1"/><rect x="5" y="5.5" width="3.2" height="6.5" rx="1"/><rect x="10" y="3" width="3.2" height="9" rx="1"/><rect x="15" y="0" width="3.2" height="12" rx="1"/></svg>
+    <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 2.2c2.4 0 4.6.9 6.2 2.5l1.2-1.2A10.4 10.4 0 0 0 8.5.5 10.4 10.4 0 0 0 1.1 3.5l1.2 1.2a8.7 8.7 0 0 1 6.2-2.5zm0 3.5c1.4 0 2.8.6 3.8 1.5L13.5 6a7 7 0 0 0-10 0l1.2 1.2c1-.9 2.4-1.5 3.8-1.5zm0 3.4c-.6 0-1.1.2-1.5.6L8.5 11.2 10 9.7c-.4-.4-.9-.6-1.5-.6z"/></svg>
+    <svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="20" height="9" rx="2.2" fill="currentColor"/><path d="M25 4.5v4a2 2 0 0 0 0-4z" fill="currentColor" opacity=".45"/></svg>
+  </span></div>`;
+
+const TABS = [['home', 'Home', 'home'], ['users', 'Connect', 'connect'], ['cal', 'Events', 'events'], ['map', 'Campus', 'campus'], ['user', 'You', 'profile']];
+const HUE = { home: ['var(--violet)', '#F8F7F4'], connect: ['var(--pink)', '#161616'], events: ['var(--yellow)', '#161616'], campus: ['#F8F7F4', '#161616'], profile: ['var(--lime)', '#161616'] };
+const tabbar = (active) => `<div class="tabbar">${TABS.map(([ic, label, key]) =>
+  key === active
+    ? `<div class="t on" style="background:${HUE[key][0]};color:${HUE[key][1]}">${I(ic, 22, HUE[key][1], 2)}${label}</div>`
+    : `<div class="t">${I(ic, 23)}</div>`).join('')}</div>`;
+
+// ---------- screens ----------
+const S = {};
+
+S.home = () => `${status()}
+<div style="padding:4px 20px 0">
+  <div class="row" style="justify-content:space-between">
+    <div class="row" style="gap:12px">
+      <img class="av" src="${im('a1')}" style="width:44px;height:44px">
+      <div><div class="muted" style="font-size:14px;font-weight:500">Good morning</div><div style="font-size:19px;font-weight:600">Ama Mensah</div></div>
+    </div>
+    <div class="row" style="gap:10px">
+      <div style="width:44px;height:44px;border-radius:99px;background:#fff;border:1px solid var(--border);display:grid;place-items:center">${I('plus', 22)}</div>
+      <div style="width:44px;height:44px;border-radius:99px;background:#fff;border:1px solid var(--border);display:grid;place-items:center;position:relative">${I('bell', 22)}<span style="position:absolute;top:9px;right:11px;width:9px;height:9px;border-radius:9px;background:var(--pink);border:2px solid #fff"></span></div>
+    </div>
+  </div>
+  <div class="row" style="gap:14px;margin-top:20px;overflow:hidden">
+    <div style="text-align:center;width:70px;flex:none"><div style="width:68px;height:68px;border-radius:99px;border:2px dashed var(--borderStrong,#CBC7BE);display:grid;place-items:center;background:#fff">${I('plus', 24)}</div><div style="font-size:12.5px;margin-top:6px;font-weight:500">Your story</div></div>
+    ${[['a2', 'Kwame'], ['a5', 'Efua'], ['a3', 'Kofi'], ['a9', 'Nana'], ['a4', 'Yaw']].map(([a, n], i) => `
+    <div style="text-align:center;width:70px;flex:none"><div style="width:68px;height:68px;border-radius:99px;padding:3px;background:${i < 3 ? 'conic-gradient(var(--violet),var(--pink),var(--yellow),var(--violet))' : 'var(--border)'}"><img class="av" src="${im(a)}" style="width:62px;height:62px;border:3px solid var(--warm)"></div><div style="font-size:12.5px;margin-top:6px;font-weight:500">${n}</div></div>`).join('')}
+  </div>
+  <div style="position:relative;height:250px;border-radius:22px;overflow:hidden;margin-top:20px">
+    <img src="${im('confetti')}" style="width:100%;height:100%">
+    <div class="scrim"></div>
+    <div style="position:absolute;left:18px;top:16px" class="chip" ><span style="width:8px;height:8px;border-radius:9px;background:var(--pink)"></span>This week</div>
+    <div style="position:absolute;left:20px;right:20px;bottom:18px;color:#fff">
+      <div style="font-family:BB;font-size:34px;line-height:1">Freshers’ Week<br>kicks off Monday</div>
+      <div style="font-size:14.5px;margin-top:8px;opacity:.9;font-weight:500">42 events · Clubs fair, live music & more</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px;padding:16px">
+    <div class="row" style="gap:11px">
+      <img class="av" src="${im('a2')}" style="width:42px;height:42px">
+      <div style="flex:1"><div style="font-weight:600;font-size:16px">Kwame Asante</div><div class="muted" style="font-size:13px;font-weight:500">BSc Computer Science · 12m</div></div>
+      ${I('more', 22, 'var(--muted)')}
+    </div>
+    <div style="font-size:16px;line-height:1.4;margin-top:12px">Hackathon squad is complete 🚀 36 hours, zero sleep, one very good idea. Wish us luck!</div>
+    <img src="${im('study')}" style="width:100%;height:210px;border-radius:14px;margin-top:12px">
+    <div class="row" style="gap:20px;margin-top:14px;font-weight:600;font-size:15px">
+      <span class="row" style="gap:6px;color:var(--pink)">${I('heart', 22, 'var(--pink)', 1.8, 'var(--pink)')}248</span>
+      <span class="row" style="gap:6px">${I('comment', 22)}36</span>
+      <span class="row" style="gap:6px">${I('share', 21)}</span>
+      <span style="margin-left:auto">${I('save', 22)}</span>
+    </div>
+  </div>
+</div>
+${tabbar('home')}`;
+
+S.events = () => `${status()}
+<div style="padding:4px 20px 0">
+  <div class="row" style="justify-content:space-between"><div class="h-title">Events</div>
+    <div style="width:44px;height:44px;border-radius:99px;background:#fff;border:1px solid var(--border);display:grid;place-items:center">${I('search', 21)}</div></div>
+  <div class="row" style="gap:8px;margin-top:14px">
+    <span class="chip" style="background:var(--ink);color:#fff;border-color:var(--ink)">All</span>
+    <span class="chip">Today</span><span class="chip">🎵 Music</span><span class="chip">🏀 Sports</span><span class="chip">📚 Study</span>
+  </div>
+  <div style="position:relative;height:330px;border-radius:22px;overflow:hidden;margin-top:16px">
+    <img src="${im('concert')}" style="width:100%;height:100%">
+    <div class="scrim"></div>
+    <div style="position:absolute;top:16px;left:16px;background:#fff;border-radius:14px;padding:8px 12px;text-align:center;line-height:1">
+      <div style="font-size:12px;font-weight:600;color:var(--pink)">FRI</div><div style="font-size:26px;font-weight:600;margin-top:3px">17</div></div>
+    <div style="position:absolute;top:16px;right:16px;background:var(--yellow);border-radius:99px;padding:7px 13px;font-weight:600;font-size:13.5px">Featured</div>
+    <div style="position:absolute;left:18px;right:18px;bottom:18px;color:#fff">
+      <div style="font-family:BB;font-size:32px;line-height:1">Night Market<br>& Live Sessions</div>
+      <div class="row" style="gap:6px;font-size:14px;margin-top:8px;font-weight:500;opacity:.92">${I('pin', 16, '#fff')}Great Hall Lawn · 7:00 PM</div>
+      <div class="row" style="justify-content:space-between;margin-top:14px">
+        <div class="row" style="gap:8px;font-size:14px;font-weight:600"><span class="stack row"><img src="${im('a5')}"><img src="${im('a4')}"><img src="${im('a6')}"></span>312 going</div>
+        <span class="btn" style="background:var(--yellow);color:var(--ink)">${I('check', 17, 'var(--ink)', 2.4)}Going</span>
+      </div>
+    </div>
+  </div>
+  <div style="font-weight:600;font-size:19px;margin:22px 0 12px">This week</div>
+  ${[['ball', 'Inter-hall Basketball Final', 'Sat 18 · 4:00 PM', 'Sports Complex', '#FF3D81', '188'],
+     ['lecture', 'Intro to Machine Learning', 'Mon 20 · 2:00 PM', 'Engineering LT 2', '#6C3BFF', '96'],
+     ['cafe', 'Startup Founders Mixer', 'Tue 21 · 6:30 PM', 'Innovation Hub', '#1F923A', '74']].map(([p, t, d, l, c, n]) => `
+  <div class="card row" style="padding:10px;gap:14px;margin-bottom:10px">
+    <img src="${im(p)}" style="width:82px;height:82px;border-radius:14px">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600;color:${c}">${d}</div>
+      <div style="font-size:16.5px;font-weight:600;margin-top:3px">${t}</div>
+      <div class="muted row" style="font-size:13.5px;margin-top:4px;gap:4px;font-weight:500">${I('pin', 14, 'var(--muted)')}${l} · ${n} going</div>
+    </div>
+  </div>`).join('')}
+</div>
+${tabbar('events')}`;
+
+S.connect = () => `${status()}
+<div style="padding:4px 20px 0">
+  <div class="row" style="justify-content:space-between"><div class="h-title">Connect</div>
+    <div class="chip" style="background:var(--pink);border-color:var(--pink)">${I('users', 18, 'var(--ink)', 2)}12 requests</div></div>
+  <div class="row" style="gap:10px;margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 14px;font-size:16px" >${I('search', 20, 'var(--muted)')}<span class="muted">Search students, programmes…</span></div>
+  <div class="row" style="justify-content:space-between;margin:20px 0 12px"><div style="font-weight:600;font-size:19px">People you may know</div><div style="font-weight:600;font-size:14px;color:var(--violet)">See all</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+  ${[['a5', 'Efua Boateng', 'Architecture · Yr 3', ['Design', 'Photography'], 8],
+     ['a3', 'Kofi Owusu', 'Economics · Yr 2', ['Startups', 'Chess'], 14],
+     ['a6', 'Sena Adjei', 'Medicine · Yr 1', ['Music', 'Volunteering'], 5],
+     ['a4', 'Yaw Darko', 'Comp. Eng · Yr 2', ['Football', 'Gaming'], 11]].map(([a, n, p, tags, m], i) => `
+    <div class="card" style="padding:8px 8px 12px;overflow:hidden">
+      <div style="position:relative"><img src="${im(a)}" style="width:100%;height:150px;border-radius:13px">
+        <div style="position:absolute;left:8px;bottom:8px;background:rgba(22,22,22,.78);color:#fff;border-radius:99px;padding:5px 9px;font-size:12px;font-weight:600">${m} mutual</div></div>
+      <div style="padding:0 4px">
+        <div style="font-weight:600;font-size:16px;margin-top:10px">${n}</div>
+        <div class="muted" style="font-size:13px;font-weight:500;margin-top:2px">${p}</div>
+        <div class="row" style="gap:5px;margin-top:8px;flex-wrap:wrap">${tags.map((t) => `<span style="font-size:11.5px;font-weight:600;padding:4px 8px;border-radius:99px;background:var(--sunken)">${t}</span>`).join('')}</div>
+        <div class="btn" style="width:100%;margin-top:11px;background:${i === 1 ? '#fff' : 'var(--ink)'};color:${i === 1 ? 'var(--ink)' : '#fff'};border:1.5px solid var(--ink)">${i === 1 ? I('check', 16, 'var(--ink)', 2.4) + 'Requested' : I('plus', 16, '#fff', 2.4) + 'Connect'}</div>
+      </div>
+    </div>`).join('')}
+  </div>
+</div>
+${tabbar('connect')}`;
+
+S.campus = () => {
+  // stylised campus map: blocks, paths, green, pins
+  const map = `<svg width="440" height="961" viewBox="0 0 440 961" style="position:absolute;inset:0">
+    <rect width="440" height="961" fill="#EFEDE6"/>
+    <path d="M-20 300 C 120 280, 200 360, 460 330" stroke="#fff" stroke-width="26" fill="none"/>
+    <path d="M150 -20 C 170 200, 120 420, 190 980" stroke="#fff" stroke-width="22" fill="none"/>
+    <path d="M-20 620 C 140 600, 300 660, 460 610" stroke="#fff" stroke-width="20" fill="none"/>
+    <path d="M330 -20 C 300 240, 360 480, 300 980" stroke="#fff" stroke-width="16" fill="none"/>
+    <path d="M190 470 L 330 450" stroke="#fff" stroke-width="10" fill="none"/>
+    <ellipse cx="250" cy="520" rx="70" ry="46" fill="#CFE8B4"/>
+    <rect x="18" y="130" width="110" height="130" rx="10" fill="#CFE8B4"/>
+    <rect x="360" y="370" width="100" height="200" rx="10" fill="#CFE8B4"/>
+    <circle cx="80" cy="460" r="58" fill="#BFDDF2"/>
+    <g fill="#E0DCD2" stroke="#D3CEC2">
+      <rect x="196" y="120" width="96" height="70" rx="8"/><rect x="200" y="210" width="60" height="50" rx="8"/>
+      <rect x="40" y="350" width="80" height="44" rx="8"/><rect x="360" y="140" width="70" height="100" rx="8"/>
+      <rect x="210" y="380" width="90" height="52" rx="8"/><rect x="30" y="680" width="100" height="70" rx="8"/>
+      <rect x="200" y="680" width="80" height="90" rx="8"/><rect x="350" y="660" width="70" height="80" rx="8"/>
+      <rect x="40" y="780" width="70" height="60" rx="8"/><rect x="200" y="800" width="70" height="50" rx="8"/>
+    </g>
+  </svg>`;
+  const pin = (x, y, label, color, big) => `<div style="position:absolute;left:${x}px;top:${y}px;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;z-index:5">
+    ${big ? `<div style="background:var(--ink);color:#fff;font-weight:600;font-size:14px;padding:7px 12px;border-radius:99px;margin-bottom:6px;white-space:nowrap">${label}</div>` : ''}
+    <div style="width:${big ? 46 : 36}px;height:${big ? 46 : 36}px;border-radius:99px 99px 99px 4px;transform:rotate(-45deg);background:${color};display:grid;place-items:center;box-shadow:0 4px 10px rgba(0,0,0,.2);border:3px solid #fff">
+      <div style="transform:rotate(45deg);display:grid;place-items:center">${I('door', big ? 20 : 16, color === 'var(--yellow)' || color === 'var(--lime)' ? '#161616' : '#fff', 2.2)}</div></div>
+    ${!big ? `<div style="margin-top:4px;font-size:12.5px;font-weight:600;background:rgba(255,255,255,.9);padding:2px 7px;border-radius:6px;white-space:nowrap">${label}</div>` : ''}
+  </div>`;
+  return `${map}
+  ${status()}
+  <div style="position:absolute;left:20px;right:20px;top:72px;z-index:10" class="row">
+    <div class="row" style="flex:1;gap:10px;background:rgba(255,255,255,.95);border-radius:999px;padding:14px 18px;font-size:16px;box-shadow:0 6px 20px rgba(0,0,0,.1)">${I('search', 20, 'var(--muted)')}<span class="muted">Search buildings & rooms</span></div>
+  </div>
+  <div class="row" style="position:absolute;left:20px;top:140px;gap:8px;z-index:10">
+    <span class="chip" style="background:var(--ink);color:#fff;border-color:var(--ink)">All</span><span class="chip">Libraries</span><span class="chip">Lecture halls</span><span class="chip">Food</span>
+  </div>
+  ${pin(232, 318, 'Main Library', 'var(--violet)', true)}
+  ${pin(380, 300, 'Science Block', 'var(--pink)')}
+  ${pin(82, 420, 'Great Hall', 'var(--ink)')}
+  ${pin(262, 470, 'Engineering', 'var(--yellow)')}
+  <div style="position:absolute;right:20px;top:440px;width:48px;height:48px;border-radius:99px;background:#fff;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.12);z-index:10">${I('locate', 22)}</div>
+  <div style="position:absolute;left:0;right:0;bottom:0;height:440px;background:#fff;border-radius:28px 28px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.1);padding:10px 20px 0;z-index:20">
+    <div style="width:40px;height:5px;border-radius:9px;background:var(--border);margin:0 auto 14px"></div>
+    <div class="row" style="gap:14px">
+      <img src="${im('library')}" style="width:74px;height:74px;border-radius:16px">
+      <div style="flex:1"><div style="font-family:BB;font-size:27px;line-height:1">Main Library</div>
+        <div class="row" style="gap:8px;margin-top:6px;font-size:14px;font-weight:600"><span style="color:var(--success,#1F923A)">● Open now</span><span class="muted">· until 10:00 PM</span></div></div>
+    </div>
+    <div class="row" style="gap:8px;margin-top:16px">
+      <span class="btn" style="background:var(--violet);color:#fff;flex:1">${I('pin', 17, '#fff', 2)}Directions</span>
+      <span class="btn" style="background:var(--sunken);flex:1">${I('wifi', 17)}Wi-Fi zone</span>
+    </div>
+    <div style="font-weight:600;font-size:16px;margin:14px 0 6px">Rooms inside · 4 floors</div>
+    ${[['Group Study Room 2B', 'Floor 2 · seats 8', 'Free'], ['Computer Lab', 'Floor 1 · 40 PCs', 'Busy'], ['Silent Reading Hall', 'Floor 3', 'Free']].map(([r, d, s]) => `
+    <div class="row" style="gap:12px;padding:11px 0;border-top:1px solid var(--border)">
+      <div style="width:38px;height:38px;border-radius:12px;background:var(--sunken);display:grid;place-items:center">${I('door', 19)}</div>
+      <div style="flex:1"><div style="font-weight:600;font-size:15.5px">${r}</div><div class="muted" style="font-size:13px;font-weight:500">${d}</div></div>
+      <span style="font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:99px;background:${s === 'Free' ? '#E3F5E6' : '#FCE8EF'};color:${s === 'Free' ? '#1F923A' : '#C21E5A'}">${s}</span>
+    </div>`).join('')}
+  </div>
+  ${tabbar('campus')}`;
+};
+
+S.chat = () => {
+  const them = (a, name, text, extra = '') => `<div class="row" style="gap:8px;align-items:flex-end;margin-top:12px">
+      <img class="av" src="${im(a)}" style="width:30px;height:30px">
+      <div style="max-width:290px"><div class="muted" style="font-size:12px;font-weight:600;margin:0 0 4px 4px">${name}</div>
+      <div style="background:#fff;border-radius:20px 20px 20px 6px;padding:11px 15px;font-size:16px;line-height:1.35">${text}</div>${extra}</div></div>`;
+  const me = (text) => `<div style="display:flex;justify-content:flex-end;margin-top:12px"><div style="max-width:290px;background:var(--violet);color:#fff;border-radius:20px 20px 6px 20px;padding:11px 15px;font-size:16px;line-height:1.35">${text}</div></div>`;
+  return `${status()}
+  <div class="row" style="gap:12px;padding:6px 18px 14px;border-bottom:1px solid var(--border);background:var(--warm)">
+    ${I('back', 26)}
+    <div style="width:46px;height:46px;border-radius:14px;background:var(--violet);display:grid;place-items:center;color:#fff;font-family:BB;font-size:20px">CS</div>
+    <div style="flex:1"><div style="font-weight:600;font-size:17px">CS 201 Study Group</div><div style="font-size:13px;font-weight:500;color:#1F923A">6 members · 3 online</div></div>
+    ${I('more', 24)}
+  </div>
+  <div style="padding:6px 16px 0">
+    <div style="text-align:center;margin:10px 0 2px"><span class="muted" style="font-size:12.5px;font-weight:600;background:var(--sunken);padding:4px 10px;border-radius:99px">Today</span></div>
+    ${them('a2', 'Kwame', 'Anyone free to go over recursion before Thursday’s quiz? 🤯')}
+    ${them('a5', 'Efua', 'Yes please! Library 2B is free after 4', `<img src="${im('laptops')}" style="width:250px;height:150px;border-radius:16px;margin-top:6px">`)}
+    ${me('I’m in. I’ll bring last year’s past questions 📚')}
+    <div class="row" style="gap:8px;align-items:flex-end;margin-top:12px">
+      <img class="av" src="${im('a3')}" style="width:30px;height:30px">
+      <div style="background:#fff;border-radius:20px 20px 20px 6px;padding:14px 15px;width:290px">
+        <div style="font-size:12px;font-weight:600;color:var(--violet)">POLL · Kofi</div>
+        <div style="font-weight:600;font-size:16px;margin:4px 0 10px">What time works best?</div>
+        ${[['4:00 PM', 67, true], ['6:00 PM', 33, false]].map(([o, p, w]) => `
+        <div style="position:relative;height:40px;border-radius:12px;background:var(--sunken);overflow:hidden;margin-top:7px">
+          <div style="position:absolute;inset:0;width:${p}%;background:${w ? 'rgba(108,59,255,.22)' : 'rgba(0,0,0,.06)'}"></div>
+          <div class="row" style="position:relative;justify-content:space-between;height:100%;padding:0 12px;font-weight:600;font-size:15px"><span class="row" style="gap:6px">${w ? I('check', 16, 'var(--violet)', 2.6) : ''}${o}</span><span>${p}%</span></div></div>`).join('')}
+      </div>
+    </div>
+    <div class="row" style="gap:8px;margin-top:10px;margin-left:38px"><span class="row" style="gap:3px;background:#fff;border:1px solid var(--border);border-radius:99px;padding:3px 8px;font-size:13px">🔥 <b style="font-weight:600">4</b></span><span class="muted" style="font-size:12.5px;font-weight:500">Seen by 5</span></div>
+    ${me('Booked 2B for 4 ✅ see you there')}
+  </div>
+  <div class="row" style="position:absolute;left:0;right:0;bottom:0;padding:12px 16px 40px;gap:10px;background:var(--warm);border-top:1px solid var(--border)">
+    <div style="width:44px;height:44px;border-radius:99px;background:#fff;border:1px solid var(--border);display:grid;place-items:center">${I('img', 21)}</div>
+    <div style="flex:1;background:#fff;border:1px solid var(--border);border-radius:99px;padding:12px 16px;font-size:16px" class="muted">Message…</div>
+    <div style="width:44px;height:44px;border-radius:99px;background:var(--violet);display:grid;place-items:center">${I('send', 20, '#fff', 2)}</div>
+  </div>`;
+};
+
+S.profile = () => `${status(true)}
+<div style="position:absolute;top:0;left:0;right:0;height:250px;overflow:hidden"><img src="${im('grad')}" style="width:100%;height:100%"><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,0) 50%)"></div></div>
+<div style="position:relative;z-index:2;padding:0 20px">
+  <div class="row" style="justify-content:flex-end;gap:10px;margin-top:2px">
+    <div style="width:42px;height:42px;border-radius:99px;background:rgba(22,22,22,.5);display:grid;place-items:center">${I('menu', 21, '#fff')}</div></div>
+  <div style="margin-top:96px" class="row">
+    <div style="padding:4px;border-radius:99px;background:var(--warm)"><img class="av" src="${im('a1')}" style="width:112px;height:112px"></div>
+  </div>
+  <div class="row" style="justify-content:space-between;margin-top:10px">
+    <div><div style="font-family:BB;font-size:32px;line-height:1">Ama Mensah</div>
+      <div style="font-size:15px;font-weight:500;color:var(--text2);margin-top:6px">BSc Computer Science · Year 2</div></div>
+    <span class="btn" style="background:var(--lime);color:var(--ink)">${I('edit', 16, 'var(--ink)', 2)}Edit</span>
+  </div>
+  <div style="font-size:15.5px;line-height:1.4;margin-top:12px">Building things that help students 💜 Hackathon addict, jollof critic, Hall 3 rep.</div>
+  <div class="row" style="gap:6px;margin-top:12px;flex-wrap:wrap">${['💻 Coding', '🎨 Design', '⚽ Football', '🎧 Afrobeats'].map((t) => `<span class="chip" style="padding:6px 11px;font-size:13px">${t}</span>`).join('')}</div>
+  <div class="row card" style="margin-top:16px;padding:14px 0">
+    ${[['86', 'Posts'], ['1.2k', 'Connections'], ['24', 'Events']].map(([n, l], i) => `<div style="flex:1;text-align:center;${i ? 'border-left:1px solid var(--border)' : ''}"><div style="font-weight:600;font-size:21px">${n}</div><div class="muted" style="font-size:13px;font-weight:500">${l}</div></div>`).join('')}
+  </div>
+  <div class="row" style="gap:24px;margin-top:16px;font-weight:600;font-size:15.5px;border-bottom:1px solid var(--border)">
+    <span style="padding-bottom:10px;border-bottom:2.5px solid var(--ink)">Posts</span><span class="muted" style="padding-bottom:10px">Events</span><span class="muted" style="padding-bottom:10px">Saved</span></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:3px;position:relative;z-index:2">
+  ${['friends', 'sunset', 'study', 'concert', 'cafe', 'hall'].map((p) => `<img src="${im(p)}" style="width:100%;height:146px">`).join('')}
+</div>
+${tabbar('profile')}`;
+
+// ---------- slides ----------
+const SLIDES = [
+  { screen: 'home', bg: 'var(--violet)', fg: '#F8F7F4', h: 'Your whole campus<br>in one app', sub: 'Posts, stories and what’s happening today, from the people you actually know.', deco: 'orbit' },
+  { screen: 'events', bg: 'var(--yellow)', fg: '#161616', h: 'Never miss<br>what’s on', sub: 'Parties, games, talks and club nights. Tap Going and you’re in.', deco: 'dots' },
+  { screen: 'connect', bg: 'var(--pink)', fg: '#161616', h: 'Meet people<br>who get you', sub: 'Find students on your course and in your hall who like what you like.', deco: 'rays' },
+  { screen: 'campus', bg: 'var(--lime)', fg: '#161616', h: 'Find any building,<br>any room', sub: 'A live campus map with every lecture hall, lab and study space.', deco: 'dots' },
+  { screen: 'chat', bg: 'var(--ink)', fg: '#F8F7F4', h: 'Chat, plan<br>and study together', sub: 'Direct messages and group chats with photos, polls and reactions.', deco: 'orbit' },
+  { screen: 'profile', bg: '#F8F7F4', fg: '#161616', h: 'Show the world<br>who you are', sub: 'Your course, interests and best moments, all on one profile.', deco: 'rays', accent: 'var(--violet)' },
+];
+
+const deco = (kind, fg) => {
+  const c = fg === '#161616' ? 'rgba(22,22,22,.09)' : 'rgba(248,247,244,.11)';
+  if (kind === 'dots') return `<svg class="deco" width="440" height="956"><defs><pattern id="d${Math.random()}" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="2.2" fill="${c}"/></pattern></defs><rect width="440" height="956" fill="url(#d)"/></svg>`.replace(/id="d[^"]+"/, 'id="dp"').replace('url(#d)', 'url(#dp)');
+  if (kind === 'orbit') return `<svg class="deco" width="440" height="956">${[180, 260, 340, 420, 500].map((r) => `<circle cx="220" cy="620" r="${r}" fill="none" stroke="${c}" stroke-width="2"/>`).join('')}</svg>`;
+  return `<svg class="deco" width="440" height="956">${Array.from({ length: 18 }, (_, i) => { const a = (i / 18) * Math.PI * 2; return `<line x1="220" y1="600" x2="${220 + Math.cos(a) * 900}" y2="${600 + Math.sin(a) * 900}" stroke="${c}" stroke-width="${i % 2 ? 2 : 16}"/>`; }).join('')}</svg>`;
+};
+
+document.getElementById('out').innerHTML = SLIDES.map((s, i) => `
+<section class="slide" id="s${i + 1}" style="background:${s.bg};color:${s.fg}">
+  ${deco(s.deco, s.fg)}
+  <div class="copy"><h1>${s.accent ? s.h.replace('who you are', `<span style="color:${s.accent}">who you are</span>`) : s.h}</h1><div class="sub">${s.sub}</div></div>
+  <div class="phone"><div class="island"></div><div class="screen"><div class="ui">${S[s.screen]()}</div></div></div>
+</section>`).join('');
+</script>
+</body>
+</html>

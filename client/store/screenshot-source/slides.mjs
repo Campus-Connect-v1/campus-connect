@@ -1,0 +1,10 @@
+import { chromium } from "playwright-core";
+const exe = "/Users/lesliepaulajayi/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
+const b = await chromium.launch({ executablePath: exe });
+const p = await b.newPage({ viewport: { width: 440, height: 956 }, deviceScaleFactor: 3 });
+await p.goto("file://" + process.cwd() + "/shots.html");
+await p.evaluate(() => document.fonts.ready);
+await p.waitForLoadState("networkidle");
+await p.waitForTimeout(500);
+for (let i = 1; i <= 6; i++) await p.locator("#s" + i).screenshot({ path: `out/0${i}.png` });
+await b.close();

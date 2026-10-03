@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "campus-connect",
+    "name": "Campus Connect",
     "slug": "campus-connect",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,7 +15,7 @@
       "url": "https://u.expo.dev/1565d730-4f88-4944-88fd-5bfa0fe51445"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.lesliepaulajayi.campusconnect",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -54,7 +54,9 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Campus Connect uses your location to show you students nearby on campus while the app is open."
+          "locationWhenInUsePermission": "Campus Connect uses your location to show you students nearby on campus while the app is open.",
+          "locationAlwaysAndWhenInUsePermission": "Campus Connect uses your location to show you students nearby on campus while the app is open. It does not track you in the background.",
+          "locationAlwaysPermission": "Campus Connect uses your location to show you students nearby on campus while the app is open. It does not track you in the background."
         }
       ],
       [
