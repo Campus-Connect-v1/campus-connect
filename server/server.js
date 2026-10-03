@@ -33,6 +33,7 @@ import connectMongoDB from "./config/mongoDB.js";
 
 import socketServer from "./socket.js";
 import { startReceiptPolling } from "./services/push/index.js";
+import { startAccountPurge } from "./services/accountPurge.js";
 
 // ============= DOTENV ======================
 dotenv.config({ debug: false });
@@ -180,6 +181,11 @@ app.get("/", (req, res) => res.send("Campus Connect API running..."));
 // ========================= PUSH RECEIPTS ======================
 // Prunes device tokens Expo reports as dead. See services/push.
 startReceiptPolling();
+
+// ========================= ACCOUNT PURGE ======================
+// Permanently deletes accounts deleted more than 30 days ago, as the privacy
+// policy promises. Daily, plus once shortly after boot. See services/accountPurge.
+startAccountPurge();
 
 // ========================= KEEP AWAKE =========================
 // Render's free plan suspends the service after 15 minutes without inbound

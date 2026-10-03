@@ -9,7 +9,9 @@ export class Event {
       FROM events e
       JOIN users u ON e.created_by = u.user_id
       JOIN universities uni ON e.university_id = uni.university_id
-      WHERE 1=1
+      -- An event goes with its organiser's account: hidden while they are
+      -- deactivated, back if they recover, deleted with them after 30 days.
+      WHERE u.is_active = 1
     `;
     const params = [];
 
@@ -62,7 +64,7 @@ export class Event {
       FROM events e
       JOIN users u ON e.created_by = u.user_id
       JOIN universities uni ON e.university_id = uni.university_id
-      WHERE e.event_id = ?
+      WHERE e.event_id = ? AND u.is_active = 1
     `;
     try {
       const [events] = await db.execute(query, [eventId]);
@@ -204,7 +206,7 @@ export class Event {
       SELECT ea.*, u.first_name, u.last_name, u.profile_picture_url, u.program
       FROM event_attendees ea
       JOIN users u ON ea.user_id = u.user_id
-      WHERE ea.event_id = ?
+      WHERE ea.event_id = ? AND u.is_active = 1
       ORDER BY ea.created_at DESC
     `;
     try {

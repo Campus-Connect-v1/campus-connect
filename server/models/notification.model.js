@@ -484,6 +484,9 @@ export const getNotificationsModel = async (
       FROM notifications n
       LEFT JOIN users a ON n.actor_id = a.user_id
       WHERE n.user_id = ?
+        -- Hidden, not deleted, while the actor is deactivated: they come back
+        -- if the account is recovered, and cascade away with it after 30 days.
+        AND (n.actor_id IS NULL OR a.is_active = 1)
         ${unreadOnly ? "AND n.is_read = 0" : ""}
       ORDER BY n.created_at DESC, n.notification_id DESC
       LIMIT ${safeLimit} OFFSET ${safeOffset}

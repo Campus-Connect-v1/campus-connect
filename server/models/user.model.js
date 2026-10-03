@@ -827,6 +827,7 @@ export const getUserConnections = async (userId, status = "accepted") => {
     JOIN users u2 ON uc.receiver_id = u2.user_id
     WHERE (uc.requester_id = ? OR uc.receiver_id = ?) 
       AND uc.status = ?
+      AND u1.is_active = 1 AND u2.is_active = 1
     ORDER BY uc.updated_at DESC`,
     [userId, userId, status]
   );
@@ -872,6 +873,9 @@ export const getAllUserConnectionsModel = async (
       JOIN users u1 ON uc.requester_id = u1.user_id
       JOIN users u2 ON uc.receiver_id = u2.user_id
       WHERE (uc.requester_id = ? OR uc.receiver_id = ?)
+        -- A deactivated account drops out of everyone's connection list, and
+        -- reappears untouched if it is recovered within 30 days.
+        AND u1.is_active = 1 AND u2.is_active = 1
     `;
 
     const params = [userId, userId];
@@ -1035,36 +1039,61 @@ ORDER BY updated_at DESC
   }
 };
 
+// Columns present in both users and user_archive, in users' order. Cached for
+// the life of the process: the schema only changes with a deploy.
+let archivableColumnsCache = null;
+const archivableColumns = async (conn) => {
+  if (archivableColumnsCache) return archivableColumnsCache;
+  const [rows] = await conn.execute(
+    `SELECT u.COLUMN_NAME AS name
+       FROM information_schema.COLUMNS u
+       JOIN information_schema.COLUMNS a
+         ON a.TABLE_SCHEMA = u.TABLE_SCHEMA
+        AND a.TABLE_NAME = 'user_archive'
+        AND a.COLUMN_NAME = u.COLUMN_NAME
+      WHERE u.TABLE_SCHEMA = DATABASE() AND u.TABLE_NAME = 'users'
+      ORDER BY u.ORDINAL_POSITION`
+  );
+  archivableColumnsCache = rows.map((r) => r.name);
+  return archivableColumnsCache;
+};
+
 export const deleteProfileModel = async (
   userId,
   deletionReason = "User initiated"
 ) => {
+  // A transaction needs ONE connection for its whole life. `db` is a pool, and
+  // a pool has no beginTransaction: the call threw a TypeError before anything
+  // ran, so every account deletion failed with a 500. Each statement below
+  // also has to go through `conn`, or the pool would hand it a different
+  // connection outside the transaction.
+  const conn = await db.getConnection();
   try {
-    await db.beginTransaction();
+    await conn.beginTransaction();
 
     // 1. Archive the user data.
     //
-    // The trailing values must line up with user_archive's own columns, which
-    // are the 35 columns of `users` followed by archived_at (36) then
-    // deletion_reason (37) -- in that order. This previously supplied three
-    // values (reason, timestamp, and an expiry) in the wrong order, so every
-    // delete died on "Column count doesn't match value count" and rolled the
-    // whole transaction back. There is no expires_at column and no need for
-    // one: recoverProfileModel derives the 30-day window from archived_at.
-    //
-    // SELECT * carries new columns across automatically, which is why it is
-    // kept -- but it means a column added to `users` must also be added to
-    // `user_archive` in the same position, ahead of these two.
-    const [archiveResult] = await db.execute(
-      `INSERT INTO user_archive
-       SELECT *, CURRENT_TIMESTAMP, ?
+    // The column list is the set the two tables share, read from the schema,
+    // rather than `SELECT *`. SELECT * required user_archive to mirror users
+    // column for column, and it stopped doing so when migration 008 added
+    // quiet_hours_start/end to users only: every delete then died on "Column
+    // count doesn't match value count" and rolled back. Migration 013 adds the
+    // missing columns; reading the intersection means the next column added
+    // to users cannot break deletion again, it is simply not archived until
+    // user_archive gains it too. recoverProfileModel reads named fields, so it
+    // is unaffected either way.
+    const columns = await archivableColumns(conn);
+    const list = columns.map((c) => `\`${c}\``).join(", ");
+    const [archiveResult] = await conn.execute(
+      `INSERT INTO user_archive (${list}, archived_at, deletion_reason)
+       SELECT ${list}, CURRENT_TIMESTAMP, ?
        FROM users
        WHERE user_id = ?`,
       [deletionReason, userId]
     );
 
     // 2. Soft delete user
-    const [updateResult] = await db.execute(
+    const [updateResult] = await conn.execute(
       `UPDATE users 
        SET is_active = 0, 
            email = CONCAT('deleted_', UNIX_TIMESTAMP(), '_', user_id, '@deleted.example'),
@@ -1084,7 +1113,7 @@ export const deleteProfileModel = async (
     );
 
     // 3. Update connections status
-    await db.execute(
+    await conn.execute(
       `UPDATE connections 
        SET status = 'declined' 
        WHERE (requester_id = ? OR receiver_id = ?) 
@@ -1093,25 +1122,29 @@ export const deleteProfileModel = async (
     );
 
     // 4. Remove from active sessions
-    await db.execute(`DELETE FROM user_sessions WHERE user_id = ?`, [userId]);
+    await conn.execute(`DELETE FROM user_sessions WHERE user_id = ?`, [userId]);
 
-    await db.commit();
+    await conn.commit();
 
     return {
       archived: archiveResult.affectedRows > 0,
       deactivated: updateResult.affectedRows > 0,
     };
   } catch (error) {
-    await db.rollback();
+    await conn.rollback();
     throw new Error(`Database error in deleteProfile: ${error.message}`);
+  } finally {
+    conn.release();
   }
 };
 export const recoverProfileModel = async (userId) => {
+  // Same reason as deleteProfileModel: a pool cannot hold a transaction.
+  const conn = await db.getConnection();
   try {
-    await db.beginTransaction();
+    await conn.beginTransaction();
 
     // 1. Check if recovery is within 30 days
-    const [archivedUser] = await db.execute(
+    const [archivedUser] = await conn.execute(
       `SELECT * FROM user_archive 
        WHERE user_id = ? 
        AND archived_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY)`,
@@ -1127,7 +1160,7 @@ export const recoverProfileModel = async (userId) => {
     const userData = archivedUser[0];
 
     // 2. Restore user data
-    const [restoreResult] = await db.execute(
+    const [restoreResult] = await conn.execute(
       `UPDATE users 
        SET is_active = 1,
            email = ?,
@@ -1160,14 +1193,16 @@ export const recoverProfileModel = async (userId) => {
     );
 
     // 3. Remove from archive
-    await db.execute(`DELETE FROM user_archive WHERE user_id = ?`, [userId]);
+    await conn.execute(`DELETE FROM user_archive WHERE user_id = ?`, [userId]);
 
-    await db.commit();
+    await conn.commit();
 
     return { restored: restoreResult.affectedRows > 0 };
   } catch (error) {
-    await db.rollback();
+    await conn.rollback();
     throw new Error(`Database error in recoverProfile: ${error.message}`);
+  } finally {
+    conn.release();
   }
 };
 

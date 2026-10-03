@@ -66,12 +66,20 @@ export default function DeleteAccountScreen() {
             }}
           >
             <Text variant="heading" color="destructive">
-              This cannot be undone
+              Your account will be deleted
+            </Text>
+            {/* Matches services/accountPurge.js on the server and the website's
+                /delete-account page: hidden at once, recoverable for 30 days,
+                then permanently deleted. */}
+            <Text variant="body" color="textSecondary">
+              You'll be signed out, and your profile, posts, comments, stories, events and groups
+              will disappear from Campus Connect straight away. Nobody will be able to find you on
+              campus.
             </Text>
             <Text variant="body" color="textSecondary">
-              Deleting your account removes your profile, your posts, comments and stories, your
-              events and groups, and your place in every conversation. Nobody will be able to find
-              you on campus through Campus Connect.
+              For 30 days you can change your mind: contact support and we'll restore your account.
+              After 30 days, your account, content, messages and location data are permanently
+              deleted.
             </Text>
           </View>
 
