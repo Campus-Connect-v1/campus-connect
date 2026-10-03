@@ -87,7 +87,7 @@ export const getPollByIdModel = async (pollId, userId) => {
        FROM polls p
        JOIN posts ps ON p.post_id = ps.post_id
        JOIN users u ON ps.user_id = u.user_id
-       WHERE p.poll_id = ? AND ps.is_active = 1`,
+       WHERE p.poll_id = ? AND ps.is_active = 1 AND u.is_active = 1`,
       [pollId]
     );
 

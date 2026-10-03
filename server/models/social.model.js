@@ -168,6 +168,9 @@ export const getFeedPostsModel = async (
       JOIN users u ON p.user_id = u.user_id
       LEFT JOIN polls pol ON pol.post_id = p.post_id
       WHERE p.is_active = 1
+        -- A deactivated author's posts leave the feed at once and come back on
+        -- recovery; nothing is rewritten, so there is nothing to undo.
+        AND u.is_active = 1
         AND (p.expires_at IS NULL OR p.expires_at > NOW())
         AND (
           p.user_id = ?
@@ -374,7 +377,7 @@ export const getPostByIdModel = async (postId, userId) => {
       LEFT JOIN post_likes pl ON p.post_id = pl.post_id
       LEFT JOIN post_comments pc ON p.post_id = pc.post_id AND pc.is_active = 1
       LEFT JOIN polls pol ON pol.post_id = p.post_id
-      WHERE p.post_id = ? AND p.is_active = 1
+      WHERE p.post_id = ? AND p.is_active = 1 AND u.is_active = 1
       GROUP BY p.post_id
     `;
 
@@ -486,7 +489,7 @@ export const getPostCommentsModel = async (postId, limit = 50, offset = 0, viewe
       ) cl ON cl.comment_id = pc.comment_id
       LEFT JOIN comment_likes mine
         ON mine.comment_id = pc.comment_id AND mine.user_id = ?
-      WHERE pc.post_id = ? AND pc.is_active = 1
+      WHERE pc.post_id = ? AND pc.is_active = 1 AND u.is_active = 1
       ORDER BY pc.created_at ASC
       LIMIT ? OFFSET ?
     `;
@@ -818,7 +821,7 @@ export const getSavedPostsModel = async (userId, limit = 50, offset = 0) => {
          pol.poll_id
        FROM saved_posts sp
        JOIN posts p ON p.post_id = sp.post_id AND p.is_active = 1
-       JOIN users u ON u.user_id = p.user_id
+       JOIN users u ON u.user_id = p.user_id AND u.is_active = 1
        -- The feed and the profile query both join this; omitting it here meant
        -- a saved poll lost its options and rendered as a bare caption.
        LEFT JOIN polls pol ON pol.post_id = p.post_id
@@ -915,6 +918,7 @@ export const getUserPostsModel = async (
       LEFT JOIN polls pol ON pol.post_id = p.post_id
       WHERE p.user_id = ?
         AND p.is_active = 1
+        AND u.is_active = 1
         AND (p.expires_at IS NULL OR p.expires_at > NOW())
         AND (
           p.user_id = ?

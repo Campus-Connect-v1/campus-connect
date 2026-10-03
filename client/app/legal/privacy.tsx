@@ -11,7 +11,7 @@ export default function PrivacyPolicyScreen() {
   return (
     <LegalDocument
       title="Privacy Policy"
-      updated="21 September 2026"
+      updated="3 October 2026"
       intro="This explains what Campus Connect collects, why, and what control you have over it."
       sections={[
         {
@@ -66,7 +66,7 @@ export default function PrivacyPolicyScreen() {
           heading: "Your choices",
           body: [
             "You can edit or remove most profile information at any time from Settings, Account.",
-            "You can delete your account from Settings, Account. This removes your profile and your content.",
+            "You can delete your account from Settings, Account. Your profile and content are hidden immediately, and you can ask us to restore the account within 30 days. After 30 days, your account, content, messages and location data are permanently deleted.",
             "You can ask us for a copy of your data, or ask us to correct it.",
           ],
         },

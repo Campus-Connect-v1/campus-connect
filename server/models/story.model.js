@@ -17,7 +17,13 @@ const ACTIVE_WINDOW = `s.is_active = 1 AND s.expires_at > NOW()`;
 //
 // Expects `stories s` joined to the author as `u`. Placeholder order is fixed;
 // build the params with visibilityParams().
+//
+// A deactivated author's stories are hidden from everyone, themselves included,
+// until the account is recovered. Every viewer-facing story query goes through
+// this predicate, which is why the check lives here rather than in each one.
 const CAN_VIEW = `(
+        u.is_active = 1
+        AND (
         s.user_id = ?
         OR s.visibility = 'public'
         OR (s.visibility = 'connections' AND EXISTS (
@@ -28,6 +34,7 @@ const CAN_VIEW = `(
            ))
         OR (s.visibility = 'university'
             AND u.university_id = (SELECT university_id FROM users WHERE user_id = ?))
+        )
       )`;
 
 const visibilityParams = (viewerId) => [viewerId, viewerId, viewerId, viewerId];
@@ -35,9 +42,15 @@ const visibilityParams = (viewerId) => [viewerId, viewerId, viewerId, viewerId];
 // A repost has to render the original inline, so the post and its author come
 // back on the same row. A per-story lookup would be one round trip per tray
 // item on the home screen.
+//
+// The author is joined first so a repost of a deactivated user's post drops
+// the embed entirely, rather than rendering their words under no name.
 const REPOST_JOIN = `
+      LEFT JOIN users ru ON ru.user_id = (
+        SELECT user_id FROM posts WHERE post_id = s.repost_post_id AND is_active = 1
+      ) AND ru.is_active = 1
       LEFT JOIN posts rp ON s.repost_post_id = rp.post_id AND rp.is_active = 1
-      LEFT JOIN users ru ON rp.user_id = ru.user_id`;
+        AND ru.user_id IS NOT NULL`;
 
 const REPOST_COLUMNS = `
         rp.post_id          AS repost_post_id,

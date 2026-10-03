@@ -178,7 +178,7 @@ export class StudyGroup {
       SELECT gm.*, u.first_name, u.last_name, u.profile_picture_url, u.program
       FROM group_members gm
       JOIN users u ON gm.user_id = u.user_id
-      WHERE gm.group_id = ?
+      WHERE gm.group_id = ? AND u.is_active = 1
       ORDER BY 
         CASE gm.role 
           WHEN 'creator' THEN 1

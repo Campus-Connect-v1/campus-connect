@@ -9,6 +9,9 @@ export const findByIds = async (userIds) => {
            profile_picture_url, bio, program
     FROM users
     WHERE user_id IN (${placeholders})
+      -- A deactivated account leaves the nearby list at once. Its location
+      -- doc is only removed by the 30-day purge, so this is what hides it.
+      AND is_active = 1
   `;
 
   const [rows] = await db.execute(query, userIds);

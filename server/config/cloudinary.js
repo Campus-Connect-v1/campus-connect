@@ -64,6 +64,45 @@ export const buildSignature = ({ userId, kind = "posts", publicId }) => {
   };
 };
 
+// Delete everything under one folder prefix, for both resource types.
+//
+// Used by the account purge: uploads live under folderFor(userId, kind), so a
+// user's media is exactly what sits under campus-connect/<kind>/<userId>/. The
+// trailing slash is load-bearing -- without it the prefix for user_1 would also
+// match user_10, user_11 and so on.
+//
+// The Admin API deletes at most 1000 resources per call and reports `partial`
+// while more remain, so this loops; the cap stops a misbehaving response from
+// spinning forever. Returns the number deleted. Throws on an HTTP error so the
+// caller can log it -- media is best-effort and must never block a purge.
+export const deleteByPrefix = async (prefix) => {
+  if (!isConfigured) return 0;
+  if (!prefix.endsWith("/")) throw new Error(`prefix must end in "/": ${prefix}`);
+
+  const auth = Buffer.from(`${API_KEY}:${API_SECRET}`).toString("base64");
+  let deleted = 0;
+
+  for (const type of RESOURCE_TYPES) {
+    for (let page = 0; page < 50; page++) {
+      const url =
+        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/${type}/upload` +
+        `?prefix=${encodeURIComponent(prefix)}`;
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: { Authorization: `Basic ${auth}` },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) {
+        throw new Error(`Cloudinary ${type} delete ${response.status}: ${await response.text()}`);
+      }
+      const body = await response.json();
+      deleted += Object.keys(body.deleted || {}).length;
+      if (!body.partial) break;
+    }
+  }
+  return deleted;
+};
+
 // Only accept media URLs that came from our own cloud.
 //
 // Without this, media_url is an arbitrary string: a post could point at any
