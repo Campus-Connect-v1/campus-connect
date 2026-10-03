@@ -217,6 +217,11 @@ Pick the build under **Build**, set **Release** to manual or automatic, then
   Connect requires; it scales these down for smaller iPhones.
 - `store/screenshots/iphone-6.5/`: 1284 × 2778, in case App Store Connect asks
   for that slot separately.
+- `store/screenshots/ipad-13/`: 2064 × 2752, and `store/screenshots/ipad-12.9/`:
+  2048 × 2732. App Store Connect asks for these only while the build in it
+  supports iPad. Build 10 (28 Sept) was made before `supportsTablet` was set
+  to `false`, so it still counts as an iPad app. Upload these to clear the
+  requirement, or upload a new build, which drops it.
 
 The screens are mockups styled to match the app's design system, not captures
 from a device. Apple requires screenshots to show the app accurately
@@ -230,6 +235,6 @@ re-render:
 ```bash
 cd client/store/screenshot-source
 npm i playwright-core && npx playwright install chromium
-# set executablePath in slides.mjs to your Chromium, or remove it
-mkdir -p out && node slides.mjs
+node slides.mjs        # iPhone   -> out/iphone/
+node slides.mjs ipad   # iPad     -> out/ipad-13/ and out/ipad-12.9/
 ```
