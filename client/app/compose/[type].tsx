@@ -12,8 +12,10 @@ import { useUploadQueue } from "@/src/services/UploadQueueContext";
 import { MentionSuggestions } from "@/src/components/social/MentionSuggestions";
 import { useMentionAutocomplete } from "@/src/features/mentions/useMentionAutocomplete";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
+import { VideoUploadFlow } from "@/src/components/video/VideoUploadFlow";
 import { Button, Icon, InlineNotice, PressableScale, Sticker, Text } from "@/src/components/ui";
 import { useUploadsEnabled } from "@/src/hooks/useUploadsEnabled";
+import { useVideoUpload } from "@/src/hooks/useVideoUpload";
 import {
   captureWithCamera,
   pickFromLibrary,
@@ -64,10 +66,32 @@ export default function ComposeScreen() {
     },
   });
   const [media, setMedia] = useState<PickedMedia | null>(null);
+  // Set only when `media` came back from the video module: that flow already
+  // uploaded (and edited/processed) the file as part of picking it, so
+  // publish() must not hand it to the upload queue a second time.
+  const [preUploadedVideoUrl, setPreUploadedVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const canUpload = useUploadsEnabled();
   const mediaRef = useRef<MediaAttachmentHandle>(null);
+  const video = useVideoUpload({ kind: "posts" });
+
+  const attachVideo = async () => {
+    setError(null);
+    const result = await video.open();
+    if (!result) return;
+    Haptics.selectionAsync();
+    setPreUploadedVideoUrl(result.url);
+    setMedia({
+      uri: result.url,
+      kind: "video",
+      width: result.width,
+      height: result.height,
+      duration: result.durationMs,
+      fileName: null,
+      fileSize: result.metadata.processedFileSizeBytes,
+    });
+  };
 
   const stickerColor = useMemo(
     () => ({ post: culture.violet, anonymous: culture.pink })[kind],
@@ -85,6 +109,10 @@ export default function ComposeScreen() {
           ? "Campus Connect needs access to your photos to attach media."
           : "Photo access is switched off for Campus Connect in your device settings."
       );
+      return;
+    }
+    if (result.status === "error") {
+      setError(result.message);
       return;
     }
     if (result.status === "picked") {
@@ -118,6 +146,9 @@ export default function ComposeScreen() {
     mediaRef.current?.pause();
     setError(null);
 
+    // A video attached through the video module was already uploaded (and
+    // edited/processed) as part of picking it, so the queue must not hand it
+    // to uploadMedia() a second time -- only pass raw media through.
     const attachment = media && canUpload ? media : null;
     // A plain noun, not copy.sticker -- that is the composer's headline
     // ("SAY SOMETHING"), and the pill was reading "Sharing say something".
@@ -127,11 +158,11 @@ export default function ComposeScreen() {
     enqueue({
       label,
       kind: "posts",
-      media: attachment,
+      media: preUploadedVideoUrl ? null : attachment,
       commit: async (mediaUrl) => {
         const result = await createPost(
           content,
-          mediaUrl ?? undefined,
+          (preUploadedVideoUrl ?? mediaUrl) ?? undefined,
           "public",
           topic,
           attachment?.kind ?? "text"
@@ -143,6 +174,7 @@ export default function ComposeScreen() {
     });
     setText("");
     setMedia(null);
+    setPreUploadedVideoUrl(null);
     router.replace("/(tabs)/home");
   };
 
@@ -254,6 +286,7 @@ export default function ComposeScreen() {
                 onRemove={() => {
                   mediaRef.current?.pause();
                   setMedia(null);
+                  setPreUploadedVideoUrl(null);
                 }}
               />
               {canUpload === false ? (
@@ -279,11 +312,7 @@ export default function ComposeScreen() {
                 label="Photo"
                 onPress={() => handlePick(() => pickFromLibrary("image"))}
               />
-              <AttachButton
-                icon="video"
-                label="Video"
-                onPress={() => handlePick(() => pickFromLibrary("video"))}
-              />
+              <AttachButton icon="video" label="Video" onPress={attachVideo} />
               <AttachButton
                 icon="camera"
                 label="Camera"
@@ -301,6 +330,8 @@ export default function ComposeScreen() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <VideoUploadFlow video={video} />
     </SettingsShell>
   );
 }

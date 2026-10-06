@@ -1,6 +1,7 @@
 import Alert02Icon from "@hugeicons/core-free-icons/Alert02Icon";
 import ArrowLeft01Icon from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import ArrowRight01Icon from "@hugeicons/core-free-icons/ArrowRight01Icon";
+import BlurIcon from "@hugeicons/core-free-icons/BlurIcon";
 import BookOpen01Icon from "@hugeicons/core-free-icons/BookOpen01Icon";
 import Bookmark02Icon from "@hugeicons/core-free-icons/Bookmark02Icon";
 import CalendarFavorite02Icon from "@hugeicons/core-free-icons/CalendarFavorite02Icon";
@@ -8,11 +9,23 @@ import Camera01Icon from "@hugeicons/core-free-icons/Camera01Icon";
 import Cancel01Icon from "@hugeicons/core-free-icons/Cancel01Icon";
 import ChromeIcon from "@hugeicons/core-free-icons/ChromeIcon";
 import Compass01Icon from "@hugeicons/core-free-icons/Compass01Icon";
+import ContrastIcon from "@hugeicons/core-free-icons/ContrastIcon";
+import CropIcon from "@hugeicons/core-free-icons/CropIcon";
+import Delete02Icon from "@hugeicons/core-free-icons/Delete02Icon";
 import ImageAdd01Icon from "@hugeicons/core-free-icons/ImageAdd01Icon";
+import PencilEdit01Icon from "@hugeicons/core-free-icons/PencilEdit01Icon";
 import PlayIcon from "@hugeicons/core-free-icons/PlayIcon";
+import Redo01Icon from "@hugeicons/core-free-icons/Redo01Icon";
+import Rotate01Icon from "@hugeicons/core-free-icons/Rotate01Icon";
+import ScissorsIcon from "@hugeicons/core-free-icons/ScissorsIcon";
+import SmileIcon from "@hugeicons/core-free-icons/SmileIcon";
+import StickerIcon from "@hugeicons/core-free-icons/StickerIcon";
+import TextFontIcon from "@hugeicons/core-free-icons/TextFontIcon";
+import UndoIcon from "@hugeicons/core-free-icons/UndoIcon";
 import Video01Icon from "@hugeicons/core-free-icons/Video01Icon";
 import VolumeHighIcon from "@hugeicons/core-free-icons/VolumeHighIcon";
 import VolumeMute01Icon from "@hugeicons/core-free-icons/VolumeMute01Icon";
+import VolumeOffIcon from "@hugeicons/core-free-icons/VolumeOffIcon";
 import Edit02Icon from "@hugeicons/core-free-icons/Edit02Icon";
 import FavouriteIcon from "@hugeicons/core-free-icons/FavouriteIcon";
 import FireIcon from "@hugeicons/core-free-icons/FireIcon";
@@ -113,6 +126,22 @@ export const ICONS = {
   entertainment: MusicNote02Icon,
   food: Restaurant01Icon,
   google: ChromeIcon,
+
+  // Video editor
+  filter: ContrastIcon,
+  crop: CropIcon,
+  rotate: Rotate01Icon,
+  trim: ScissorsIcon,
+  undo: UndoIcon,
+  redo: Redo01Icon,
+  blur: BlurIcon,
+  sticker: StickerIcon,
+  emoji: SmileIcon,
+  text: TextFontIcon,
+  draw: PencilEdit01Icon,
+  volume: VolumeHighIcon,
+  mute: VolumeOffIcon,
+  delete: Delete02Icon,
 } as const;
 
 export type IconName = keyof typeof ICONS;

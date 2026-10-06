@@ -44,12 +44,19 @@ export const sign = (params) => {
     .digest("hex");
 };
 
-export const buildSignature = ({ userId, kind = "posts", publicId }) => {
+// `eager` is how the video editor's edit configuration (trim/rotate/crop/
+// filter/blur/overlay) actually gets applied: Cloudinary re-encodes the
+// upload synchronously to this transformation and hands back the derived
+// asset's URL in the same response. It has to be part of the signed
+// params -- an unsigned `eager` would let a client apply any transformation
+// (including ones this account is not meant to allow) to any of its uploads.
+export const buildSignature = ({ userId, kind = "posts", publicId, eager }) => {
   const timestamp = Math.floor(Date.now() / 1000);
   const params = {
     timestamp,
     folder: folderFor(userId, kind),
     ...(publicId ? { public_id: publicId } : {}),
+    ...(eager ? { eager } : {}),
   };
 
   return {
@@ -57,6 +64,7 @@ export const buildSignature = ({ userId, kind = "posts", publicId }) => {
     apiKey: API_KEY,
     timestamp,
     folder: params.folder,
+    eager: params.eager,
     signature: sign(params),
     // Where the client PUTs the file. resource_type is chosen client-side by
     // what is actually being uploaded, and is not part of the signature.

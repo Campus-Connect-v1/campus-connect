@@ -5,8 +5,10 @@ import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, View } 
 
 import { MediaAttachment } from "@/src/components/compose/MediaAttachment";
 import { SettingsShell } from "@/src/components/settings/SettingsPrimitives";
+import { VideoUploadFlow } from "@/src/components/video/VideoUploadFlow";
 import { Button, Icon, InlineNotice, PressableScale, Text } from "@/src/components/ui";
 import { useUploadsEnabled } from "@/src/hooks/useUploadsEnabled";
+import { useVideoUpload } from "@/src/hooks/useVideoUpload";
 import {
   captureWithCamera,
   pickFromLibrary,
@@ -38,12 +40,35 @@ export default function StoryComposeScreen() {
   const [text, setText] = useState("");
   const [background, setBackground] = useState(BACKGROUNDS[0]);
   const [media, setMedia] = useState<PickedMedia | null>(null);
+  // Set only when `media` came back from the video module: that flow already
+  // uploaded (and edited/processed) the file as part of picking it, so
+  // post() must not hand it to uploadMedia() a second time.
+  const [preUploadedVideoUrl, setPreUploadedVideoUrl] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<StoryVisibility>("connections");
   const [error, setError] = useState<string | null>(null);
   const { enqueue } = useUploadQueue();
   const [permissionBlocked, setPermissionBlocked] = useState(false);
+  const video = useVideoUpload({ kind: "posts" });
 
   const isRepost = Boolean(repost);
+
+  const attachVideo = async () => {
+    setError(null);
+    const result = await video.open();
+    if (!result) return;
+    Haptics.selectionAsync();
+    setPreUploadedVideoUrl(result.url);
+    setMedia({
+      uri: result.url,
+      kind: "video",
+      width: result.width,
+      height: result.height,
+      duration: result.durationMs,
+      fileName: null,
+      fileSize: result.metadata.processedFileSizeBytes,
+    });
+    setMode("media");
+  };
 
   const handlePick = async (pick: () => Promise<PickResult>) => {
     setError(null);
@@ -56,6 +81,10 @@ export default function StoryComposeScreen() {
           ? "Campus Connect needs access to your photos to post a story."
           : "Photo access is switched off for Campus Connect in your device settings."
       );
+      return;
+    }
+    if (result.status === "error") {
+      setError(result.message);
       return;
     }
     if (result.status === "picked") {
@@ -93,13 +122,17 @@ export default function StoryComposeScreen() {
 
     const caption = text.trim();
     // Text and repost stories have nothing to upload, so they go straight to
-    // the commit step and the bar is only ever briefly on screen.
+    // the commit step and the bar is only ever briefly on screen. A video
+    // attached through the video module was already uploaded (and
+    // edited/processed) as part of picking it -- passing it through again
+    // would both waste the bandwidth and lose the processed/edited version
+    // in favour of re-uploading the untouched original.
     const attachment = !isRepost && mode === "media" ? media : null;
 
     enqueue({
       label: "Story",
       kind: "posts",
-      media: attachment,
+      media: preUploadedVideoUrl ? null : attachment,
       commit: async (mediaUrl: string | null) => {
         const result = isRepost
           ? await createStory({
@@ -119,7 +152,7 @@ export default function StoryComposeScreen() {
                 // The picker's guess, since the queue reports the URL but not
                 // what Cloudinary decided the file was.
                 story_type: media?.kind === "video" ? "video" : "image",
-                media_url: mediaUrl ?? undefined,
+                media_url: (preUploadedVideoUrl ?? mediaUrl) ?? undefined,
                 content: caption || undefined,
                 visibility,
               });
@@ -128,6 +161,7 @@ export default function StoryComposeScreen() {
       },
     });
 
+    setPreUploadedVideoUrl(null);
     router.replace("/(tabs)/home");
   };
 
@@ -247,7 +281,13 @@ export default function StoryComposeScreen() {
 
           {mode === "media" && !isRepost ? (
             media ? (
-              <MediaAttachment media={media} onRemove={() => setMedia(null)} />
+              <MediaAttachment
+                media={media}
+                onRemove={() => {
+                  setMedia(null);
+                  setPreUploadedVideoUrl(null);
+                }}
+              />
             ) : (
               <View style={{ flexDirection: "row", gap: spacing.sm }}>
                 <Attach
@@ -255,11 +295,7 @@ export default function StoryComposeScreen() {
                   label="Photo"
                   onPress={() => handlePick(() => pickFromLibrary("image"))}
                 />
-                <Attach
-                  icon="video"
-                  label="Video"
-                  onPress={() => handlePick(() => pickFromLibrary("video"))}
-                />
+                <Attach icon="video" label="Video" onPress={attachVideo} />
                 <Attach
                   icon="camera"
                   label="Camera"
@@ -356,6 +392,8 @@ export default function StoryComposeScreen() {
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <VideoUploadFlow video={video} />
     </SettingsShell>
   );
 }
