@@ -1,7 +1,7 @@
 import { useEvent } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import { ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
 
 import { Button, Icon, PressableScale, Text, type IconName } from "@/src/components/ui";
 import {
@@ -20,7 +20,8 @@ import { createBlurRegion, defaultBlurRect } from "@/src/features/video/editor/b
 import { createStroke } from "@/src/features/video/editor/drawing";
 import { createEmojiOverlay, createStickerOverlay, createTextOverlay } from "@/src/features/video/editor/overlays";
 import type { StickerDefinition } from "@/src/features/video/editor/stickers";
-import type { SourceVideo, VideoEditorState } from "@/src/features/video/types";
+import { getTextFontStyle, TEXT_FONT_STYLES } from "@/src/features/video/editor/textStyles";
+import type { SourceVideo, TextFontStyleId, VideoEditorState } from "@/src/features/video/types";
 import { culture, radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
@@ -39,15 +40,13 @@ import { VideoTextEditor } from "./VideoTextEditor";
 import { VideoTimeline } from "./VideoTimeline";
 import { videoUploadConfig, type VideoQualityId } from "@/src/features/video/config";
 
-// "filters" is not one of these -- it's not a destination you switch to, it's
-// a strip that's always visible under whichever tool panel is showing (see
-// the always-rendered VideoFilterPanel below the ToolPanel).
-type Tool = "trim" | "crop" | "rotate" | "text" | "emoji" | "stickers" | "draw" | "blur" | "audio" | "caption" | "quality";
+type Tool = "trim" | "crop" | "rotate" | "filter" | "text" | "emoji" | "stickers" | "draw" | "blur" | "audio" | "caption" | "quality";
 
 const TOOLS: { id: Tool; label: string; icon: IconName }[] = [
   { id: "trim", label: "Trim", icon: "trim" },
   { id: "crop", label: "Crop", icon: "crop" },
   { id: "rotate", label: "Rotate", icon: "rotate" },
+  { id: "filter", label: "Filters", icon: "filter" },
   { id: "text", label: "Text", icon: "text" },
   { id: "emoji", label: "Emoji", icon: "emoji" },
   { id: "stickers", label: "Stickers", icon: "sticker" },
@@ -168,6 +167,56 @@ export function VideoEditor({
     else if (state.stickerOverlays.some((o) => o.id === id)) setTool("stickers");
   };
 
+  // What's currently being typed, shown live on the video itself (see the
+  // TextInput rendered over the preview below) rather than in a second copy
+  // inside the tool panel. Lifted up here, rather than kept local to
+  // VideoTextEditor, precisely because the video preview -- where this
+  // actually needs to render -- lives in this component, not in the panel
+  // underneath it.
+  const [draftText, setDraftText] = useState("");
+  const [draftColor, setDraftColor] = useState<string>(videoUploadConfig.text.palette[0]);
+  const [draftFontSize, setDraftFontSize] = useState<number>(videoUploadConfig.text.defaultFontSize);
+  const [draftFontFamily, setDraftFontFamily] = useState<TextFontStyleId>(TEXT_FONT_STYLES[0].id);
+
+  // Re-seeds the draft from whichever overlay just became selected (or resets
+  // it for a brand new one) -- keyed on the overlay's id rather than the
+  // whole object, so a drag/pinch on the very overlay being edited (which
+  // updates `editedText` continuously) never fights what's being typed.
+  useEffect(() => {
+    if (tool !== "text") return;
+    if (editedText) {
+      setDraftText(editedText.text);
+      setDraftColor(editedText.color);
+      setDraftFontSize(editedText.fontSize);
+      setDraftFontFamily(editedText.fontFamily);
+    } else {
+      setDraftText("");
+      setDraftColor(videoUploadConfig.text.palette[0]);
+      setDraftFontSize(videoUploadConfig.text.defaultFontSize);
+      setDraftFontFamily(TEXT_FONT_STYLES[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tool, editedText?.id]);
+
+  const commitTextOverlay = () => {
+    const trimmed = draftText.trim();
+    if (!trimmed) return;
+    if (editedText) {
+      dispatch({
+        type: "UPDATE_TEXT",
+        id: editedText.id,
+        patch: { text: trimmed, color: draftColor, fontSize: draftFontSize, fontFamily: draftFontFamily },
+      });
+    } else {
+      const overlay = createTextOverlay(trimmed);
+      dispatch({
+        type: "ADD_TEXT",
+        overlay: { ...overlay, color: draftColor, fontSize: draftFontSize, fontFamily: draftFontFamily },
+      });
+      setSelectedOverlayId(overlay.id);
+    }
+  };
+
   return (
     <View style={{ flex: 1, gap: spacing.md }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -244,7 +293,15 @@ export function VideoEditor({
 
         <View pointerEvents={tool === "text" || tool === "emoji" || tool === "stickers" ? "box-none" : "none"} style={StyleSheet.absoluteFill}>
           <OverlayLayer
-            state={state}
+            // While a text overlay is actively being typed, it's rendered
+            // live by the TextInput below instead -- leaving it in here too
+            // would draw it twice, the committed copy sitting underneath the
+            // one actually tracking keystrokes.
+            state={
+              tool === "text" && editedText
+                ? { ...state, textOverlays: state.textOverlays.filter((o) => o.id !== editedText.id) }
+                : state
+            }
             width={previewWidth}
             height={previewHeight}
             interactive
@@ -262,6 +319,33 @@ export function VideoEditor({
             }}
           />
         </View>
+
+        {/* Typing happens directly on the video, not in a separate input
+            box in the tool panel below -- styled with the same
+            colour/size/font choices the committed overlay will render with,
+            so what's on screen while typing is what gets placed once
+            submitted. */}
+        {tool === "text" ? (
+          <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
+            <TextInput
+              accessibilityLabel="Overlay text"
+              placeholder="Add text"
+              placeholderTextColor="rgba(248,247,244,0.6)"
+              autoFocus
+              multiline
+              value={draftText}
+              onChangeText={setDraftText}
+              style={{
+                maxWidth: previewWidth - spacing.xl * 2,
+                color: draftColor,
+                fontSize: draftFontSize,
+                lineHeight: draftFontSize * 1.25,
+                fontFamily: getTextFontStyle(draftFontFamily).fontFamily,
+                textAlign: "center",
+              }}
+            />
+          </View>
+        ) : null}
 
         {tool === "blur" ? (
           <View style={StyleSheet.absoluteFill}>
@@ -319,13 +403,16 @@ export function VideoEditor({
       {/* flex: 1 is load-bearing here: React Native's flex items default to
           flexShrink: 0 (unlike web). Deliberately NOT flex: 1 here, though:
           that made this box always claim every last bit of remaining space
-          whether the active tool needed it or not, which pushed the filter
-          strip and the submit button as far down as the screen allowed
-          instead of sitting right after whatever content this actually
-          has. A capped maxHeight sizes it to its content -- short for Crop
-          or Rotate, so the filter strip sits close under them -- and only
-          falls back to scrolling internally on a tool tall enough to need
-          it (Crop's own preview box, on a short screen). */}
+          whether the active tool needed it or not, which pushed the submit
+          button as far down as the screen allowed instead of sitting right
+          after whatever content this actually has. A capped maxHeight sizes
+          it to its content -- short for Crop or Rotate -- and only falls
+          back to scrolling internally on a tool tall enough to need it
+          (Crop's own preview box, or the emoji/sticker grids, on a short
+          screen). Filters live in here as an ordinary rail tool now, rather
+          than a strip pinned open below every other tool, so a tool that
+          needs more room (emoji, stickers) gets the space that strip used
+          to always claim. */}
       <ScrollView
         style={{ maxHeight: previewHeight }}
         contentContainerStyle={{ paddingBottom: spacing.sm }}
@@ -335,9 +422,23 @@ export function VideoEditor({
           tool={tool}
           state={state}
           source={source}
+          thumbnailUri={thumbnailUri}
           quality={quality}
           onQualityChange={setQuality}
-          editedText={editedText}
+          isEditingText={editedText !== null}
+          draftText={draftText}
+          draftColor={draftColor}
+          onDraftColorChange={setDraftColor}
+          draftFontSize={draftFontSize}
+          onDraftFontSizeChange={setDraftFontSize}
+          draftFontFamily={draftFontFamily}
+          onDraftFontFamilyChange={setDraftFontFamily}
+          onSubmitText={commitTextOverlay}
+          onDeleteText={() => {
+            if (editedText) dispatch({ type: "REMOVE_TEXT", id: editedText.id });
+            setSelectedOverlayId(null);
+          }}
+          onCancelText={() => setSelectedOverlayId(null)}
           dispatch={dispatch}
           setSelectedOverlayId={setSelectedOverlayId}
           previewWidth={previewWidth}
@@ -345,20 +446,6 @@ export function VideoEditor({
           currentPositionMs={currentTime * 1000}
         />
       </ScrollView>
-
-      {/* Its own fixed-height row, deliberately NOT inside the ScrollView
-          above: sharing that flexing space with whichever tool panel is
-          active meant the filter strip was whatever was left over after a
-          taller tool panel (or nothing, once the panel alone filled the
-          available height) -- squeezed down to a sliver or clipped
-          entirely. Always visible, directly under whichever tool panel is
-          showing (the trim timeline by default), the way Snapchat's filter
-          strip sits under its editor regardless of which tool is selected. */}
-      <VideoFilterPanel
-        thumbnailUri={thumbnailUri}
-        selected={state.filter}
-        onSelect={(filter) => dispatch({ type: "APPLY_FILTER", filter })}
-      />
 
       <Button
         label={submitLabel}
@@ -390,9 +477,20 @@ function ToolPanel({
   tool,
   state,
   source,
+  thumbnailUri,
   quality,
   onQualityChange,
-  editedText,
+  isEditingText,
+  draftText,
+  draftColor,
+  onDraftColorChange,
+  draftFontSize,
+  onDraftFontSizeChange,
+  draftFontFamily,
+  onDraftFontFamilyChange,
+  onSubmitText,
+  onDeleteText,
+  onCancelText,
   dispatch,
   setSelectedOverlayId,
   previewWidth,
@@ -402,9 +500,20 @@ function ToolPanel({
   tool: Tool | null;
   state: VideoEditorState;
   source: SourceVideo;
+  thumbnailUri: string | null;
   quality: VideoQualityId;
   onQualityChange: (quality: VideoQualityId) => void;
-  editedText: VideoEditorState["textOverlays"][number] | null;
+  isEditingText: boolean;
+  draftText: string;
+  draftColor: string;
+  onDraftColorChange: (color: string) => void;
+  draftFontSize: number;
+  onDraftFontSizeChange: (size: number) => void;
+  draftFontFamily: TextFontStyleId;
+  onDraftFontFamilyChange: (id: TextFontStyleId) => void;
+  onSubmitText: () => void;
+  onDeleteText: () => void;
+  onCancelText: () => void;
   dispatch: (action: Parameters<typeof editorReducer>[1]) => void;
   setSelectedOverlayId: (id: string | null) => void;
   previewWidth: number;
@@ -440,24 +549,28 @@ function ToolPanel({
           onChange={(rotation) => dispatch({ type: "SET_ROTATION", rotation })}
         />
       );
+    case "filter":
+      return (
+        <VideoFilterPanel
+          thumbnailUri={thumbnailUri}
+          selected={state.filter}
+          onSelect={(filter) => dispatch({ type: "APPLY_FILTER", filter })}
+        />
+      );
     case "text":
       return (
         <VideoTextEditor
-          editing={editedText}
-          onSubmit={(text, color, fontSize) => {
-            if (editedText) {
-              dispatch({ type: "UPDATE_TEXT", id: editedText.id, patch: { text, color, fontSize } });
-            } else {
-              const overlay = createTextOverlay(text);
-              dispatch({ type: "ADD_TEXT", overlay: { ...overlay, color, fontSize } });
-              setSelectedOverlayId(overlay.id);
-            }
-          }}
-          onDelete={() => {
-            if (editedText) dispatch({ type: "REMOVE_TEXT", id: editedText.id });
-            setSelectedOverlayId(null);
-          }}
-          onCancel={() => setSelectedOverlayId(null)}
+          editing={isEditingText}
+          canSubmit={draftText.trim().length > 0}
+          color={draftColor}
+          onColorChange={onDraftColorChange}
+          fontSize={draftFontSize}
+          onFontSizeChange={onDraftFontSizeChange}
+          fontFamily={draftFontFamily}
+          onFontFamilyChange={onDraftFontFamilyChange}
+          onSubmit={onSubmitText}
+          onDelete={onDeleteText}
+          onCancel={onCancelText}
         />
       );
     case "emoji":

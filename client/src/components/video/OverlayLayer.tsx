@@ -12,6 +12,7 @@ import Svg, { Path } from "react-native-svg";
 
 import { Icon, Text } from "@/src/components/ui";
 import { strokeToPath } from "@/src/features/video/editor/drawing";
+import { getTextFontStyle } from "@/src/features/video/editor/textStyles";
 import type { EditorOverlay, EmojiOverlay, StickerOverlay, TextOverlay, VideoEditorState } from "@/src/features/video/types";
 
 /** Size and position of the drag-to-delete target, in preview-space pixels.
@@ -105,7 +106,14 @@ export const OverlayLayer = forwardRef<View, OverlayLayerProps>(function Overlay
             style={{
               color: overlay.color,
               fontSize: overlay.fontSize,
-              fontFamily: overlay.weight === "bold" ? "Gilroy-SemiBold" : "Gilroy-Regular",
+              // A line height tied to the chosen size, not inherited from
+              // the `body` variant's fixed 24px -- left as-is, any overlay
+              // above ~24px (the default is 28, and sizes go up to 56) had
+              // its top and bottom sheared off by the mismatch, which is
+              // what made text overlays look like they weren't rendering
+              // at all.
+              lineHeight: overlay.fontSize * 1.25,
+              fontFamily: getTextFontStyle(overlay.fontFamily).fontFamily,
               textAlign: overlay.align,
             }}
           >
@@ -129,7 +137,7 @@ export const OverlayLayer = forwardRef<View, OverlayLayerProps>(function Overlay
           deleteZoneProgress={deleteZoneProgress}
           deleteZoneHover={deleteZoneHover}
         >
-          <Text style={{ fontSize: 44 }}>{overlay.value}</Text>
+          <Text style={{ fontSize: 44, lineHeight: 52 }}>{overlay.value}</Text>
         </OverlayItem>
       ))}
 
@@ -148,7 +156,7 @@ export const OverlayLayer = forwardRef<View, OverlayLayerProps>(function Overlay
           deleteZoneProgress={deleteZoneProgress}
           deleteZoneHover={deleteZoneHover}
         >
-          <Text style={{ fontSize: 48 }}>{overlay.glyph}</Text>
+          <Text style={{ fontSize: 48, lineHeight: 56 }}>{overlay.glyph}</Text>
         </OverlayItem>
       ))}
 

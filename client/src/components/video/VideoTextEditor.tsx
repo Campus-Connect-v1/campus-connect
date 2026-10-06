@@ -1,57 +1,59 @@
-import { useState } from "react";
-import { TextInput, View } from "react-native";
+import { View } from "react-native";
 
 import { Button, Icon, PressableScale, Text } from "@/src/components/ui";
 import { videoUploadConfig } from "@/src/features/video/config";
-import type { TextOverlay } from "@/src/features/video/types";
-import { inputTextStyle, radius, spacing } from "@/src/styles/theme";
+import { TEXT_FONT_STYLES } from "@/src/features/video/editor/textStyles";
+import type { TextFontStyleId } from "@/src/features/video/types";
+import { radius, spacing } from "@/src/styles/theme";
 import { useTheme } from "@/src/styles/useTheme";
 
 interface VideoTextEditorProps {
-  /** The overlay being edited, or null when adding a new one. */
-  editing: TextOverlay | null;
-  onSubmit: (text: string, color: string, fontSize: number) => void;
+  /** Whether the panel is editing an existing overlay (shows Delete, and
+   * labels the submit button "Update") or building a new one. */
+  editing: boolean;
+  canSubmit: boolean;
+  color: string;
+  onColorChange: (color: string) => void;
+  fontSize: number;
+  onFontSizeChange: (size: number) => void;
+  fontFamily: TextFontStyleId;
+  onFontFamilyChange: (id: TextFontStyleId) => void;
+  onSubmit: () => void;
   onDelete: () => void;
   onCancel: () => void;
 }
 
 /**
- * Adds or edits ONE text overlay's content and style. Where it lands on the
- * video, and how it's moved/resized/rotated afterward, is `OverlayLayer`'s
- * job (via drag/pinch/rotate gestures) -- this component only ever produces
- * text + color + size, never a position.
+ * The text tool's controls -- colour, size, and font style -- for whatever
+ * is currently being typed.
+ *
+ * This panel owns none of the text itself and renders no input box of its
+ * own: typing happens directly on the video preview (see VideoEditor's live
+ * `TextInput` overlay, styled with these same colour/size/family values), so
+ * what the person sees while typing is exactly what the overlay will look
+ * like, not a preview of it in a separate box down here. Where the overlay
+ * lands, and how it's moved/resized/rotated afterward, is `OverlayLayer`'s
+ * job (via drag/pinch/rotate gestures) -- this component never produces a
+ * position.
  */
-export function VideoTextEditor({ editing, onSubmit, onDelete, onCancel }: VideoTextEditorProps) {
+export function VideoTextEditor({
+  editing,
+  canSubmit,
+  color,
+  onColorChange,
+  fontSize,
+  onFontSizeChange,
+  fontFamily,
+  onFontFamilyChange,
+  onSubmit,
+  onDelete,
+  onCancel,
+}: VideoTextEditorProps) {
   const { colors } = useTheme();
-  const [text, setText] = useState(editing?.text ?? "");
-  const [color, setColor] = useState(editing?.color ?? videoUploadConfig.text.palette[0]);
-  const [fontSize, setFontSize] = useState(editing?.fontSize ?? videoUploadConfig.text.defaultFontSize);
-
-  const canSubmit = text.trim().length > 0;
 
   return (
     <View style={{ gap: spacing.md }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-        <TextInput
-          accessibilityLabel="Overlay text"
-          placeholder="Add text"
-          placeholderTextColor={colors.textMuted}
-          autoFocus
-          multiline
-          value={text}
-          onChangeText={setText}
-          style={{
-            flex: 1,
-            minHeight: 44,
-            maxHeight: 100,
-            borderRadius: radius.md,
-            backgroundColor: colors.surface,
-            color: colors.textPrimary,
-            ...inputTextStyle(true),
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
-          }}
-        />
+      <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
         <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Close text editor"
@@ -69,7 +71,7 @@ export function VideoTextEditor({ editing, onSubmit, onDelete, onCancel }: Video
             accessibilityRole="button"
             accessibilityLabel={`Text colour ${hue}`}
             accessibilityState={{ selected: hue === color }}
-            onPress={() => setColor(hue)}
+            onPress={() => onColorChange(hue)}
             style={{
               width: 30,
               height: 30,
@@ -89,7 +91,7 @@ export function VideoTextEditor({ editing, onSubmit, onDelete, onCancel }: Video
             accessibilityRole="button"
             accessibilityLabel={`Font size ${size}`}
             accessibilityState={{ selected: fontSize === size }}
-            onPress={() => setFontSize(size)}
+            onPress={() => onFontSizeChange(size)}
             style={{
               flex: 1,
               minHeight: 40,
@@ -110,13 +112,45 @@ export function VideoTextEditor({ editing, onSubmit, onDelete, onCancel }: Video
       </View>
 
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
+        {TEXT_FONT_STYLES.map((style) => {
+          const active = fontFamily === style.id;
+          return (
+            <PressableScale
+              key={style.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Font style ${style.label}`}
+              accessibilityState={{ selected: active }}
+              onPress={() => onFontFamilyChange(style.id)}
+              style={{
+                flex: 1,
+                minHeight: 44,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: radius.md,
+                backgroundColor: active ? colors.textPrimary : colors.surface,
+              }}
+            >
+              <Text
+                style={[
+                  { fontFamily: style.fontFamily, fontSize: 15, lineHeight: 19 },
+                  active ? { color: colors.background } : undefined,
+                ]}
+              >
+                Aa
+              </Text>
+            </PressableScale>
+          );
+        })}
+      </View>
+
+      <View style={{ flexDirection: "row", gap: spacing.sm }}>
         {editing ? (
           <Button label="Delete" variant="secondary" onPress={onDelete} style={{ flex: 1 }} />
         ) : null}
         <Button
           label={editing ? "Update" : "Add text"}
           disabled={!canSubmit}
-          onPress={() => onSubmit(text.trim(), color, fontSize)}
+          onPress={onSubmit}
           style={{ flex: 1 }}
         />
       </View>

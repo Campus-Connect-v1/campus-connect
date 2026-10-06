@@ -27,7 +27,7 @@ export function createTextOverlay(text: string): TextOverlay {
     color: videoUploadConfig.text.palette[0],
     fontSize: videoUploadConfig.text.defaultFontSize,
     align: "center",
-    weight: "bold",
+    fontFamily: "bold",
   };
 }
 

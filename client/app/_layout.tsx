@@ -41,6 +41,10 @@ export default function RootLayout() {
     // Temporary brand display face. UI/body copy remains on Gilroy until the
     // final typography set is ready.
     Blackbold: require("../assets/fonts/Blackbold/Blackbold.ttf"),
+    // Video editor text-overlay styles only (see editor/textStyles.ts) --
+    // not part of the app's own typography set.
+    Chilispepper: require("../assets/fonts/chilispepper.ttf"),
+    Chrusty: require("../assets/fonts/chrusty.ttf"),
   });
 
   useEffect(() => {

@@ -64,7 +64,7 @@ export function VideoStickerPicker({ onSelect }: VideoStickerPickerProps) {
               backgroundColor: colors.surface,
             }}
           >
-            <Text style={{ fontSize: 32 }}>{sticker.glyph}</Text>
+            <Text style={{ fontSize: 32, lineHeight: 38 }}>{sticker.glyph}</Text>
           </PressableScale>
         ))}
       </View>

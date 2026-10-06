@@ -1,4 +1,4 @@
-import { ScrollView } from "react-native";
+import { View } from "react-native";
 
 import { PressableScale, Text } from "@/src/components/ui";
 import { spacing } from "@/src/styles/theme";
@@ -24,7 +24,7 @@ interface VideoEmojiPickerProps {
 
 export function VideoEmojiPicker({ onSelect }: VideoEmojiPickerProps) {
   return (
-    <ScrollView contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
       {EMOJI.map((emoji) => (
         <PressableScale
           key={emoji}
@@ -33,9 +33,9 @@ export function VideoEmojiPicker({ onSelect }: VideoEmojiPickerProps) {
           onPress={() => onSelect(emoji)}
           style={{ width: 52, height: 52, alignItems: "center", justifyContent: "center" }}
         >
-          <Text style={{ fontSize: 30 }}>{emoji}</Text>
+          <Text style={{ fontSize: 30, lineHeight: 36 }}>{emoji}</Text>
         </PressableScale>
       ))}
-    </ScrollView>
+    </View>
   );
 }

@@ -51,6 +51,8 @@ export type FilterId =
   | "mono"
   | "dramatic";
 
+export type TextFontStyleId = "classic" | "bold" | "display" | "retro" | "handwritten";
+
 export interface OverlayBase {
   id: string;
   position: Point;
@@ -65,7 +67,7 @@ export interface TextOverlay extends OverlayBase {
   color: string;
   fontSize: number;
   align: "left" | "center" | "right";
-  weight: "regular" | "bold";
+  fontFamily: TextFontStyleId;
 }
 
 export interface EmojiOverlay extends OverlayBase {

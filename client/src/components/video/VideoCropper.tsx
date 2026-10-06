@@ -153,6 +153,9 @@ function CropRectHandle({
   };
 
   const move = Gesture.Pan()
+    // Capped to one finger so a two-finger touch always resolves as the
+    // pinch gesture below instead of the two racing over the same box.
+    .maxPointers(1)
     .onBegin(() => {
       start.value = { x: x.value, y: y.value, w: w.value, h: h.value };
       runOnJS(setDragging)(true);
@@ -180,6 +183,40 @@ function CropRectHandle({
       runOnJS(setDragging)(false);
       runOnJS(commit)();
     });
+
+  // Two-finger pinch, directly on the crop box: scales width and height by
+  // the same factor (so a locked aspect ratio stays locked without any
+  // special-casing) around the box's own center, rather than the pinch's
+  // focal point -- growing outward from the middle is what reads as
+  // "cropping" here; growing from wherever the fingers happened to land
+  // would walk the box around the frame as a side effect of resizing it.
+  const pinch = Gesture.Pinch()
+    .onBegin(() => {
+      start.value = { x: x.value, y: y.value, w: w.value, h: h.value };
+      runOnJS(setDragging)(true);
+    })
+    .onUpdate((event) => {
+      "worklet";
+      const centerX = start.value.x + start.value.w / 2;
+      const centerY = start.value.y + start.value.h / 2;
+
+      const rawWidth = start.value.w * event.scale;
+      const rawHeight = start.value.h * event.scale;
+      const newWidth = Math.min(Math.max(rawWidth, 60), previewWidth);
+      const newHeight = Math.min(Math.max(rawHeight, 60), previewHeight);
+
+      w.value = newWidth;
+      h.value = newHeight;
+      x.value = Math.min(Math.max(centerX - newWidth / 2, 0), previewWidth - newWidth);
+      y.value = Math.min(Math.max(centerY - newHeight / 2, 0), previewHeight - newHeight);
+    })
+    .onEnd(() => {
+      "worklet";
+      runOnJS(setDragging)(false);
+      runOnJS(commit)();
+    });
+
+  const moveAndPinch = Gesture.Simultaneous(move, pinch);
 
   const resize = Gesture.Pan()
     .onBegin(() => {
@@ -223,7 +260,7 @@ function CropRectHandle({
 
   return (
     <>
-      <GestureDetector gesture={move}>
+      <GestureDetector gesture={moveAndPinch}>
         <Animated.View
           style={[
             { position: "absolute", borderWidth: 2, borderColor: colors.textPrimary, borderRadius: radius.sm },

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { LayoutChangeEvent } from "react-native";
 import {
   Easing,
@@ -54,7 +54,9 @@ export function useHideOnScroll({ minVisible = 0 }: { minVisible?: number } = {}
    * keeps its solid background and the feed never scrolls under the clock.
    */
   const floor = useSharedValue(minVisible);
-  floor.value = minVisible;
+  useEffect(() => {
+    floor.value = minVisible;
+  }, [floor, minVisible]);
 
   const onHeaderLayout = useCallback(
     (event: LayoutChangeEvent) => {

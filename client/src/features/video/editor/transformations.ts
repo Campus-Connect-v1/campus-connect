@@ -1,6 +1,5 @@
 import { videoUploadConfig, type VideoQualityId } from "../config";
 import type { SourceVideo, VideoEditorState } from "../types";
-import { aspectRatioFor } from "../utils/media";
 import * as AudioEngine from "./audio";
 import * as BlurEngine from "./blur";
 import { getFilterPreset } from "./filters";
@@ -49,7 +48,14 @@ export function buildCloudinaryTransformation(options: BuildOptions): string[] {
   first.push(`so_${startSec}`, `eo_${endSec}`);
   if (state.rotation !== 0) first.push(`a_${state.rotation}`);
 
-  if (state.crop.aspect === "free" && state.crop.rect) {
+  // Every aspect except "original" seeds and keeps a pixel rect in
+  // `crop.rect` -- the presets only lock its width/height together while
+  // it's being resized (see VideoCropper), they don't stop it being moved
+  // or resized afterward. That rect, wherever the user left it, is always
+  // the actual crop; a plain `ar_`-driven centered fill would silently
+  // throw away every drag and pinch the moment a preset (rather than Free)
+  // was selected.
+  if (state.crop.rect) {
     first.push(
       "c_crop",
       "g_north_west",
@@ -58,11 +64,6 @@ export function buildCloudinaryTransformation(options: BuildOptions): string[] {
       `w_${Math.round(state.crop.rect.width * source.width)}`,
       `h_${Math.round(state.crop.rect.height * source.height)}`
     );
-  } else {
-    const ratio = aspectRatioFor(state.crop.aspect);
-    if (ratio) {
-      first.push("c_fill", "g_center", `ar_${ratio.toFixed(4)}`);
-    }
   }
 
   first.push(`w_${width}`, `h_${height}`, "c_limit", `br_${bitrateKbps}k`, "q_auto", "f_mp4");

@@ -9,6 +9,7 @@ import Camera01Icon from "@hugeicons/core-free-icons/Camera01Icon";
 import Cancel01Icon from "@hugeicons/core-free-icons/Cancel01Icon";
 import ChromeIcon from "@hugeicons/core-free-icons/ChromeIcon";
 import Compass01Icon from "@hugeicons/core-free-icons/Compass01Icon";
+import ContrastIcon from "@hugeicons/core-free-icons/ContrastIcon";
 import CropIcon from "@hugeicons/core-free-icons/CropIcon";
 import Delete02Icon from "@hugeicons/core-free-icons/Delete02Icon";
 import ImageAdd01Icon from "@hugeicons/core-free-icons/ImageAdd01Icon";
@@ -127,6 +128,7 @@ export const ICONS = {
   google: ChromeIcon,
 
   // Video editor
+  filter: ContrastIcon,
   crop: CropIcon,
   rotate: Rotate01Icon,
   trim: ScissorsIcon,
